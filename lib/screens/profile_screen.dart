@@ -567,7 +567,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
-      childAspectRatio: 1.75,
+      // Tiles must fit icon + value + label with room to spare at the
+      // largest text-size setting (1.75 was 24px too short on phones).
+      childAspectRatio: 1.35,
       children: [
         StatTile(
           palette: p,

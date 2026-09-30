@@ -950,6 +950,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
     final status = DropdownButtonFormField<String>(
       initialValue: _statusFilter,
+      isExpanded: true,
       decoration: const InputDecoration(
         prefixIcon: Icon(Icons.filter_list, size: 16),
       ),
@@ -960,6 +961,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
     final field = DropdownButtonFormField<String>(
       initialValue: _fieldFilter,
+      isExpanded: true,
       decoration: const InputDecoration(),
       items: [
         const DropdownMenuItem(value: 'all', child: Text('All subjects')),
@@ -969,6 +971,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
     final year = DropdownButtonFormField<String>(
       initialValue: _yearFilter,
+      isExpanded: true,
       decoration: const InputDecoration(),
       items: [
         const DropdownMenuItem(value: 'all', child: Text('All years')),

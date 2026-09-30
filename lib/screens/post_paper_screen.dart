@@ -344,6 +344,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                 label: 'Field',
                 child: DropdownButtonFormField<String>(
                   initialValue: _field,
+                  isExpanded: true,
                   dropdownColor: p.c.surface,
                   style: TextStyle(color: p.c.text, fontSize: 14),
                   items: fields

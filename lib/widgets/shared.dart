@@ -728,7 +728,7 @@ class StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = palette.c;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: c.surface,
         border: Border.all(color: c.border),
@@ -738,8 +738,8 @@ class StatTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 22)),
-          const SizedBox(height: 6),
+          Text(icon, style: const TextStyle(fontSize: 20)),
+          const SizedBox(height: 4),
           Text(
             value,
             style: displayStyle(
@@ -749,7 +749,7 @@ class StatTile extends StatelessWidget {
               color: color,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label.toUpperCase(),
             style: monoStyle(palette, size: 9, letterSpacing: 0.1),
