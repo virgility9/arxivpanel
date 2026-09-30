@@ -1,0 +1,151 @@
+rules_version = '2';
+
+// Firestore security rules for ArxivPanel.
+// Paste into: Firebase console → Firestore Database → Rules tab → Publish.
+// No CLI required.
+//
+// Data model:
+//   papers/{paperId}                      paper docs, `status`: pending|approved|rejected|revision|archived
+//   papers/{paperId}/comments/{commentId} comment docs
+//   papers/{paperId}/reactions/{uid}      one doc per user: { emoji, reactedAt }
+//   users/{uid}                           profile docs (username, email, avatar, bio, ...)
+//   users/{uid}/bookmarks/{paperId}       saved papers (doc id = paper id)
+//   users/{uid}/history/{entryId}         reading-history entries
+//   polls/{pollId}                        poll docs
+//   polls/{pollId}/options/{optionId}     poll options
+//   polls/{pollId}/votes/{uid}            one vote per user (doc id = uid)
+//   admins/{uid}                          presence of a doc marks the user as admin
+//                                         (create the first one manually in the
+//                                         console — see FIREBASE_SETUP.md step 8)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isAuthor(paperData) {
+      return signedIn() && paperData.authorId == request.auth.uid;
+    }
+
+    // A paper is publicly readable once approved.
+    function paperVisible(paperData) {
+      return paperData.status == 'approved'
+        || isAuthor(paperData)
+        || isAdmin();
+    }
+
+    // ------------------------------------------------------------- papers
+    match /papers/{paperId} {
+      allow read: if paperVisible(resource.data);
+
+      // Anyone signed in can submit; new papers always start as pending
+      // and the authorId must be their own uid.
+      allow create: if signedIn()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.keys().hasAll(
+             ['title', 'abstract', 'field', 'authorId', 'status']);
+
+      // Author can edit their own pending/revision papers; admins can do
+      // anything (approve/reject/archive). isAdmin can never be escalated
+      // here — it lives on the user doc, guarded below.
+      allow update: if isAdmin()
+        || (isAuthor(resource.data)
+            && request.resource.data.authorId == resource.data.authorId
+            && request.resource.data.status == resource.data.status);
+
+      allow delete: if isAdmin() || isAuthor(resource.data);
+
+      // ------------------------------------------------------- comments
+      match /comments/{commentId} {
+        allow read: if paperVisible(
+          get(/databases/$(database)/documents/papers/$(paperId)).data);
+
+        allow create: if signedIn()
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.keys().hasAll(
+               ['userId', 'username', 'text']);
+
+        // Authors can edit/delete their own comments; admins can delete.
+        allow update, delete: if signedIn()
+          && (resource.data.userId == request.auth.uid || isAdmin());
+      }
+
+      // ------------------------------------------------------ reactions
+      // One doc per user (doc id = uid): { emoji, reactedAt }.
+      match /reactions/{uid} {
+        allow read: if paperVisible(
+          get(/databases/$(database)/documents/papers/$(paperId)).data);
+
+        // Users can only write their own reaction doc.
+        allow write: if signedIn() && uid == request.auth.uid;
+      }
+    }
+
+    // -------------------------------------------------------------- users
+    match /users/{uid} {
+      // Profiles are public (username/avatar shown across the app).
+      allow read: if true;
+
+      // Users can create/update only their own doc, and can never grant
+      // themselves admin — isAdmin may only change via an existing admin.
+      allow create: if signedIn() && uid == request.auth.uid
+        && (!('isAdmin' in request.resource.data)
+            || request.resource.data.isAdmin == false);
+
+      allow update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.isAdmin == resource.data.isAdmin;
+
+      allow delete: if isAdmin();
+
+      match /bookmarks/{paperId} {
+        allow read, write: if signedIn() && uid == request.auth.uid;
+      }
+
+      match /history/{entryId} {
+        allow read, write: if signedIn() && uid == request.auth.uid;
+      }
+    }
+
+    // -------------------------------------------------------------- polls
+    match /polls/{pollId} {
+      allow read: if true;
+      allow create: if signedIn();
+      allow update, delete: if isAdmin()
+        || (signedIn() && resource.data.createdBy == request.auth.uid);
+
+      match /options/{optionId} {
+        allow read: if true;
+        allow write: if isAdmin()
+          || (signedIn()
+              && get(/databases/$(database)/documents/polls/$(pollId)).data.createdBy
+                 == request.auth.uid);
+      }
+
+      // One vote per user: the vote doc id IS the uid.
+      match /votes/{uid} {
+        allow read: if true;
+        allow create, update: if signedIn() && uid == request.auth.uid;
+        allow delete: if signedIn()
+          && (uid == request.auth.uid || isAdmin());
+      }
+    }
+
+    // ------------------------------------------------------------- admins
+    // Presence of admins/{uid} marks that uid as an admin.
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      // The very first admin doc must be created manually in the console
+      // (console → Firestore → admins collection). After that, only admins
+      // can add/remove admins.
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,42 @@
+// Firebase Storage security rules for ArxivPanel.
+// Paste into: Firebase console → Storage → Rules tab → Publish.
+// No CLI required.
+//
+// Layout:
+//   covers/{uid}/{fileName}   paper cover images (≤ 5 MB, images only)
+//   papers/{uid}/{fileName}   paper PDFs (≤ 50 MB)
+//   avatars/{uid}/{fileName}  profile avatars (≤ 2 MB, images only)
+//
+// Reads are public (covers/avatars are shown to everyone). Writes and
+// deletes are restricted to the owning user. To remove abusive content,
+// delete the file manually in the Firebase console (Storage → Files).
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /covers/{uid}/{fileName} {
+      allow read: if true;
+      allow write, delete: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /papers/{uid}/{fileName} {
+      allow read: if true;
+      allow write, delete: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    match /avatars/{uid}/{fileName} {
+      allow read: if true;
+      allow write, delete: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
