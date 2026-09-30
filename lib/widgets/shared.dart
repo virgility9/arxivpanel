@@ -214,7 +214,7 @@ class NetImage extends StatelessWidget {
           ),
         );
       },
-      errorBuilder: (context, _, __) => Container(
+      errorBuilder: (context, _, _) => Container(
         width: width,
         height: height,
         color: const Color(0xFF1C1C2A),
@@ -262,7 +262,7 @@ class AvatarImage extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (context, _, __) => Container(
+          errorBuilder: (context, _, _) => Container(
             color: const Color(0xFF2A2A3A),
             child: const Center(
               child: Text('👤', style: TextStyle(fontSize: 16)),

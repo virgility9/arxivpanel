@@ -135,7 +135,6 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   @override
   Widget build(BuildContext context) {
     final p = widget.theme.palette;
-    final c = p.c;
     final user = widget.appState.user;
 
     // NOTE: no nested Scaffold — AppShell already provides one.

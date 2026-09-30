@@ -46,6 +46,9 @@ dependencies:
   # website links). Run `flutter pub get` after adding.
   url_launcher: ^6.3.1
 
+  # Web-only DOM bindings for the iframe PDF viewer (replaces dart:html).
+  web: ^1.1.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
