@@ -26,8 +26,13 @@ class ThemeProvider extends ChangeNotifier {
   AppAccent get accent => _accent;
   AppFontScale get fontScale => _fontScale;
 
-  /// Resolved color palette for the current mode + accent.
-  AppPalette get palette => AppPalette(mode: _mode, accent: AccentPalette.of(_accent));
+  /// Resolved color palette for the current mode + accent, including the
+  /// user's text-size scale so the custom typography helpers scale too.
+  AppPalette get palette => AppPalette(
+        mode: _mode,
+        accent: AccentPalette.of(_accent),
+        textScale: _fontScale.scale,
+      );
 
   /// Material 3 theme built from the resolved palette.
   ThemeData get themeData => buildThemeData(palette, textScale: _fontScale.scale);

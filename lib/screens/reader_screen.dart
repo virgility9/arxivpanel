@@ -3,12 +3,13 @@
 /// Shows a single paper's hero (cover, metadata, reactions), tabbed content
 /// (abstract / comments / PDF placeholder), and related papers.
 ///
-/// The PDF tab is an acknowledged simplification: the web app embeds an
-/// iframe, which is not portable, so this port shows a card with the URL and
-/// a copy-link button instead. The scroll progress bar from the web app was
-/// intentionally skipped (a web-only affordance).
+/// The PDF tab embeds the paper's PDF in an iframe on web; on other
+/// platforms it shows a card with the URL and a copy-link button. The scroll
+/// progress bar from the web app was intentionally skipped (a web-only
+/// affordance).
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,6 +18,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/pdf_view.dart';
 import '../widgets/shared.dart';
 
 enum _ReaderTab { abstract, comments, pdf }
@@ -39,13 +41,6 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   _ReaderTab _activeTab = _ReaderTab.abstract;
-  final TextEditingController _commentCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _commentCtrl.dispose();
-    super.dispose();
-  }
 
   /// Comment dates render like "Nov 14, 2024" (mirrors the React
   /// `toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })`).
@@ -78,16 +73,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
         ];
 
         void share() {
-          final link = 'https://arxivpanel.app/papers/${paper.id}';
+          // On web the app has no router/deep links, so the only honest
+          // shareable link is the current page URL.
+          final link = kIsWeb
+              ? Uri.base.toString()
+              : 'https://arxivpanel.app/papers/${paper.id}';
           Clipboard.setData(ClipboardData(text: link));
           appState.showToast('Link copied', '🔗');
-        }
-
-        void postComment() {
-          final text = _commentCtrl.text.trim();
-          if (text.isEmpty) return;
-          appState.addComment(paper.id, text);
-          _commentCtrl.clear();
         }
 
         return Column(
@@ -100,7 +92,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     _buildHero(p, paper, narrow),
                     _buildTabsBar(p, tabs, narrow, paper),
                     _buildTabContent(
-                      p, paper, narrow, user, postComment, constraints.maxWidth,
+                      p, paper, narrow, user, constraints.maxWidth,
                     ),
                   ],
                 ),
@@ -120,7 +112,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     required VoidCallback onPressed,
     Color? borderColor,
     Color? color,
-    double minWidth = 36,
+    double minWidth = 44,
   }) {
     return Material(
       color: Colors.transparent,
@@ -128,7 +120,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         borderRadius: BorderRadius.circular(6),
         onTap: onPressed,
         child: Container(
-          constraints: BoxConstraints(minWidth: minWidth, minHeight: 36),
+          constraints: BoxConstraints(minWidth: minWidth, minHeight: 44),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             border: Border.all(color: borderColor ?? p.c.border),
@@ -375,19 +367,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 borderWidth: 2,
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    paper.author,
-                    style:
-                        bodyStyle(p, size: 13, weight: FontWeight.w600),
-                  ),
-                  Text(
-                    '${paper.institution} · ${paper.year}',
-                    style: bodyStyle(p, size: 11, color: c.muted),
-                  ),
-                ],
+              // Expanded + ellipsis: long institution names must not
+              // overflow on narrow screens.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      paper.author,
+                      style:
+                          bodyStyle(p, size: 13, weight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '${paper.institution} · ${paper.year}',
+                      style: bodyStyle(p, size: 11, color: c.muted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -525,8 +525,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
-          child: Row(
-            children: tabs.map((tab) {
+          // Horizontally scrollable so the tabs never cramp on narrow
+          // screens (e.g. "Comments" + count badge + "PDF" at 360px).
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: tabs.map((tab) {
               final active = _activeTab == tab;
               return InkWell(
                 onTap: () => setState(() => _activeTab = tab),
@@ -576,6 +580,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 ),
               );
             }).toList(),
+            ),
           ),
         ),
       ),
@@ -598,7 +603,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     Paper paper,
     bool narrow,
     AppUser? user,
-    VoidCallback postComment,
     double maxWidth,
   ) {
     // Mirror the React padding: mobile "24px 16px", desktop "36px 0" (within
@@ -619,8 +623,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           constraints: BoxConstraints(maxWidth: contentMax),
           child: switch (_activeTab) {
             _ReaderTab.abstract => _buildAbstractTab(p, paper, narrow),
-            _ReaderTab.comments =>
-              _buildCommentsTab(p, paper, user, postComment),
+            _ReaderTab.comments => _buildCommentsTab(p, paper, user),
             _ReaderTab.pdf => _buildPdfTab(p, paper),
           },
         ),
@@ -651,7 +654,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
               Text('Abstract',
                   style: displayStyle(p, size: 18, weight: FontWeight.w600)),
               const SizedBox(height: 16),
-              Text(
+              // Selectable so web readers can copy quotes.
+              SelectableText(
                 paper.abstract,
                 style: bodyStyle(p,
                     size: narrow ? 15 : 16,
@@ -790,7 +794,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     AppPalette p,
     Paper paper,
     AppUser? user,
-    VoidCallback postComment,
   ) {
     final c = p.c;
     final a = p.accent;
@@ -825,43 +828,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       const SizedBox(height: 10),
                     ],
                   )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AvatarImage(
-                        url: user.avatar,
-                        size: 32,
-                        borderColor: c.border,
-                        borderWidth: 2,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            TextField(
-                              controller: _commentCtrl,
-                              maxLines: 3,
-                              style: bodyStyle(p, size: 14),
-                              decoration: const InputDecoration(
-                                hintText:
-                                    'Share your thoughts on this research…',
-                              ),
-                              onChanged: (_) => setState(() {}),
-                            ),
-                            const SizedBox(height: 8),
-                            GoldButton(
-                              palette: p,
-                              label: 'Post',
-                              onPressed: _commentCtrl.text.trim().isEmpty
-                                  ? null
-                                  : postComment,
-                              minHeight: 40,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                : _CommentComposer(
+                    palette: p,
+                    user: user,
+                    onPost: (text) =>
+                        widget.appState.addComment(paper.id, text),
                   ),
           ),
           const SizedBox(height: 24),
@@ -938,7 +909,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            Text(
+            SelectableText(
               comment.text,
               style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
             ),
@@ -956,6 +927,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       .toggleCommentLike(paper.id, comment.id);
                 },
                 child: Container(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
@@ -996,6 +969,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget _buildPdfTab(AppPalette p, Paper paper) {
     final c = p.c;
     final url = paper.pdfUrl ?? '';
+    final canEmbed = kIsWeb && url.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1009,12 +983,28 @@ class _ReaderScreenState extends State<ReaderScreen> {
           Text('📄 Full Paper',
               style: displayStyle(p, size: 18, weight: FontWeight.w600)),
           const SizedBox(height: 12),
-          Text(
-            'The embedded PDF viewer is not available in this Flutter port.',
-            style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
-          ),
-          const SizedBox(height: 12),
-          SelectableText(url, style: monoStyle(p, size: 11)),
+          if (canEmbed)
+            // On web the PDF renders inline in an iframe (Chrome's built-in
+            // viewer). A bounded height is needed because the tab scrolls;
+            // scale it to the viewport so it feels like a real document
+            // viewer instead of a fixed 640px box.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                height: (MediaQuery.of(context).size.height * 0.75)
+                    .clamp(480.0, 900.0)
+                    .toDouble(),
+                child: buildPdfView(url),
+              ),
+            )
+          else ...[
+            Text(
+              'The embedded PDF viewer is only available on web. Copy the link to open it in your browser.',
+              style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
+            ),
+            const SizedBox(height: 12),
+            SelectableText(url, style: monoStyle(p, size: 11)),
+          ],
           const SizedBox(height: 16),
           GoldButton(
             palette: p,
@@ -1026,6 +1016,81 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Comment composer, extracted as its own [StatefulWidget] so typing in the
+/// field only rebuilds the composer — previously `onChanged` called
+/// `setState` on the whole reader screen per keystroke.
+class _CommentComposer extends StatefulWidget {
+  const _CommentComposer({
+    required this.palette,
+    required this.user,
+    required this.onPost,
+  });
+
+  final AppPalette palette;
+  final AppUser user;
+  final ValueChanged<String> onPost;
+
+  @override
+  State<_CommentComposer> createState() => _CommentComposerState();
+}
+
+class _CommentComposerState extends State<_CommentComposer> {
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.palette;
+    final c = p.c;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AvatarImage(
+          url: widget.user.avatar,
+          size: 32,
+          borderColor: c.border,
+          borderWidth: 2,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              TextField(
+                controller: _ctrl,
+                maxLines: 3,
+                style: bodyStyle(p, size: 14),
+                decoration: const InputDecoration(
+                  hintText: 'Share your thoughts on this research…',
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              GoldButton(
+                palette: p,
+                label: 'Post',
+                onPressed: _ctrl.text.trim().isEmpty
+                    ? null
+                    : () {
+                        widget.onPost(_ctrl.text.trim());
+                        _ctrl.clear();
+                        setState(() {});
+                      },
+                minHeight: 40,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

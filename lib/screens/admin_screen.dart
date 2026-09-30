@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../state/app_state.dart';
@@ -454,6 +455,13 @@ class _AdminScreenState extends State<AdminScreen> {
   // --------------------------------------------------------------- dashboard
 
   Widget _buildDashboard(AppPalette p, bool wide) {
+    // Don't flash zero-counts while the first Firestore emission is pending.
+    if (!widget.appState.papersResolved) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 64),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -543,9 +551,9 @@ class _AdminScreenState extends State<AdminScreen> {
         p,
         icon: Icons.people,
         iconColor: const Color(0xFF7C6AF7),
-        label: 'Registered users',
-        value: _uniqueStudents + 1,
-        detail: 'Including 1 administrator',
+        label: 'Contributors',
+        value: _uniqueStudents,
+        detail: 'Unique authors in the archive',
       ),
       _statCard(
         p,
@@ -785,12 +793,12 @@ class _AdminScreenState extends State<AdminScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Recent activity',
+                      'Recent submissions',
                       style: displayStyle(p, size: 17, weight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Latest platform updates',
+                      'Latest papers uploaded to the archive',
                       style: bodyStyle(p, size: 12, color: p.c.muted),
                     ),
                   ],
@@ -808,64 +816,66 @@ class _AdminScreenState extends State<AdminScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          ...rows.map((paper) {
-            final color = _statusColor(paper.status);
-            final icon = paper.status == PaperStatus.approved
-                ? Icons.check
-                : paper.status == PaperStatus.rejected
-                ? Icons.close
-                : Icons.description;
-            final action = paper.status == PaperStatus.approved
-                ? 'had a paper approved'
-                : paper.status == PaperStatus.rejected
-                ? 'received a decision'
-                : 'uploaded a new paper';
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color.withValues(alpha: 0.12),
-                      border: Border.all(color: color.withValues(alpha: 0.4)),
+          if (rows.isEmpty)
+            Text(
+              'No submissions yet.',
+              style: bodyStyle(p, size: 13, color: p.c.muted),
+            )
+          else
+            ...rows.map((paper) {
+              final color = _statusColor(paper.status);
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color.withValues(alpha: 0.12),
+                        border: Border.all(color: color.withValues(alpha: 0.4)),
+                      ),
+                      child: Icon(Icons.description, size: 13, color: color),
                     ),
-                    child: Icon(icon, size: 13, color: color),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        RichText(
-                          text: TextSpan(
-                            style: bodyStyle(p, size: 13),
-                            children: [
-                              TextSpan(
-                                text: paper.author,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RichText(
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            text: TextSpan(
+                              style: bodyStyle(p, size: 13),
+                              children: [
+                                TextSpan(
+                                  text: paper.author,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                              TextSpan(text: ' $action'),
-                            ],
+                                const TextSpan(text: ' submitted '),
+                                TextSpan(
+                                  text: '“${paper.title}”',
+                                  style: TextStyle(color: p.c.muted),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          timeAgo(paper.submittedAt),
-                          style: monoStyle(p, size: 11),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            timeAgo(paper.submittedAt),
+                            style: monoStyle(p, size: 11),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -1314,9 +1324,15 @@ class _AdminScreenState extends State<AdminScreen> {
                                         size: 17,
                                       ),
                                       label: const Text('Read PDF'),
-                                      onPressed: () => widget.appState.showToast(
-                                        'PDF links open in a browser in the full app',
-                                      ),
+                                      onPressed: () async {
+                                        final url = Uri.parse(cur.pdfUrl!);
+                                        if (!await launchUrl(url)) {
+                                          widget.appState.showToast(
+                                            'Could not open the PDF link',
+                                            '⚠️',
+                                          );
+                                        }
+                                      },
                                     ),
                                   if (cur.status == PaperStatus.pending) ...[
                                     GhostButton(
