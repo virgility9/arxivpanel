@@ -25,20 +25,26 @@ class AuthRepository {
 
   /// Streams the signed-in user's [AppUser] profile.
   ///
-  /// Emits `null` when signed out or when no `users/{uid}` document exists.
+  /// Emits `null` when signed out. While signed in, the `users/{uid}`
+  /// document is watched live (not fetched once): if the profile document
+  /// is missing at sign-in time and gets created a moment later — e.g. by
+  /// the self-heal in [signIn] — the profile arrives automatically instead
+  /// of the app being stuck thinking the user has no profile.
   Stream<AppUser?> watchAuthUser() {
-    return _auth
-        .authStateChanges()
-        .asyncMap((user) async {
-          if (user == null) return null;
-          final doc = await _firestore.collection('users').doc(user.uid).get();
-          final data = doc.data();
-          if (data == null) return null;
-          return AppUser.fromJson(doc.id, data);
-        })
-        .handleError((Object e, StackTrace s) {
-          debugPrint('[AuthRepository] watchAuthUser error: $e');
-        });
+    return _auth.authStateChanges().asyncExpand((user) {
+      if (user == null) return Stream<AppUser?>.value(null);
+      return _firestore
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .map((doc) {
+            final data = doc.data();
+            if (data == null) return null;
+            return AppUser.fromJson(doc.id, data);
+          });
+    }).handleError((Object e, StackTrace s) {
+      debugPrint('[AuthRepository] watchAuthUser error: $e');
+    });
   }
 
   /// Signs in with email and password.

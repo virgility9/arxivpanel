@@ -64,15 +64,18 @@ class DefaultFirebaseConfig {
   }
 
   /// FirebaseOptions built from the constants above.
+  ///
+  /// The Analytics `measurementId` is only passed when it holds a real value;
+  /// the `TODO-` placeholder is never sent to Firebase.
   static FirebaseOptions get currentPlatform {
-    return const FirebaseOptions(
+    return FirebaseOptions(
       apiKey: apiKey,
       appId: appId,
       messagingSenderId: messagingSenderId,
       projectId: projectId,
       authDomain: authDomain,
       storageBucket: storageBucket,
-      measurementId: measurementId,
+      measurementId: measurementId.startsWith('TODO-') ? null : measurementId,
     );
   }
 }
