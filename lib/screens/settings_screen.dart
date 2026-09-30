@@ -279,17 +279,15 @@ class SettingsScreen extends StatelessWidget {
 
                       // Color Mode
                       _groupTitle(p, 'Color Mode'),
-                      // Color Mode — IntrinsicHeight + stretch keeps both cards
-                      // at identical height in either mode.
-                      IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _modeCard(p, AppMode.dark),
-                            const SizedBox(width: 10),
-                            _modeCard(p, AppMode.light),
-                          ],
-                        ),
+                      // Color Mode — both cards keep an identical layout in
+                      // either mode (the check-badge slot is always laid
+                      // out), so switching modes never resizes them.
+                      Row(
+                        children: [
+                          _modeCard(p, AppMode.dark),
+                          const SizedBox(width: 10),
+                          _modeCard(p, AppMode.light),
+                        ],
                       ),
                       const SizedBox(height: 32),
 
