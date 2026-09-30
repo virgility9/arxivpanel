@@ -54,6 +54,8 @@ class _AuthDialogState extends State<AuthDialog> {
   late final TapGestureRecognizer _modeToggleRecognizer;
   String _error = '';
   bool _loading = false;
+  bool _obscured = true;
+  bool _resetSent = false;
 
   @override
   void initState() {
@@ -125,6 +127,30 @@ class _AuthDialogState extends State<AuthDialog> {
       setState(() => _loading = false);
       Navigator.of(context).pop();
     }
+  }
+
+  /// Sends a password-reset email for the address currently in the email
+  /// field. Login mode only.
+  Future<void> _sendReset() async {
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _error = 'Enter your email address first.');
+      return;
+    }
+    setState(() {
+      _error = '';
+      _loading = true;
+    });
+    final err = await widget.appState.sendPasswordReset(email: email);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (err != null) {
+        _error = err;
+      } else {
+        _resetSent = true;
+      }
+    });
   }
 
   @override
@@ -211,6 +237,11 @@ class _AuthDialogState extends State<AuthDialog> {
                       style: bodyStyle(palette, size: 13, color: c.muted),
                     ),
                     const SizedBox(height: 24),
+                    AutofillGroup(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                     if (!isLogin) ...[
                       LabeledField(
                         palette: palette,
@@ -231,6 +262,7 @@ class _AuthDialogState extends State<AuthDialog> {
                       child: TextField(
                         controller: _email,
                         keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
                         style: TextStyle(color: c.text, fontSize: 15),
                         decoration: const InputDecoration(
                           hintText: 'you@institution.edu',
@@ -243,12 +275,51 @@ class _AuthDialogState extends State<AuthDialog> {
                       label: 'Password',
                       child: TextField(
                         controller: _password,
-                        obscureText: true,
+                        obscureText: _obscured,
+                        autofillHints: isLogin
+                            ? const [AutofillHints.password]
+                            : const [AutofillHints.newPassword],
                         style: TextStyle(color: c.text, fontSize: 15),
-                        decoration: const InputDecoration(hintText: '••••••••'),
+                        decoration: InputDecoration(
+                          hintText: '••••••••',
+                          suffixIcon: IconButton(
+                            // 44px minimum touch target.
+                            constraints: const BoxConstraints(
+                                minWidth: 44, minHeight: 44),
+                            icon: Icon(
+                              _obscured
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: c.muted,
+                            ),
+                            tooltip: _obscured
+                                ? 'Show password'
+                                : 'Hide password',
+                            onPressed: () => setState(
+                                () => _obscured = !_obscured),
+                          ),
+                        ),
                         onSubmitted: (_) => _submit(),
                       ),
                     ),
+                        ],
+                      ),
+                    ),
+                    // Password reset lives in login mode only.
+                    if (isLogin) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _resetSent ? null : _sendReset,
+                          child: Text(
+                            _resetSent
+                                ? 'Reset email sent ✓'
+                                : 'Forgot password?',
+                          ),
+                        ),
+                      ),
+                    ],
                     if (_error.isNotEmpty) ...[
                       const SizedBox(height: 14),
                       ErrorBanner(message: _error),

@@ -31,6 +31,7 @@ class AppState extends ChangeNotifier {
     _firebaseReady = true;
     _papersSub = _repo!.watchPapers().listen((papers) {
       _papers = papers;
+      _papersLoaded = true;
       notifyListeners();
     });
     _authSub = _authRepo!.watchAuthUser().listen(_onAuthUser);
@@ -52,6 +53,7 @@ class AppState extends ChangeNotifier {
   AppUser? _user;
   AppView _view = AppView.library;
   List<Paper> _papers = <Paper>[];
+  bool _papersLoaded = false;
   String? _selectedPaperId;
   Set<String> _bookmarks = <String>{};
   List<ReadEntry> _readingHistory = <ReadEntry>[];
@@ -64,6 +66,11 @@ class AppState extends ChangeNotifier {
   AppUser? get user => _user;
   AppView get view => _view;
   List<Paper> get papers => _papers;
+
+  /// True once the papers stream has emitted at least once. Screens render a
+  /// loading indicator until [papersResolved] so users never see a flash of
+  /// "no papers" on first load.
+  bool get papersResolved => _papersLoaded || !_firebaseReady;
 
   /// Resolves the selected paper id against the live [_papers] list so the
   /// returned object is always fresh (streams keep it up to date).
@@ -143,6 +150,14 @@ class AppState extends ChangeNotifier {
     if (!_firebaseReady) return Future.value('Firebase is not configured.');
     return _authRepo!
         .signUp(username: username, email: email, password: password);
+  }
+
+  /// Sends a password-reset email.
+  ///
+  /// Returns `null` on success, otherwise a user-friendly error message.
+  Future<String?> sendPasswordReset({required String email}) {
+    if (!_firebaseReady) return Future.value('Firebase is not configured.');
+    return _authRepo!.sendPasswordReset(email: email);
   }
 
   /// Signs the current user out. The auth stream clears the user, bookmarks
@@ -295,7 +310,8 @@ class AppState extends ChangeNotifier {
     if (!_firebaseReady) return;
     await _repo!.submitPaper(paper);
     showToast('Paper submitted for review!', '📬');
-    navigate(AppView.library);
+    // NOTE: no navigate() here — the post screen shows its own success
+    // state with a "Back to Library" button.
   }
 
   // ------------------------------------------------------------------- admin

@@ -140,6 +140,25 @@ class AuthRepository {
   /// Signs the current user out.
   Future<void> signOut() => _auth.signOut();
 
+  /// Sends a password-reset email.
+  ///
+  /// Returns `null` on success, otherwise a user-friendly error message.
+  Future<String?> sendPasswordReset({required String email}) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'user-not-found':
+          return 'No account found for that email.';
+        case 'invalid-email':
+          return 'Enter a valid email address.';
+        default:
+          return 'Could not send the reset email (${e.code}). Try again.';
+      }
+    }
+  }
+
   String _friendlySignInError(String code) {
     switch (code) {
       case 'user-not-found':

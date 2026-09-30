@@ -123,7 +123,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'RESEARCH ARCHIVE — VOL. 2024',
+                          'RESEARCH ARCHIVE — VOL. 2026',
                           style: monoStyle(
                             p,
                             size: 10,
@@ -150,6 +150,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             hintText: 'Search titles, authors, tags…',
                             prefixIcon: Icon(Icons.search, color: c.faint, size: 20),
                             prefixIconConstraints: const BoxConstraints(minWidth: 44),
+                            suffixIcon: _search.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    icon: Icon(Icons.clear, color: c.faint, size: 18),
+                                    constraints: const BoxConstraints(
+                                        minWidth: 44, minHeight: 44),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _search = '');
+                                    },
+                                  ),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -204,7 +216,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1280),
-                    child: filtered.isEmpty
+                    child: !widget.appState.papersResolved
+                        // First Firestore emission hasn't arrived yet —
+                        // distinguish loading from genuinely empty.
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 64),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  CircularProgressIndicator(color: a.accent),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Loading the archive…',
+                                    style:
+                                        bodyStyle(p, size: 13, color: c.muted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : filtered.isEmpty
                         ? EmptyState(
                             palette: p,
                             icon: '📭',
@@ -227,28 +258,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   ],
                                 ],
                               )
-                            : GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  childAspectRatio: 2.6,
-                                  crossAxisSpacing: 1,
-                                  mainAxisSpacing: 1,
-                                ),
-                                itemCount: filtered.length,
-                                itemBuilder: (context, i) {
-                                  return Container(
-                                    color: c.border,
-                                    padding: const EdgeInsets.all(0),
-                                    child: PaperCard(
-                                      key: ValueKey(filtered[i].id),
-                                      paper: filtered[i],
-                                      appState: widget.appState,
-                                      theme: widget.theme,
-                                      onAuthPrompt: widget.onAuthPrompt,
-                                    ),
+                            : LayoutBuilder(
+                                builder: (context, listConstraints) {
+                                  // Two-column Wrap instead of a fixed
+                                  // childAspectRatio grid: cards keep their
+                                  // intrinsic height, so long titles/tags can
+                                  // never overflow the cell.
+                                  final colWidth =
+                                      (listConstraints.maxWidth - 1) / 2;
+                                  return Wrap(
+                                    spacing: 1,
+                                    runSpacing: 1,
+                                    children: [
+                                      for (final paper in filtered)
+                                        Container(
+                                          width: colWidth,
+                                          color: c.border,
+                                          child: PaperCard(
+                                            key: ValueKey(paper.id),
+                                            paper: paper,
+                                            appState: widget.appState,
+                                            theme: widget.theme,
+                                            onAuthPrompt: widget.onAuthPrompt,
+                                          ),
+                                        ),
+                                    ],
                                   );
                                 },
                               ),
@@ -290,7 +324,9 @@ class _TitleBlock extends StatelessWidget {
   }
 }
 
-/// Sort option chip: mono font, selected gets surface2 bg + violet border/text.
+/// Sort option chip: mono font, selected gets surface2 bg + accent
+/// border/text. Uses [InkWell] for ripple + semantics, and a 44px minimum
+/// tap height.
 class _SortChip extends StatelessWidget {
   const _SortChip({
     required this.palette,
@@ -304,27 +340,32 @@ class _SortChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  static const Color _violet = Color(0xFF7C6AF7);
-
   @override
   Widget build(BuildContext context) {
     final c = palette.c;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? c.surface2 : Colors.transparent,
-          border: Border.all(color: selected ? _violet : c.border),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: monoStyle(
-            palette,
-            size: 11,
-            color: selected ? _violet : c.muted,
-          ).copyWith(fontWeight: selected ? FontWeight.w600 : FontWeight.w400),
+    final a = palette.accent;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? c.surface2 : Colors.transparent,
+            border: Border.all(color: selected ? a.accent : c.border),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            label,
+            style: monoStyle(
+              palette,
+              size: 11,
+              color: selected ? a.accent : c.muted,
+            ).copyWith(fontWeight: selected ? FontWeight.w600 : FontWeight.w400),
+          ),
         ),
       ),
     );

@@ -78,7 +78,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     return custom.isNotEmpty ? custom : AppConstants.presetCovers[_presetIndex];
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
     final errs = <String, String>{};
     final title = _title.text.trim();
     final abstract = _abstract.text.trim();
@@ -97,40 +97,38 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     if (errs.isNotEmpty) return;
 
     setState(() => _loading = true);
-    Future.delayed(const Duration(milliseconds: 800), () async {
-      if (!mounted) return;
-      final user = widget.appState.user!;
-      final pdfRaw = _pdfUrl.text.trim();
-      final paper = Paper(
-        id: 'p${DateTime.now().millisecondsSinceEpoch}',
-        title: title,
-        author: user.username,
-        authorId: user.id,
-        authorAvatar: user.avatar,
-        abstract: abstract,
-        field: _field,
-        tags: _tags.text
-            .split(',')
-            .map((t) => t.trim())
-            .where((t) => t.isNotEmpty)
-            .toList(),
-        coverImage: _effectiveCover,
-        publishedAt: DateTime.now().toIso8601String().split('T').first,
-        pages: pages!,
-        views: 0,
-        reactions: const {},
-        comments: const [],
-        institution: institution,
-        year: DateTime.now().year.toString(),
-        pdfUrl: pdfRaw.isEmpty ? null : pdfRaw,
-        status: PaperStatus.pending,
-        submittedAt: DateTime.now(),
-      );
-      await widget.appState.submitPaper(paper);
-      setState(() {
-        _loading = false;
-        _submitted = true;
-      });
+    final user = widget.appState.user!;
+    final pdfRaw = _pdfUrl.text.trim();
+    final paper = Paper(
+      id: 'p${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      author: user.username,
+      authorId: user.id,
+      authorAvatar: user.avatar,
+      abstract: abstract,
+      field: _field,
+      tags: _tags.text
+          .split(',')
+          .map((t) => t.trim())
+          .where((t) => t.isNotEmpty)
+          .toList(),
+      coverImage: _effectiveCover,
+      publishedAt: DateTime.now().toIso8601String().split('T').first,
+      pages: pages!,
+      views: 0,
+      reactions: const {},
+      comments: const [],
+      institution: institution,
+      year: DateTime.now().year.toString(),
+      pdfUrl: pdfRaw.isEmpty ? null : pdfRaw,
+      status: PaperStatus.pending,
+      submittedAt: DateTime.now(),
+    );
+    await widget.appState.submitPaper(paper);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _submitted = true;
     });
   }
 
@@ -140,20 +138,18 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     final c = p.c;
     final user = widget.appState.user;
 
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: SingleChildScrollView(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
-              child: user == null
-                  ? _buildSignInPrompt(p)
-                  : _submitted
-                  ? _buildSuccess(p)
-                  : _buildForm(p, user),
-            ),
+    // NOTE: no nested Scaffold — AppShell already provides one.
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+            child: user == null
+                ? _buildSignInPrompt(p)
+                : _submitted
+                ? _buildSuccess(p)
+                : _buildForm(p, user),
           ),
         ),
       ),

@@ -192,10 +192,19 @@ class AppColors {
 
 /// Full resolved theme: mode colors + accent palette.
 class AppPalette {
-  const AppPalette({required this.mode, required this.accent});
+  const AppPalette({
+    required this.mode,
+    required this.accent,
+    this.textScale = 1.0,
+  });
 
   final AppMode mode;
   final AccentPalette accent;
+
+  /// Multiplier applied to custom typography helpers (mirrors the web app's
+  /// font-size setting). Defaults to 1.0; [ThemeProvider] sets it from the
+  /// user's chosen [AppFontScale].
+  final double textScale;
 
   AppColors get c => AppColors.of(mode);
   bool get isDark => mode == AppMode.dark;

@@ -32,7 +32,110 @@ class PaperCard extends StatefulWidget {
 }
 
 class _PaperCardState extends State<PaperCard> {
-  bool _showReactions = false;
+  /// The reaction popover lives in the app [Overlay] (not in the card's own
+  /// stack) so it dismisses on outside tap and never clips at card edges.
+  OverlayEntry? _reactionOverlay;
+
+  @override
+  void dispose() {
+    _removeReactionOverlay();
+    super.dispose();
+  }
+
+  void _removeReactionOverlay() {
+    _reactionOverlay?.remove();
+    _reactionOverlay = null;
+  }
+
+  void _toggleReactions() {
+    if (_reactionOverlay != null) {
+      _removeReactionOverlay();
+      return;
+    }
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(
+      builder: (ctx) {
+        final screen = MediaQuery.of(ctx).size;
+        // Anchor the popover above the card's bottom-right action area.
+        const pickerWidth = 300.0;
+        const pickerHeight = 60.0;
+        var left = screen.width - pickerWidth - 16;
+        var top = screen.height - pickerHeight - 120;
+        final cardBox = context.findRenderObject() as RenderBox?;
+        if (cardBox != null && cardBox.hasSize) {
+          final pos = cardBox.localToGlobal(Offset.zero);
+          left = pos.dx + cardBox.size.width - pickerWidth - 8;
+          top = pos.dy + cardBox.size.height - pickerHeight - 52;
+        }
+        // clamp() returns num; toDouble() keeps the inferred double type.
+        left = left.clamp(8.0, screen.width - pickerWidth - 8).toDouble();
+        top = top.clamp(8.0, screen.height - pickerHeight - 8).toDouble();
+        return Stack(
+          children: [
+            // Outside-tap scrim: transparent, closes the popover.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _removeReactionOverlay,
+              ),
+            ),
+            Positioned(
+              left: left,
+              top: top,
+              child: _reactionPopover(ctx),
+            ),
+          ],
+        );
+      },
+    );
+    _reactionOverlay = entry;
+    overlay.insert(entry);
+  }
+
+  /// The emoji popover rendered inside the overlay.
+  Widget _reactionPopover(BuildContext ctx) {
+    final palette = widget.theme.palette;
+    final c = palette.c;
+    final a = palette.accent;
+    final paper = widget.paper;
+    final user = widget.appState.user;
+    final reacted = user == null ? null : paper.reactionOf(user.id);
+    return Material(
+      color: c.surface,
+      elevation: 8,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          border: Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: AppConstants.reactions.map((emoji) {
+            final active = reacted == emoji;
+            return GestureDetector(
+              onTap: () {
+                _requireAuth(
+                    () => widget.appState.reactToPaper(paper.id, emoji));
+                _removeReactionOverlay();
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: active
+                      ? a.accent.withValues(alpha: 0.2)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(emoji, style: const TextStyle(fontSize: 22)),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
 
   void _requireAuth(VoidCallback action) {
     if (widget.appState.user == null) {
@@ -148,7 +251,8 @@ class _PaperCardState extends State<PaperCard> {
                           GestureDetector(
                             onTap: () => _requireAuth(() => widget.appState.toggleBookmark(paper.id)),
                             child: Padding(
-                              padding: const EdgeInsets.all(4),
+                              // Visual stays compact; hit area meets 44px.
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                               child: Text(
                                 bookmarked ? '🔖' : '🏷️',
                                 style: TextStyle(
@@ -159,67 +263,45 @@ class _PaperCardState extends State<PaperCard> {
                             ),
                           ),
                           const Spacer(),
-                          // Reaction picker
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              if (_showReactions)
-                                Positioned(
-                                  bottom: 40,
-                                  right: 0,
-                                  child: Material(
-                                    color: c.surface,
-                                    elevation: 8,
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: c.border),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: AppConstants.reactions.map((emoji) {
-                                          final active = reacted == emoji;
-                                          return GestureDetector(
-                                            onTap: () {
-                                              _requireAuth(() => widget.appState.reactToPaper(paper.id, emoji));
-                                              setState(() => _showReactions = false);
-                                            },
-                                            child: Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: active ? a.accent.withValues(alpha: 0.2) : Colors.transparent,
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(emoji, style: const TextStyle(fontSize: 22)),
-                                            ),
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              GestureDetector(
-                                onTap: () => setState(() => _showReactions = !_showReactions),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: reacted != null ? a.accent.withValues(alpha: 0.15) : c.surface2,
-                                    border: Border.all(color: reacted != null ? a.accent : c.border),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(reacted ?? '+', style: TextStyle(fontSize: 13, color: reacted != null ? a.accent : c.muted)),
-                                      const SizedBox(width: 4),
-                                      Text('$totalReactions', style: monoStyle(palette, size: 10)),
-                                    ],
-                                  ),
-                                ),
+                          // Reaction picker trigger — the popover itself is
+                          // an OverlayEntry (see _toggleReactions), so it
+                          // dismisses on outside tap and never clips.
+                          GestureDetector(
+                            onTap: _toggleReactions,
+                            // Extra vertical padding keeps the pill compact
+                            // while the tap target meets the 44px minimum.
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 8),
+                              child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: reacted != null
+                                    ? a.accent.withValues(alpha: 0.15)
+                                    : c.surface2,
+                                border: Border.all(
+                                    color: reacted != null
+                                        ? a.accent
+                                        : c.border),
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                            ],
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(reacted ?? '+',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: reacted != null
+                                              ? a.accent
+                                              : c.muted)),
+                                  const SizedBox(width: 4),
+                                  Text('$totalReactions',
+                                      style: monoStyle(palette, size: 10)),
+                                ],
+                              ),
+                            ),
+                          ),
                           ),
                         ],
                       ),
