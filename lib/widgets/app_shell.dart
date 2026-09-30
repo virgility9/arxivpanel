@@ -41,55 +41,65 @@ class AppShell extends StatelessWidget {
     final c = palette.c;
     final isNarrow = MediaQuery.of(context).size.width < 700;
 
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              _Navbar(
-                appState: appState,
-                theme: theme,
-                isNarrow: isNarrow,
-                onNavigate: (v) => _navigate(context, v),
-                onAuthPrompt: (m) => _promptAuth(context, m),
-              ),
-              Expanded(child: _buildView(context)),
-            ],
-          ),
-          // Toast stack
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: isNarrow ? 74 : 24,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 340),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: appState.toasts
-                      .map(
-                        (t) => _ToastCard(
-                          palette: palette,
-                          toast: t,
-                          onDismiss: () => appState.dismissToast(t.id),
-                        ),
-                      )
-                      .toList(),
+    return PopScope(
+      // No router in this app, so intercept the system back button: on any
+      // non-library view, go back to the library instead of exiting.
+      // (Browser back-button history is not wired; this covers Android
+      // system back and programmatic pops.)
+      canPop: appState.view == AppView.library,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _navigate(context, AppView.library);
+      },
+      child: Scaffold(
+        backgroundColor: c.bg,
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                _Navbar(
+                  appState: appState,
+                  theme: theme,
+                  isNarrow: isNarrow,
+                  onNavigate: (v) => _navigate(context, v),
+                  onAuthPrompt: (m) => _promptAuth(context, m),
+                ),
+                Expanded(child: _buildView(context)),
+              ],
+            ),
+            // Toast stack
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: isNarrow ? 74 : 24,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 340),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: appState.toasts
+                        .map(
+                          (t) => _ToastCard(
+                            palette: palette,
+                            toast: t,
+                            onDismiss: () => appState.dismissToast(t.id),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+        bottomNavigationBar: isNarrow
+            ? _BottomNav(
+                appState: appState,
+                theme: theme,
+                onNavigate: (v) => _navigate(context, v),
+                onAuthPrompt: () => _promptAuth(context),
+              )
+            : null,
       ),
-      bottomNavigationBar: isNarrow
-          ? _BottomNav(
-              appState: appState,
-              theme: theme,
-              onNavigate: (v) => _navigate(context, v),
-              onAuthPrompt: () => _promptAuth(context),
-            )
-          : null,
     );
   }
 
@@ -131,7 +141,8 @@ class AppShell extends StatelessWidget {
             onAuthPrompt: onAuthPrompt,
           );
         }
-        return ProfileScreen(appState: appState, theme: theme);
+        return ProfileScreen(
+            appState: appState, theme: theme, onAuthPrompt: onAuthPrompt);
       case AppView.settings:
         return SettingsScreen(theme: theme);
       case AppView.admin:
@@ -701,6 +712,20 @@ class _ToastCard extends StatelessWidget {
                 color: c.text,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Manual dismiss — previously toasts could only vanish on the
+          // 3-second timer.
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: onDismiss,
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Text('✕', style: TextStyle(fontSize: 12)),
               ),
             ),
           ),

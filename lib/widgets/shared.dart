@@ -26,13 +26,14 @@ TextStyle displayStyle(
   double? height,
   double letterSpacing = -0.02,
 }) {
+  final s = size * p.textScale;
   return TextStyle(
     fontFamily: 'serif',
-    fontSize: size,
+    fontSize: s,
     fontWeight: weight,
     color: color ?? p.c.text,
     height: height,
-    letterSpacing: size * letterSpacing,
+    letterSpacing: s * letterSpacing,
   );
 }
 
@@ -47,7 +48,7 @@ TextStyle monoStyle(
 }) {
   return TextStyle(
     fontFamily: 'monospace',
-    fontSize: size,
+    fontSize: size * p.textScale,
     fontWeight: weight,
     color: color ?? p.c.muted,
     letterSpacing: letterSpacing,
@@ -62,7 +63,7 @@ TextStyle bodyStyle(
   double? height,
 }) {
   return TextStyle(
-    fontSize: size,
+    fontSize: size * p.textScale,
     fontWeight: weight,
     color: color ?? p.c.text,
     height: height,
@@ -197,6 +198,22 @@ class NetImage extends StatelessWidget {
       width: width,
       height: height,
       fit: fit,
+      // Loading placeholder so images don't pop in from blank.
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          color: const Color(0xFF1C1C2A),
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
       errorBuilder: (context, _, __) => Container(
         width: width,
         height: height,
@@ -559,21 +576,29 @@ class SelectChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = palette.c;
     final sel = selectedColor ?? palette.accent.accent;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? sel : c.surface,
-          border: Border.all(color: selected ? sel : c.border),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? palette.accent.accentFg : c.muted,
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+    // Material + InkWell gives the ripple and tap semantics a bare
+    // GestureDetector lacks; minHeight keeps a comfortable tap target.
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? sel : c.surface,
+            border: Border.all(color: selected ? sel : c.border),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? palette.accent.accentFg : c.muted,
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+            ),
           ),
         ),
       ),

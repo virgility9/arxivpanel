@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../state/app_state.dart';
@@ -14,10 +15,15 @@ import '../theme/theme_provider.dart';
 import '../widgets/shared.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, required this.appState, required this.theme});
+  const ProfileScreen(
+      {super.key,
+      required this.appState,
+      required this.theme,
+      required this.onAuthPrompt});
 
   final AppState appState;
   final ThemeProvider theme;
+  final VoidCallback onAuthPrompt;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -58,17 +64,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _webCtrl.text = user.website ?? '';
   }
 
-  void _save(AppUser user) {
+  Future<void> _save(AppUser user) async {
     final username = _nameCtrl.text.trim();
-    widget.appState.updateUser(
-      user.copyWith(
-        username: username.isEmpty ? user.username : username,
-        institution: _instCtrl.text.trim(),
-        bio: _bioCtrl.text,
-        website: _webCtrl.text.trim(),
-      ),
-    );
-    setState(() => _editing = false);
+    try {
+      await widget.appState.updateUser(
+        user.copyWith(
+          username: username.isEmpty ? user.username : username,
+          institution: _instCtrl.text.trim(),
+          bio: _bioCtrl.text,
+          website: _webCtrl.text.trim(),
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _editing = false);
+    } catch (_) {
+      // updateUser already toasts on success; surface failures too instead
+      // of leaving the optimistic edit silently applied.
+      widget.appState.showToast('Could not save profile', '⚠️');
+    }
   }
 
   Future<void> _confirmDelete(Paper paper) async {
@@ -105,7 +118,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       animation: widget.appState,
       builder: (context, _) {
         final user = widget.appState.user;
-        if (user == null) return const SizedBox.shrink();
+        // AppShell normally guards this route, but never render a dead
+        // blank screen if the profile is reached while signed out.
+        if (user == null) {
+          return SingleChildScrollView(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: _buildSignInPrompt(p),
+              ),
+            ),
+          );
+        }
 
         final isNarrow = MediaQuery.of(context).size.width < 700;
         final bannerH = isNarrow ? 120.0 : 160.0;
@@ -157,12 +181,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     height: bannerH,
                     decoration: BoxDecoration(
+                      // Palette-derived gradient: the old navy gradient was
+                      // hardcoded and looked wrong in light mode.
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          const Color(0xFF1A1A2E),
-                          const Color(0xFF16213E),
+                          p.accent.accent.withValues(
+                              alpha: p.mode == AppMode.dark ? 0.35 : 0.18),
+                          c.surface2,
                           c.bg,
                         ],
                         stops: const [0.0, 0.5, 1.0],
@@ -214,7 +241,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 32),
                         _tabsRow(p, c, a, tabs, isNarrow),
                         const SizedBox(height: 24),
-                        if (_tab == 0)
+                        if (!widget.appState.papersResolved)
+                          // Papers are still loading from Firestore; don't
+                          // flash "No papers yet" on the tab counts.
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 48),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (_tab == 0)
                           myPapers.isEmpty
                               ? EmptyState(
                                   palette: p,
@@ -455,8 +489,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         if (user.website != null && user.website!.isNotEmpty)
-          Text(user.website!, style: monoStyle(p, size: 11, color: p.info)),
+          InkWell(
+            onTap: () => _openWebsite(user.website!),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                user.website!,
+                style: monoStyle(p, size: 11, color: p.info).copyWith(
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  /// Opens the profile website in a browser; tolerates bare domains.
+  Future<void> _openWebsite(String raw) async {
+    var uri = Uri.tryParse(raw.trim());
+    if (uri == null) return;
+    if (uri.scheme.isEmpty) uri = Uri.tryParse('https://${raw.trim()}');
+    if (uri == null) return;
+    if (!await launchUrl(uri)) {
+      widget.appState.showToast('Could not open website', '⚠️');
+    }
+  }
+
+  /// Rendered when the profile route is reached while signed out (AppShell
+  /// normally guards this, but a blank screen is never acceptable).
+  Widget _buildSignInPrompt(AppPalette p) {
+    final c = p.c;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 96, horizontal: 24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('👤', style: TextStyle(fontSize: 56)),
+          const SizedBox(height: 20),
+          Text(
+            'Your Scholar Profile',
+            style: displayStyle(p, size: 26, weight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Sign in to see your papers, reading history, and saved items.',
+            style: bodyStyle(p, size: 15, color: c.muted),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: GoldButton(
+              palette: p,
+              label: 'Sign In to Continue',
+              onPressed: widget.onAuthPrompt,
+              minHeight: 52,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

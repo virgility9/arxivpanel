@@ -105,10 +105,22 @@ class _PollsScreenState extends State<PollsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildPodium(ranked, wide),
-                    _buildRankingsList(ranked, maxScore, wide),
-                    const SizedBox(height: 40),
-                    _buildInsightBox(),
+                    if (!widget.appState.papersResolved)
+                      // First Firestore emission hasn't arrived yet.
+                      Padding(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 64),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                              color: _violet),
+                        ),
+                      )
+                    else ...[
+                      _buildPodium(ranked, wide),
+                      _buildRankingsList(ranked, maxScore, wide),
+                      const SizedBox(height: 40),
+                      _buildInsightBox(),
+                    ],
                   ],
                 ),
               ),
@@ -202,17 +214,22 @@ class _PollsScreenState extends State<PollsScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
-          child: Row(
-            children: [
-              for (final tab in tabs)
-                _MetricTab(
-                  icon: tab.icon,
-                  label: tab.label,
-                  active: _metric == tab.key,
-                  activeColor: _violet,
-                  onTap: () => setState(() => _metric = tab.key),
-                ),
-            ],
+          // Scrollable so the three tabs never overflow on narrow phones.
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final tab in tabs)
+                  _MetricTab(
+                    palette: p,
+                    icon: tab.icon,
+                    label: tab.label,
+                    active: _metric == tab.key,
+                    activeColor: _violet,
+                    onTap: () => setState(() => _metric = tab.key),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -234,6 +251,7 @@ class _PollsScreenState extends State<PollsScreen> {
     final cards = [
       for (var i = 0; i < top3.length; i++)
         _PodiumCard(
+          palette: p,
           paper: top3[i],
           index: i,
           wide: wide,
@@ -285,6 +303,7 @@ class _PollsScreenState extends State<PollsScreen> {
         ),
         for (var i = 0; i < ranked.length; i++)
           _RankingRow(
+            palette: p,
             paper: ranked[i],
             index: i,
             wide: wide,
@@ -327,22 +346,22 @@ class _PollsScreenState extends State<PollsScreen> {
             RichText(
               text: TextSpan(
                 style: bodyStyle(p, size: 13, color: c.muted, height: 1.7),
-                children: const [
+                children: [
                   TextSpan(
                     text: 'Most Reacted',
-                    style: TextStyle(color: Color(0xFFB0A898), fontWeight: FontWeight.w700),
+                    style: TextStyle(color: p.c.text, fontWeight: FontWeight.w700),
                   ),
-                  TextSpan(text: ' counts all emoji reactions (🔥🧠👏❤️✨🌱) left by readers. '),
+                  const TextSpan(text: ' counts all emoji reactions (🔥🧠👏❤️✨🌱) left by readers. '),
                   TextSpan(
                     text: 'Most Read',
-                    style: TextStyle(color: Color(0xFFB0A898), fontWeight: FontWeight.w700),
+                    style: TextStyle(color: p.c.text, fontWeight: FontWeight.w700),
                   ),
-                  TextSpan(text: ' counts unique page opens. '),
+                  const TextSpan(text: ' counts unique page opens. '),
                   TextSpan(
                     text: 'Most Discussed',
-                    style: TextStyle(color: Color(0xFFB0A898), fontWeight: FontWeight.w700),
+                    style: TextStyle(color: p.c.text, fontWeight: FontWeight.w700),
                   ),
-                  TextSpan(text: ' counts comments. Rankings update as you read and react.'),
+                  const TextSpan(text: ' counts comments. Rankings update as you read and react.'),
                 ],
               ),
             ),
@@ -359,6 +378,7 @@ class _PollsScreenState extends State<PollsScreen> {
 
 class _MetricTab extends StatelessWidget {
   const _MetricTab({
+    required this.palette,
     required this.icon,
     required this.label,
     required this.active,
@@ -366,6 +386,7 @@ class _MetricTab extends StatelessWidget {
     required this.onTap,
   });
 
+  final AppPalette palette;
   final String icon;
   final String label;
   final bool active;
@@ -374,7 +395,8 @@ class _MetricTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = const Color(0xFF7A7690);
+    // Palette-driven so the tab bar stays readable in light mode too.
+    final muted = palette.c.muted;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -416,6 +438,7 @@ class _MetricTab extends StatelessWidget {
 
 class _PodiumCard extends StatelessWidget {
   const _PodiumCard({
+    required this.palette,
     required this.paper,
     required this.index,
     required this.wide,
@@ -424,6 +447,7 @@ class _PodiumCard extends StatelessWidget {
     required this.onTap,
   });
 
+  final AppPalette palette;
   final Paper paper;
   final int index;
   final bool wide;
@@ -501,16 +525,17 @@ class _PodiumCard extends StatelessWidget {
   }
 
   Widget _info(Color medalColor) {
+    final c = palette.c;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           paper.title,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'serif',
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Color(0xFFE4DFD0),
+            color: c.text,
             height: 1.35,
           ),
           maxLines: wide ? 4 : 3,
@@ -519,7 +544,7 @@ class _PodiumCard extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           '${paper.author} · ${paper.year}',
-          style: const TextStyle(fontSize: 11, color: Color(0xFF7A7690)),
+          style: TextStyle(fontSize: 11, color: c.muted),
         ),
         const Spacer(),
         Row(
@@ -537,10 +562,10 @@ class _PodiumCard extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               scoreLabel,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 10,
-                color: Color(0xFF5A5668),
+                color: c.faint,
               ),
             ),
           ],
@@ -590,6 +615,7 @@ class _PodiumCard extends StatelessWidget {
 
 class _RankingRow extends StatelessWidget {
   const _RankingRow({
+    required this.palette,
     required this.paper,
     required this.index,
     required this.wide,
@@ -598,6 +624,7 @@ class _RankingRow extends StatelessWidget {
     required this.onTap,
   });
 
+  final AppPalette palette;
   final Paper paper;
   final int index;
   final bool wide;
@@ -607,6 +634,7 @@ class _RankingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = palette.c;
     final isTop3 = index < 3;
     final accent = isTop3 ? _medalColors[index] : _violet;
     return Material(
@@ -615,8 +643,8 @@ class _RankingRow extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: EdgeInsets.symmetric(vertical: wide ? 14 : 12),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: Color(0xFF1C1C2A))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: c.border)),
           ),
           child: Row(
             children: [
@@ -635,7 +663,7 @@ class _RankingRow extends StatelessWidget {
                             fontFamily: 'serif',
                             fontSize: wide ? 16 : 14,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF3A3A50),
+                            color: c.faint,
                             height: 1,
                           ),
                         ),
@@ -661,7 +689,7 @@ class _RankingRow extends StatelessWidget {
                         fontFamily: 'serif',
                         fontSize: wide ? 14 : 13,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFFE4DFD0),
+                        color: c.text,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -675,7 +703,7 @@ class _RankingRow extends StatelessWidget {
                             child: Container(
                               height: 3,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1C1C2A),
+                                color: c.surface2,
                                 borderRadius: BorderRadius.circular(2),
                               ),
                               child: TweenAnimationBuilder<double>(
@@ -685,7 +713,7 @@ class _RankingRow extends StatelessWidget {
                                 builder: (context, value, _) {
                                   return FractionallySizedBox(
                                     alignment: Alignment.centerLeft,
-                                    widthFactor: value.clamp(0.0, 1.0),
+                                    widthFactor: value.clamp(0.0, 1.0).toDouble(),
                                     child: Container(
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
@@ -709,7 +737,7 @@ class _RankingRow extends StatelessWidget {
                           style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 11,
-                            color: isTop3 ? _medalColors[index] : const Color(0xFF7A7690),
+                            color: isTop3 ? _medalColors[index] : c.muted,
                           ),
                         ),
                       ],
@@ -718,9 +746,9 @@ class _RankingRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Text(
+              Text(
                 '›',
-                style: TextStyle(color: Color(0xFF3A3A50), fontSize: 18),
+                style: TextStyle(color: c.faint, fontSize: 18),
               ),
             ],
           ),
