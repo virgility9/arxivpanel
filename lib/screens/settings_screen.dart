@@ -90,21 +90,26 @@ class SettingsScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (active)
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: a.accent),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '✓',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: a.accentFg,
-                        fontWeight: FontWeight.w700,
-                      ),
+                // Check badge slot is always laid out (transparent when
+                // inactive) so selecting a mode never re-wraps the text or
+                // resizes the cards.
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: active ? a.accent : Colors.transparent,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '✓',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: active ? a.accentFg : Colors.transparent,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
+                ),
               ],
             ),
           ),
@@ -274,12 +279,17 @@ class SettingsScreen extends StatelessWidget {
 
                       // Color Mode
                       _groupTitle(p, 'Color Mode'),
-                      Row(
-                        children: [
-                          _modeCard(p, AppMode.dark),
-                          const SizedBox(width: 10),
-                          _modeCard(p, AppMode.light),
-                        ],
+                      // Color Mode — IntrinsicHeight + stretch keeps both cards
+                      // at identical height in either mode.
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _modeCard(p, AppMode.dark),
+                            const SizedBox(width: 10),
+                            _modeCard(p, AppMode.light),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 32),
 
