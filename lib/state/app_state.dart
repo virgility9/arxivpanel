@@ -29,11 +29,7 @@ class AppState extends ChangeNotifier {
     _repo = FirestoreRepository();
     _authRepo = AuthRepository();
     _firebaseReady = true;
-    _papersSub = _repo!.watchPapers().listen((papers) {
-      _papers = papers;
-      _papersLoaded = true;
-      notifyListeners();
-    });
+    _subscribePapers();
     _usersSub = _repo!.watchUsers().listen((users) {
       _users = users;
       _usersLoaded = true;
@@ -51,6 +47,38 @@ class AppState extends ChangeNotifier {
   AuthRepository? _authRepo;
 
   StreamSubscription<List<Paper>>? _papersSub;
+
+  /// Disposer for the feed behind [_papersSub]; called when re-subscribing
+  /// so the old feed's query and per-paper listeners don't leak.
+  Future<void> Function()? _papersDispose;
+
+  /// Which papers query [_papersSub] is currently on. The feed must follow
+  /// the user's admin flag: admins get the unfiltered collection (allowed by
+  /// the rules' `isAdmin()` branch), everyone else gets approved papers only
+  /// (an unfiltered query would be denied for them — rules are not filters).
+  bool _papersAdmin = false;
+
+  /// (Re)subscribes to the papers feed matching the current admin status.
+  /// Called once at startup and again whenever the auth user (and thus
+  /// `isAdmin`) resolves or changes. `_papersLoaded` is intentionally left
+  /// alone on re-subscribe so the UI keeps showing the previous feed until
+  /// the new one emits, instead of flashing a loading spinner.
+  void _subscribePapers() {
+    if (_repo == null) return;
+    final admin = _user?.isAdmin == true;
+    if (_papersSub != null && _papersAdmin == admin) return;
+    _papersSub?.cancel();
+    // Fire-and-forget: teardown is idempotent and never throws.
+    unawaited(_papersDispose?.call());
+    _papersAdmin = admin;
+    final feed = _repo!.watchPapers(admin: admin);
+    _papersDispose = feed.dispose;
+    _papersSub = feed.stream.listen((papers) {
+      _papers = papers;
+      _papersLoaded = true;
+      notifyListeners();
+    });
+  }
   StreamSubscription<List<AppUser>>? _usersSub;
   StreamSubscription<AppUser?>? _authSub;
   StreamSubscription<Set<String>>? _bookmarksSub;
@@ -118,6 +146,8 @@ class AppState extends ChangeNotifier {
   void _onAuthUser(AppUser? user) {
     _user = user;
     _cancelUserSubs();
+    // The papers feed depends on isAdmin — re-subscribe if it changed.
+    _subscribePapers();
     if (user != null) {
       _bookmarksSub = _repo!.watchBookmarks(user.id).listen((bookmarks) {
         _bookmarks = bookmarks;

@@ -613,28 +613,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         _statCard(
           p,
-          icon: '📄',
+          icon: Icons.description_outlined,
           value: '$papers',
           label: 'Papers',
           color: p.accent.accent,
         ),
         _statCard(
           p,
-          icon: '👁',
+          icon: Icons.visibility_outlined,
           value: views,
           label: 'Total Views',
           color: const Color(0xFF7C6AF7),
         ),
         _statCard(
           p,
-          icon: '🔥',
+          icon: Icons.whatshot_outlined,
           value: '$reactions',
           label: 'Reactions Received',
           color: const Color(0xFFE06B6B),
         ),
         _statCard(
           p,
-          icon: '⏱',
+          icon: Icons.timer_outlined,
           value: readTime,
           label: 'Read Time',
           color: const Color(0xFF4ADE80),
@@ -644,9 +644,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// One stat card: tinted icon tile, colored value, uppercase label.
+  /// Uses Material icons (not emoji) so the glyphs always render — some
+  /// emoji (e.g. ⏱) are missing from Windows system fonts and trigger
+  /// Flutter's "could not find Noto fonts" fallback warning on web.
   Widget _statCard(
     AppPalette p, {
-    required String icon,
+    required IconData icon,
     required String value,
     required String label,
     required Color color,
@@ -671,7 +674,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               borderRadius: BorderRadius.circular(9),
             ),
             alignment: Alignment.center,
-            child: Text(icon, style: const TextStyle(fontSize: 17)),
+            child: Icon(icon, size: 18, color: color),
           ),
           const SizedBox(height: 10),
           Text(

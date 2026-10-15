@@ -37,15 +37,15 @@ ReadEntry _readEntryFromJson(Map<String, dynamic> json) {
 
 /// Internal feed owned by one [FirestoreRepository.watchPapers] call.
 ///
-/// Fans-in the `papers` collection with each paper's `comments` and
+/// Fans-in the papers query with each paper's `comments` and
 /// `reactions` subcollections, rebuilding [Paper] objects on any change.
+/// Sorting by `submittedAt` happens client-side in [_emit], so callers
+/// don't need a server `orderBy` (which would demand composite indexes
+/// when combined with filters).
 class _PaperFeed {
-  _PaperFeed(this._firestore) {
-    _papersSub = _firestore
-        .collection('papers')
-        .orderBy('submittedAt', descending: true)
-        .snapshots()
-        .listen(_onPapers, onError: _logError('papers'));
+  _PaperFeed(this._firestore, Query<Map<String, dynamic>> query) {
+    _papersSub =
+        query.snapshots().listen(_onPapers, onError: _logError('papers'));
   }
 
   final FirebaseFirestore _firestore;
@@ -135,6 +135,8 @@ class _PaperFeed {
   }
 
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     for (final id in _paperSubs.keys.toList()) {
       _cancelPaper(id);
     }
@@ -142,6 +144,8 @@ class _PaperFeed {
     _papersSub = null;
     await _controller.close();
   }
+
+  bool _disposed = false;
 }
 
 /// Internal feed owned by one [FirestoreRepository.watchPolls] call.
@@ -257,12 +261,29 @@ class FirestoreRepository {
   // Papers
   // ------------------------------------------------------------------
 
-  /// Streams all papers ordered by `submittedAt` descending, with each
-  /// paper's comments and emoji reactions hydrated from subcollections.
-  Stream<List<Paper>> watchPapers() {
-    final feed = _PaperFeed(_firestore);
+  /// Streams papers with each paper's comments and emoji reactions
+  /// hydrated from subcollections (newest first).
+  ///
+  /// Firestore security rules are not filters: an unfiltered `papers` query
+  /// is denied for anyone who isn't an admin, because the read rule also
+  /// depends on each document's `status`/`authorId`. So non-admins get a
+  /// `status == approved` query (equality-only, no composite index needed),
+  /// which matches the rules' public-read branch exactly; admins get the
+  /// unfiltered collection, allowed by the rules' `isAdmin()` branch.
+  ///
+  /// Returns the stream plus a `dispose` callback that tears down the query
+  /// and all per-paper subcollection listeners. Disposal is idempotent, so
+  /// it is safe to call both directly and via [dispose].
+  ({Stream<List<Paper>> stream, Future<void> Function() dispose}) watchPapers({
+    bool admin = false,
+  }) {
+    final collection = _firestore.collection('papers');
+    final Query<Map<String, dynamic>> query = admin
+        ? collection
+        : collection.where('status', isEqualTo: 'approved');
+    final feed = _PaperFeed(_firestore, query);
     _feedDisposers.add(feed.dispose);
-    return feed.stream;
+    return (stream: feed.stream, dispose: feed.dispose);
   }
 
   /// Increments the paper's view counter atomically.
