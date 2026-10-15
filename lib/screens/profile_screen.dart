@@ -224,44 +224,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             style: bodyStyle(p, size: 12, color: c.muted),
                           ),
                           const SizedBox(height: 8),
-                          Row(
+                          // Wrap instead of Row: 6 presets no longer fit on
+                          // one line at narrow dialog widths.
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
                             children: [
                               for (final url in AppConstants.randomAvatars)
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.only(right: 8),
-                                  child: InkWell(
-                                    borderRadius:
-                                        BorderRadius.circular(22),
-                                    onTap: saving
-                                        ? null
-                                        : () => setDialogState(() {
-                                              avatarUrl = url;
-                                              avatarBytes = null;
-                                            }),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: avatarBytes == null &&
-                                                  avatarUrl == url
-                                              ? a.accent
-                                              : Colors.transparent,
-                                          width: 2.5,
-                                        ),
+                                InkWell(
+                                  borderRadius:
+                                      BorderRadius.circular(22),
+                                  onTap: saving
+                                      ? null
+                                      : () => setDialogState(() {
+                                            avatarUrl = url;
+                                            avatarBytes = null;
+                                          }),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: avatarBytes == null &&
+                                                avatarUrl == url
+                                            ? a.accent
+                                            : Colors.transparent,
+                                        width: 2.5,
                                       ),
-                                      child: ClipOval(
-                                        child: Image.network(
-                                          url,
+                                    ),
+                                    child: ClipOval(
+                                      child: Image.network(
+                                        url,
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            Container(
                                           width: 40,
                                           height: 40,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) =>
-                                              Container(
-                                            width: 40,
-                                            height: 40,
-                                            color: c.surface2,
-                                          ),
+                                          color: c.surface2,
                                         ),
                                       ),
                                     ),

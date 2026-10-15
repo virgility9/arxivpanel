@@ -249,11 +249,14 @@ class AvatarImage extends StatelessWidget {
     final fallback = Container(
       color: const Color(0xFF2A2A3A),
       child: const Center(
-        child: Text('👤', style: TextStyle(fontSize: 16)),
+        child: Icon(Icons.person_outline, size: 20, color: Colors.white70),
       ),
     );
     // Custom avatars are stored as inline data URLs (no Storage needed);
     // presets and legacy avatars are network URLs.
+    // NOTE: the fallback is a Material icon, not an emoji — emoji glyphs
+    // like 👤 are missing from Windows fonts and trigger Flutter's
+    // "could not find a set of Noto fonts" warning.
     final Widget image = isDataUrl(url)
         ? Image.memory(
             dataUrlToBytes(url),
