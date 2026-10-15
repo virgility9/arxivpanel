@@ -1096,7 +1096,7 @@ class _AdminScreenState extends State<AdminScreen> {
           const SizedBox(width: 12),
           Expanded(child: year),
         ],
-      ),
+      );
     }
     return Column(
       children: [
