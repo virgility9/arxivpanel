@@ -34,7 +34,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  // -- Group title ("Color Mode" / "Accent Color" / "Text Size") ---------------
+  // -- Group title ("Color Mode" / "Accent Color") -------------------------------
   Widget _groupTitle(AppPalette p, String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
