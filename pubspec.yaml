@@ -49,6 +49,10 @@ dependencies:
   # Web-only DOM bindings for the iframe PDF viewer (replaces dart:html).
   web: ^1.1.1
 
+  # File picker for avatar images and paper PDFs (device storage).
+  # Run `flutter pub get` after adding.
+  file_picker: ^13.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

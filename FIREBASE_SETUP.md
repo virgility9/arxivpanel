@@ -50,13 +50,25 @@ You never need the Firebase CLI or `flutterfire configure`.
    and paste into the Rules editor.
 4. Click **Publish**. Wait for "Rules published successfully".
 
-## Step 5 — Create the Storage bucket and install its rules
+## Step 5 — Upgrade to Blaze, create the Storage bucket, install its rules
 
-1. In the left sidebar, go to **Build → Storage**.
-2. Click **Get started** → **Next** through the defaults → **Done**.
-3. Open the **Rules** tab.
-4. Replace the contents with the entire contents of `storage.rules` from this
+> **Required for profile pictures and paper PDFs.** File uploads only work
+> on the **Blaze (pay-as-you-go)** plan — Storage cannot be enabled on the
+> free Spark plan. The free quotas still apply on Blaze, so a small app like
+> this stays within the free tier; billing is only there as a backstop.
+
+1. In the Firebase console, click the plan badge at the bottom-left (it says
+   **Spark**) → **Upgrade** → set up Cloud Billing (a card is required, but
+   the free quotas cover this app's usage).
+2. In the left sidebar, go to **Build → Storage**.
+3. Click **Get started** → **Next** through the defaults → **Done**.
+4. Open the **Rules** tab.
+5. Replace the contents with the entire contents of `storage.rules` from this
    repo → **Publish**.
+
+If an upload ever fails with a permissions error, re-check this step: the
+bucket must exist, the rules above must be published, and the project must
+be on Blaze.
 
 ## Step 6 — Register the Android app & add `google-services.json`
 

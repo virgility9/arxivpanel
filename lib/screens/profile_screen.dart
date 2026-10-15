@@ -4,7 +4,9 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -37,7 +39,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _instCtrl;
   late final TextEditingController _bioCtrl;
   late final TextEditingController _webCtrl;
-  late final TextEditingController _avatarCtrl;
 
   @override
   void initState() {
@@ -47,7 +48,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _instCtrl = TextEditingController(text: user?.institution ?? '');
     _bioCtrl = TextEditingController(text: user?.bio ?? '');
     _webCtrl = TextEditingController(text: user?.website ?? '');
-    _avatarCtrl = TextEditingController(text: user?.avatar ?? '');
   }
 
   @override
@@ -56,7 +56,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _instCtrl.dispose();
     _bioCtrl.dispose();
     _webCtrl.dispose();
-    _avatarCtrl.dispose();
     super.dispose();
   }
 
@@ -65,7 +64,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _instCtrl.text = user.institution ?? '';
     _bioCtrl.text = user.bio;
     _webCtrl.text = user.website ?? '';
-    _avatarCtrl.text = user.avatar;
   }
 
   /// Edit-profile dialog: avatar, display name, institution, bio, website.
@@ -75,6 +73,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final c = p.c;
     final a = p.accent;
     var saving = false;
+    // Avatar source: either a picked image (bytes, uploaded on save) or a
+    // URL (current avatar or a preset).
+    var avatarUrl = user.avatar;
+    Uint8List? avatarBytes;
+    var avatarExt = 'jpg';
     await showDialog(
       context: context,
       // Locked: the dialog must still be the top route when the async
@@ -90,11 +93,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
             setDialogState(() => saving = true);
             try {
               final username = _nameCtrl.text.trim();
-              final avatar = _avatarCtrl.text.trim();
+              // A picked image is uploaded to Storage first; on failure
+              // the toast is shown and the dialog stays open for a retry.
+              var avatar = avatarUrl;
+              if (avatarBytes != null) {
+                final uploaded = await widget.appState.uploadAvatar(
+                  user.id,
+                  avatarBytes!,
+                  avatarExt,
+                );
+                if (uploaded == null) {
+                  setDialogState(() => saving = false);
+                  return;
+                }
+                avatar = uploaded;
+              }
               await widget.appState.updateUser(
                 user.copyWith(
                   username: username.isEmpty ? user.username : username,
-                  avatar: avatar.isEmpty ? user.avatar : avatar,
+                  avatar: avatar,
                   institution: _instCtrl.text.trim(),
                   bio: _bioCtrl.text,
                   website: _webCtrl.text.trim(),
@@ -128,9 +145,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // --------------------------------- avatar picker
-                    // No file uploads: Firebase Storage needs Blaze billing,
-                    // so avatars are preset gallery images or a custom URL.
+                    // --------------------------- avatar picker (device)
+                    // Pick an image from device storage; it is uploaded to
+                    // Firebase Storage on save (needs the Blaze plan).
                     LabeledField(
                       palette: p,
                       label: 'Profile Picture',
@@ -139,26 +156,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           Row(
                             children: [
-                              AvatarImage(
-                                url: _avatarCtrl.text,
-                                size: 52,
-                                borderColor: a.accent,
-                                borderWidth: 2,
-                              ),
+                              if (avatarBytes != null)
+                                ClipOval(
+                                  child: Image.memory(
+                                    avatarBytes!,
+                                    width: 52,
+                                    height: 52,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              else
+                                AvatarImage(
+                                  url: avatarUrl,
+                                  size: 52,
+                                  borderColor: a.accent,
+                                  borderWidth: 2,
+                                ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  'Tap a preset below, or paste any image URL.',
-                                  style: bodyStyle(
-                                    p,
-                                    size: 12,
-                                    color: c.muted,
+                                child: OutlinedButton.icon(
+                                  onPressed: saving
+                                      ? null
+                                      : () async {
+                                          final result =
+                                              await FilePicker.platform
+                                                  .pickFiles(
+                                            type: FileType.image,
+                                            withData: true,
+                                          );
+                                          if (result == null ||
+                                              result.files.isEmpty) {
+                                            return;
+                                          }
+                                          final file = result.files.first;
+                                          if (file.bytes == null) return;
+                                          setDialogState(() {
+                                            avatarBytes = file.bytes;
+                                            avatarExt =
+                                                file.extension ?? 'jpg';
+                                          });
+                                        },
+                                  icon: const Icon(
+                                    Icons.upload_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    'Choose from device',
+                                    style:
+                                        bodyStyle(p, size: 13, color: c.text),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: c.border),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(6),
+                                    ),
+                                    minimumSize:
+                                        const Size.fromHeight(40),
                                   ),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 10),
+                          Text(
+                            '…or pick a preset:',
+                            style: bodyStyle(p, size: 12, color: c.muted),
+                          ),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
                               for (final url in AppConstants.randomAvatars)
@@ -170,18 +235,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         BorderRadius.circular(22),
                                     onTap: saving
                                         ? null
-                                        : () => setDialogState(
-                                              () =>
-                                                  _avatarCtrl.text = url,
-                                            ),
+                                        : () => setDialogState(() {
+                                              avatarUrl = url;
+                                              avatarBytes = null;
+                                            }),
                                     child: Container(
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color:
-                                              _avatarCtrl.text == url
-                                                  ? a.accent
-                                                  : Colors.transparent,
+                                          color: avatarBytes == null &&
+                                                  avatarUrl == url
+                                              ? a.accent
+                                              : Colors.transparent,
                                           width: 2.5,
                                         ),
                                       ),
@@ -203,15 +268,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
                             ],
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: _avatarCtrl,
-                            style: bodyStyle(p, size: 14),
-                            decoration: const InputDecoration(
-                              hintText: 'https://… (custom image URL)',
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
                           ),
                         ],
                       ),

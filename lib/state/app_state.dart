@@ -12,11 +12,13 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
 import '../data/auth_repository.dart';
 import '../data/firestore_repository.dart';
+import '../data/storage_repository.dart';
 import '../firebase/firebase_config.dart';
 import '../models/models.dart';
 
@@ -28,6 +30,7 @@ class AppState extends ChangeNotifier {
     }
     _repo = FirestoreRepository();
     _authRepo = AuthRepository();
+    _storageRepo = StorageRepository();
     _firebaseReady = true;
     _subscribePapers();
     _usersSub = _repo!.watchUsers().listen((users) {
@@ -45,6 +48,7 @@ class AppState extends ChangeNotifier {
 
   FirestoreRepository? _repo;
   AuthRepository? _authRepo;
+  StorageRepository? _storageRepo;
 
   StreamSubscription<List<Paper>>? _papersSub;
 
@@ -350,13 +354,70 @@ class AppState extends ChangeNotifier {
 
   /// Submits a paper for review. The passed paper's `id` is ignored —
   /// Firestore assigns the document id and `status`/`submittedAt` are set
-  /// server-side by [FirestoreRepository.submitPaper].
-  Future<void> submitPaper(Paper paper) async {
-    if (!_firebaseReady) return;
-    await _repo!.submitPaper(paper);
+  /// server-side by [FirestoreRepository.submitPaper]. Returns the new
+  /// document id (so the caller can upload the paper's PDF), or null when
+  /// Firebase isn't configured.
+  Future<String?> submitPaper(Paper paper) async {
+    if (!_firebaseReady) return null;
+    final id = await _repo!.submitPaper(paper);
     showToast('Paper submitted for review!', '📬');
     // NOTE: no navigate() here — the post screen shows its own success
     // state with a "Back to Library" button.
+    return id;
+  }
+
+  /// Attaches an uploaded PDF's download URL to a paper.
+  Future<bool> setPaperPdfUrl(String paperId, String url) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.setPaperPdfUrl(paperId, url);
+      return true;
+    } catch (e) {
+      debugPrint('setPaperPdfUrl failed: $e');
+      showToast('Could not attach the PDF.', '⚠️');
+      return false;
+    }
+  }
+
+  /// Uploads a new avatar image for [uid] to Firebase Storage.
+  /// Returns the download URL, or null when the upload failed (most
+  /// commonly: the Blaze plan / Storage isn't enabled yet).
+  Future<String?> uploadAvatar(
+    String uid,
+    Uint8List bytes,
+    String extension,
+  ) async {
+    if (!_firebaseReady) return null;
+    try {
+      return await _storageRepo!.uploadAvatar(uid, bytes, extension);
+    } catch (e) {
+      debugPrint('avatar upload failed: $e');
+      showToast(
+        'Upload failed — enable Firebase Storage (Blaze plan) first.',
+        '⚠️',
+      );
+      return null;
+    }
+  }
+
+  /// Uploads a paper PDF to Firebase Storage. Returns the download URL,
+  /// or null when the upload failed.
+  Future<String?> uploadPaperPdf(
+    String paperId,
+    Uint8List bytes,
+    String fileName,
+  ) async {
+    if (!_firebaseReady) return null;
+    try {
+      return await _storageRepo!.uploadPaperPdf(paperId, bytes, fileName);
+    } catch (e) {
+      debugPrint('PDF upload failed: $e');
+      showToast(
+        'PDF upload failed — enable Firebase Storage (Blaze plan) first.',
+        '⚠️',
+      );
+      return null;
+    }
   }
 
   // ------------------------------------------------------------------- admin

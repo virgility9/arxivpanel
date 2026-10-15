@@ -294,11 +294,21 @@ class FirestoreRepository {
   }
 
   /// Adds a new paper document with `pending` status and a server timestamp.
-  Future<void> submitPaper(Paper paper) {
+  /// Returns the new document's id (needed to upload the paper's PDF).
+  Future<String> submitPaper(Paper paper) async {
     final data = paper.toJson()
       ..['status'] = PaperStatus.pending.name
       ..['submittedAt'] = FieldValue.serverTimestamp();
-    return _firestore.collection('papers').add(data);
+    final ref = await _firestore.collection('papers').add(data);
+    return ref.id;
+  }
+
+  /// Attaches the uploaded PDF's download URL to a paper. Authors may only
+  /// change `pdfUrl` — `authorId`/`status` are guarded by the security rules.
+  Future<void> setPaperPdfUrl(String paperId, String url) {
+    return _firestore.collection('papers').doc(paperId).update({
+      'pdfUrl': url,
+    });
   }
 
   /// Updates a paper's moderation status.

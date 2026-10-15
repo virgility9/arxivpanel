@@ -2,20 +2,24 @@
 ///
 /// Auth-gated form: unauthenticated users get a sign-in prompt, a successful
 /// submit shows a confirmation, otherwise a full submission form with cover
-/// picker, title, abstract, field/pages, institution, tags, PDF URL and a
-/// submitter card.
-///
-/// Note: the web app's file uploads (cover image, PDF file) are not portable
-/// to Flutter, so both are represented as URL text fields here.
+/// picker, title, abstract, field/pages, institution, tags, a PDF file
+/// picker (uploaded to Firebase Storage) and a submitter card.
 library;
 
+import 'dart:js_interop';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 
 import '../data/constants.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/pdf_view.dart';
 import '../widgets/shared.dart';
 
 class PostPaperScreen extends StatefulWidget {
@@ -41,13 +45,16 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   late final TextEditingController _institution;
   late final TextEditingController _tags;
   late final TextEditingController _customCover;
-  late final TextEditingController _pdfUrl;
 
   String _field = 'Machine Learning';
   int _presetIndex = 0;
   Map<String, String> _errors = {};
   bool _loading = false;
   bool _submitted = false;
+
+  /// Picked PDF (device storage), uploaded to Firebase Storage on submit.
+  Uint8List? _pdfBytes;
+  String? _pdfName;
 
   @override
   void initState() {
@@ -58,7 +65,6 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     _institution = TextEditingController();
     _tags = TextEditingController();
     _customCover = TextEditingController();
-    _pdfUrl = TextEditingController();
   }
 
   @override
@@ -69,13 +75,22 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     _institution.dispose();
     _tags.dispose();
     _customCover.dispose();
-    _pdfUrl.dispose();
     super.dispose();
   }
 
   String get _effectiveCover {
     final custom = _customCover.text.trim();
     return custom.isNotEmpty ? custom : AppConstants.presetCovers[_presetIndex];
+  }
+
+  /// Human-readable size of the picked PDF (e.g. "2.4 MB").
+  String get _pdfSizeLabel {
+    final bytes = _pdfBytes;
+    if (bytes == null) return '';
+    if (bytes.length < 1024) return '${bytes.length} B';
+    final kb = bytes.length / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    return '${(kb / 1024).toStringAsFixed(1)} MB';
   }
 
   Future<void> _handleSubmit() async {
@@ -98,7 +113,6 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
 
     setState(() => _loading = true);
     final user = widget.appState.user!;
-    final pdfRaw = _pdfUrl.text.trim();
     final paper = Paper(
       id: 'p${DateTime.now().millisecondsSinceEpoch}',
       title: title,
@@ -120,16 +134,85 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       comments: const [],
       institution: institution,
       year: DateTime.now().year.toString(),
-      pdfUrl: pdfRaw.isEmpty ? null : pdfRaw,
+      pdfUrl: null, // attached after the Storage upload below
       status: PaperStatus.pending,
       submittedAt: DateTime.now(),
     );
-    await widget.appState.submitPaper(paper);
+    // The paper doc is created first so the PDF has a stable Storage path;
+    // the download URL is then attached to the paper.
+    final paperId = await widget.appState.submitPaper(paper);
+    if (paperId != null && _pdfBytes != null) {
+      final pdfUrl = await widget.appState.uploadPaperPdf(
+        paperId,
+        _pdfBytes!,
+        _pdfName ?? 'paper.pdf',
+      );
+      if (pdfUrl != null) {
+        await widget.appState.setPaperPdfUrl(paperId, pdfUrl);
+      }
+    }
     if (!mounted) return;
     setState(() {
       _loading = false;
       _submitted = true;
     });
+  }
+
+  /// Picks a PDF from device storage.
+  Future<void> _pickPdf() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
+    setState(() {
+      _pdfBytes = file.bytes;
+      _pdfName = file.name;
+    });
+  }
+
+  /// Previews the picked PDF inline (web) from a blob URL — no upload yet.
+  void _previewPdf() {
+    final bytes = _pdfBytes;
+    if (bytes == null) return;
+    if (!kIsWeb) {
+      widget.appState.showToast('PDF preview is only available on web', '⚠️');
+      return;
+    }
+    final blob = web.Blob(
+      [Uint8List.fromList(bytes).buffer.toJS].toJS,
+      web.BlobPropertyBag(type: 'application/pdf'),
+    );
+    final url = web.URL.createObjectURL(blob);
+    final p = widget.theme.palette;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.c.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        title: Text(
+          _pdfName ?? 'PDF preview',
+          style: displayStyle(p, size: 16, weight: FontWeight.w600),
+        ),
+        content: SizedBox(
+          width: 720,
+          height: MediaQuery.of(ctx).size.height * 0.7,
+          child: buildPdfView(url),
+        ),
+        actions: [
+          GoldButton(
+            palette: p,
+            label: 'Close',
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+        ],
+      ),
+    ).then((_) => web.URL.revokeObjectURL(url));
   }
 
   @override
@@ -429,24 +512,95 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _pdfUrl,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                hintText: 'https://…/paper.pdf',
-                prefixIcon: Padding(
-                  padding: EdgeInsets.only(left: 12, right: 8),
-                  child: Text('📁', style: TextStyle(fontSize: 18)),
+            if (_pdfBytes == null)
+              // No file picked yet — open the device file chooser.
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _pickPdf,
+                icon: const Icon(Icons.upload_file_outlined, size: 18),
+                label: Text(
+                  'Choose PDF from device',
+                  style: bodyStyle(p, size: 13, color: p.c.text),
                 ),
-                prefixIconConstraints: BoxConstraints(
-                  minWidth: 0,
-                  minHeight: 0,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: p.c.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  minimumSize: const Size.fromHeight(44),
+                ),
+              )
+            else
+              // Picked file: name, size, preview and remove actions.
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: p.c.surface,
+                  border: Border.all(color: p.c.border),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.picture_as_pdf_outlined,
+                      size: 32,
+                      color: Color(0xFFE06B6B),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _pdfName ?? 'paper.pdf',
+                            style: bodyStyle(
+                              p,
+                              size: 13,
+                              weight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _pdfSizeLabel,
+                            style:
+                                bodyStyle(p, size: 11, color: p.c.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _loading ? null : _previewPdf,
+                      child: Text(
+                        'Preview',
+                        style: bodyStyle(
+                          p,
+                          size: 13,
+                          color: p.accent.accent,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _loading
+                          ? null
+                          : () => setState(() {
+                                _pdfBytes = null;
+                                _pdfName = null;
+                              }),
+                      icon: Icon(
+                        Icons.close,
+                        size: 18,
+                        color: p.c.muted,
+                      ),
+                      tooltip: 'Remove',
+                    ),
+                  ],
                 ),
               ),
-            ),
             const SizedBox(height: 4),
             Text(
-              'The web app uploads a PDF file directly — paste a URL here as the portable equivalent.',
+              'The PDF is uploaded to Firebase Storage when you submit.',
               style: monoStyle(p, size: 9, color: p.c.faint),
             ),
           ],
