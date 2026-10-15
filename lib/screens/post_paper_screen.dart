@@ -8,7 +8,6 @@ library;
 
 import 'dart:js_interop';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
@@ -18,6 +17,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../utils/file_pick.dart';
 import '../widgets/pdf_view.dart';
 import '../widgets/shared.dart';
 
@@ -160,19 +160,18 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   /// Picks a PDF from device storage.
   Future<void> _pickPdf() async {
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
+      final picked = await pickSingleFile(PickKind.pdf);
       // Null = the user cancelled.
-      if (file == null) return;
-      final bytes = await file.readAsBytes();
+      if (picked == null) return;
       setState(() {
-        _pdfBytes = bytes;
-        _pdfName = file.name;
+        _pdfBytes = picked.bytes;
+        _pdfName = picked.name;
       });
-    } catch (_) {
-      widget.appState.showToast('Could not read the PDF', '⚠️');
+    } catch (e) {
+      widget.appState.showToast(
+        'Could not read the PDF (${shortError(e)})',
+        '⚠️',
+      );
     }
   }
 

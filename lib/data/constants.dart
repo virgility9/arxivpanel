@@ -33,10 +33,14 @@ class AppConstants {
     'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=600&fit=crop&auto=format',
   ];
 
+  /// Cartoonish preset avatars (DiceBear, PNG). Shown in the Edit Profile
+  /// dialog and assigned to new signups.
   static const List<String> randomAvatars = [
-    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop&auto=format',
-    'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=80&h=80&fit=crop&auto=format',
-    'https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=80&h=80&fit=crop&auto=format',
-    'https://images.unsplash.com/photo-1628157588553-5eeea00af15c?w=80&h=80&fit=crop&auto=format',
+    'https://api.dicebear.com/9.x/adventurer/png?seed=Felix&size=128',
+    'https://api.dicebear.com/9.x/big-smile/png?seed=Luna&size=128',
+    'https://api.dicebear.com/9.x/croodles/png?seed=Max&size=128',
+    'https://api.dicebear.com/9.x/lorelei/png?seed=Nova&size=128',
+    'https://api.dicebear.com/9.x/micah/png?seed=Sunny&size=128',
+    'https://api.dicebear.com/9.x/personas/png?seed=Zoe&size=128',
   ];
 }

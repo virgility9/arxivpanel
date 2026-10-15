@@ -6,7 +6,6 @@ library;
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,6 +14,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../utils/file_pick.dart';
 import '../widgets/shared.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -179,22 +179,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ? null
                                       : () async {
                                           try {
-                                            final file =
-                                                await FilePicker.pickFile(
-                                              type: FileType.image,
+                                            final picked =
+                                                await pickSingleFile(
+                                              PickKind.image,
                                             );
                                             // Null = the user cancelled.
-                                            if (file == null) return;
-                                            final bytes =
-                                                await file.readAsBytes();
+                                            if (picked == null) return;
                                             setDialogState(() {
-                                              avatarBytes = bytes;
+                                              avatarBytes = picked.bytes;
+                                              final ext = picked.extension;
                                               avatarExt =
-                                                  file.extension ?? 'jpg';
+                                                  ext.isEmpty ? 'jpg' : ext;
                                             });
-                                          } catch (_) {
+                                          } catch (e) {
                                             widget.appState.showToast(
-                                              'Could not read the image',
+                                              'Could not read the image '
+                                              '(${shortError(e)})',
                                               '⚠️',
                                             );
                                           }
