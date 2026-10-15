@@ -1,10 +1,9 @@
-/// Profile screen: centered identity header (avatar, name, joined date),
-/// Edit Profile / Sign Out actions, 2×2 stat cards, and tabbed lists
+/// Profile screen: page header with sign-out, centered identity block,
+/// Edit Profile action, unified stats panel, and pill-tabbed lists
 /// (My Papers / History / Saved).
 library;
 
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -310,34 +309,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ];
 
         return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // --------------------------------------- centered header
-              _header(p, c, a, user, isNarrow),
-              const SizedBox(height: 24),
-
-              // --------------------------------------------- body
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: hPad),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                    hPad, 20, hPad, isNarrow ? 100 : 80),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ---------------------------------- page header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _bioBlock(p, c, user),
-                        _statsGrid(
-                          p,
-                          isNarrow,
-                          myPapers.length,
-                          formatCount(totalViews),
-                          totalReactions,
-                          '${(totalReadSeconds / 60).round()}m',
+                        Text(
+                          'Profile',
+                          style: displayStyle(
+                            p,
+                            size: 17,
+                            weight: FontWeight.w600,
+                          ),
                         ),
-                        const SizedBox(height: 28),
-                        _tabsRow(p, c, a, tabs, isNarrow),
-                        const SizedBox(height: 8),
+                        InkWell(
+                          onTap: _confirmSignOut,
+                          borderRadius: BorderRadius.circular(6),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 4,
+                            ),
+                            child: Text(
+                              'Sign Out',
+                              style: TextStyle(
+                                color: Color(0xFFE06B6B),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    _header(p, c, a, user),
+                    const SizedBox(height: 24),
+                    _bioBlock(p, c, user),
+                    _statsPanel(
+                      p,
+                      myPapers.length,
+                      formatCount(totalViews),
+                      totalReactions,
+                      '${(totalReadSeconds / 60).round()}m',
+                    ),
+                    const SizedBox(height: 20),
+                    _tabsRow(p, c, a, tabs),
+                    const SizedBox(height: 8),
                         if (!widget.appState.papersResolved)
                           // Papers are still loading from Firestore; don't
                           // flash "No papers yet" on the tab counts.
@@ -350,7 +375,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           myPapers.isEmpty
                               ? _emptyTab(
                                   p,
-                                  icon: '📄',
+                                  icon: Icons.description_outlined,
                                   title: 'No papers yet',
                                   sub:
                                       'Papers you publish will show up here.',
@@ -369,7 +394,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           historyPapers.isEmpty
                               ? _emptyTab(
                                   p,
-                                  icon: '📖',
+                                  icon: Icons.menu_book_outlined,
                                   title: 'No reading history',
                                   sub: 'Papers you open will appear here.',
                                 )
@@ -378,88 +403,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           savedPapers.isEmpty
                               ? _emptyTab(
                                   p,
-                                  icon: '🔖',
+                                  icon: Icons.bookmark_border,
                                   title: 'No saved papers',
                                   sub:
                                       'Bookmark papers while reading to find them here.',
                                 )
                               : _paperList(p, c, savedPapers),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
               ),
-              SizedBox(height: isNarrow ? 100 : 80),
-            ],
-          ),
-        );
+            ),
+          );
       },
     );
   }
 
   // ------------------------------------------------------------ sections
 
-  /// Centered identity header: gradient banner with overlapping avatar,
-  /// name, joined date, and the Edit Profile / Sign Out actions.
+  /// Centered identity block: avatar with gold ring, name, joined date,
+  /// and the Edit Profile action.
   Widget _header(
     AppPalette p,
     AppColors c,
     AccentPalette a,
     AppUser user,
-    bool isNarrow,
   ) {
-    const bannerH = 120.0;
-    const overlap = 44.0;
-    final avatarSize = isNarrow ? 88.0 : 96.0;
     return Column(
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              height: bannerH,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    p.accent.accent.withValues(
-                        alpha: p.mode == AppMode.dark ? 0.35 : 0.18),
-                    c.surface2,
-                    c.bg,
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
-                ),
-                border: Border(bottom: BorderSide(color: c.border)),
-              ),
-            ),
-            Positioned(
-              top: bannerH - overlap,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: a.accent.withValues(alpha: 0.25),
-                        blurRadius: 24,
-                      ),
-                    ],
-                  ),
-                  child: AvatarImage(
-                    url: user.avatar,
-                    size: avatarSize,
-                    borderColor: a.accent,
-                    borderWidth: 2.5,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: overlap + 12),
+        const SizedBox(height: 16),
+        _profileAvatar(p, a, user, 88),
+        const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
@@ -475,36 +449,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 16),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GoldButton(
-                      palette: p,
-                      label: 'Edit Profile',
-                      minHeight: 44,
-                      onPressed: () => _openEditDialog(user),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GhostButton(
-                    palette: p,
-                    label: 'Sign Out',
-                    color: const Color(0xFFE06B6B),
-                    minHeight: 44,
-                    onPressed: _confirmSignOut,
-                  ),
-                ],
-              ),
-            ),
-          ),
+        GhostButton(
+          palette: p,
+          label: 'Edit Profile',
+          color: a.accent,
+          minHeight: 40,
+          onPressed: () => _openEditDialog(user),
         ),
       ],
     );
+  }
+
+  /// Avatar with gold ring; falls back to the user's initials when the
+  /// image can't be loaded.
+  Widget _profileAvatar(
+    AppPalette p,
+    AccentPalette a,
+    AppUser user,
+    double size,
+  ) {
+    final initials = _initials(user.username);
+    final fallback = Container(
+      color: p.c.surface2,
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: a.accent,
+          fontSize: size * 0.32,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: a.accent, width: 2.5),
+        boxShadow: [
+          BoxShadow(
+            color: a.accent.withValues(alpha: 0.25),
+            blurRadius: 24,
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: Image.network(
+          user.avatar,
+          fit: BoxFit.cover,
+          loadingBuilder: (ctx, child, progress) =>
+              progress == null ? child : fallback,
+          errorBuilder: (_, _, _) => fallback,
+        ),
+      ),
+    );
+  }
+
+  /// "Joe Black" -> "JB".
+  String _initials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      final w = parts[0];
+      return w.substring(0, w.length >= 2 ? 2 : 1).toUpperCase();
+    }
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
   /// Centered bio + website, rendered only when there is something to show.
@@ -594,89 +608,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ---------------------------------------------------------------- stats
 
-  Widget _statsGrid(
+  /// One unified stats panel: 2×2 cells separated by thin dividers,
+  /// colored values, uppercase labels.
+  Widget _statsPanel(
     AppPalette p,
-    bool isNarrow,
     int papers,
     String views,
     int reactions,
     String readTime,
   ) {
-    return GridView.count(
-      crossAxisCount: isNarrow ? 2 : 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      // Tiles must fit the icon tile + value + label with room to spare.
-      childAspectRatio: 1.25,
-      children: [
-        _statCard(
-          p,
-          icon: Icons.description_outlined,
-          value: '$papers',
-          label: 'Papers',
-          color: p.accent.accent,
-        ),
-        _statCard(
-          p,
-          icon: Icons.visibility_outlined,
-          value: views,
-          label: 'Total Views',
-          color: const Color(0xFF7C6AF7),
-        ),
-        _statCard(
-          p,
-          icon: Icons.whatshot_outlined,
-          value: '$reactions',
-          label: 'Reactions Received',
-          color: const Color(0xFFE06B6B),
-        ),
-        _statCard(
-          p,
-          icon: Icons.timer_outlined,
-          value: readTime,
-          label: 'Read Time',
-          color: const Color(0xFF4ADE80),
-        ),
-      ],
-    );
-  }
-
-  /// One stat card: tinted icon tile, colored value, uppercase label.
-  /// Uses Material icons (not emoji) so the glyphs always render — some
-  /// emoji (e.g. ⏱) are missing from Windows system fonts and trigger
-  /// Flutter's "could not find Noto fonts" fallback warning on web.
-  Widget _statCard(
-    AppPalette p, {
-    required IconData icon,
-    required String value,
-    required String label,
-    required Color color,
-  }) {
     final c = p.c;
+    Widget row(List<Widget> cells) {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: cells[0]),
+            Container(width: 1, color: c.border),
+            Expanded(child: cells[1]),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: c.surface,
         border: Border.all(color: c.border),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
+        children: [
+          row([
+            _statCell(
+              p,
+              value: '$papers',
+              label: 'Papers',
+              color: p.accent.accent,
+            ),
+            _statCell(
+              p,
+              value: views,
+              label: 'Total Views',
+              color: const Color(0xFF7C6AF7),
+            ),
+          ]),
+          Container(height: 1, color: c.border),
+          row([
+            _statCell(
+              p,
+              value: '$reactions',
+              label: 'Reactions Received',
+              color: const Color(0xFFE06B6B),
+            ),
+            _statCell(
+              p,
+              value: readTime,
+              label: 'Read Time',
+              color: const Color(0xFF4ADE80),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  /// One stats cell: colored value over an uppercase label.
+  Widget _statCell(
+    AppPalette p, {
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, size: 18, color: color),
-          ),
-          const SizedBox(height: 10),
           Text(
             value,
             style: TextStyle(
@@ -686,10 +695,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               height: 1,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             label.toUpperCase(),
-            style: monoStyle(p, size: 9, color: c.muted, letterSpacing: 0.05),
+            style: monoStyle(p, size: 9, color: p.c.muted, letterSpacing: 0.05),
           ),
         ],
       ),
@@ -698,64 +707,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ----------------------------------------------------------------- tabs
 
+  /// Segmented pill tabs: the active tab gets a highlighted background
+  /// and gold label, in "Label · count" form.
   Widget _tabsRow(
     AppPalette p,
     AppColors c,
     AccentPalette a,
     List<({String label, int count})> tabs,
-    bool isNarrow,
   ) {
     return Container(
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: c.border)),
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
           for (var i = 0; i < tabs.length; i++)
-            InkWell(
-              onTap: () => setState(() => _tab = i),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isNarrow ? 14 : 20,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: _tab == i ? a.accent : Colors.transparent,
-                      width: 2,
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(7),
+                onTap: () => setState(() => _tab = i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _tab == i ? c.surface2 : Colors.transparent,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(
+                    '${tabs[i].label} · ${tabs[i].count}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight:
+                          _tab == i ? FontWeight.w600 : FontWeight.w400,
+                      color: _tab == i ? a.accent : c.muted,
                     ),
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      tabs[i].label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: _tab == i
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                        color: _tab == i ? a.accent : c.muted,
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.surface2,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${tabs[i].count}',
-                        style: monoStyle(p, size: 11, color: c.muted),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
@@ -764,10 +753,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Empty tab state: dashed circle icon, title, subtitle, optional action.
+  /// Empty tab state: muted icon, title, subtitle, optional action.
   Widget _emptyTab(
     AppPalette p, {
-    required String icon,
+    required IconData icon,
     required String title,
     required String sub,
     String? actionLabel,
@@ -778,16 +767,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(vertical: 36),
       child: Column(
         children: [
-          SizedBox(
-            width: 76,
-            height: 76,
-            child: CustomPaint(
-              painter: _DashedCirclePainter(color: c.faint),
-              child: Center(
-                child: Text(icon, style: const TextStyle(fontSize: 28)),
-              ),
-            ),
-          ),
+          Icon(icon, size: 36, color: c.faint),
           const SizedBox(height: 16),
           Text(
             title,
@@ -977,37 +957,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
-}
-
-/// Dashed circle used by the profile empty states.
-class _DashedCirclePainter extends CustomPainter {
-  _DashedCirclePainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    final r = size.width / 2 - 2;
-    final rect = Rect.fromCircle(
-      center: Offset(size.width / 2, size.height / 2),
-      radius: r,
-    );
-    const dashPx = 6.0;
-    const gapPx = 5.0;
-    final circ = 2 * pi * r;
-    var drawn = 0.0;
-    while (drawn < circ) {
-      final startAngle = (drawn / circ) * 2 * pi - pi / 2;
-      final sweep = (dashPx / circ) * 2 * pi;
-      canvas.drawArc(rect, startAngle, sweep, false, paint);
-      drawn += dashPx + gapPx;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
