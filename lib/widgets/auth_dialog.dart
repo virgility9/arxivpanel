@@ -226,7 +226,7 @@ class _AuthDialogState extends State<AuthDialog> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      isLogin ? 'Welcome back' : 'Join ArxivPanel',
+                      isLogin ? 'Welcome back' : 'Join ArxivLibrary',
                       style: displayStyle(palette, size: 24),
                     ),
                     const SizedBox(height: 4),

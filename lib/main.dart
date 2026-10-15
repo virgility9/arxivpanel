@@ -1,4 +1,4 @@
-/// Entry point of the ArxivPanel Flutter app (Firebase backend edition).
+/// Entry point of the Arxiv Flutter app (Firebase backend edition).
 ///
 /// Manual Firebase setup (no CLI): [DefaultFirebaseConfig] holds the web-app
 /// config values pasted from the Firebase console — see FIREBASE_SETUP.md.
@@ -36,19 +36,19 @@ Future<void> main() async {
     }
   }
 
-  runApp(ArxivPanelApp(firebaseReady: firebaseReady));
+  runApp(ArxivApp(firebaseReady: firebaseReady));
 }
 
-class ArxivPanelApp extends StatefulWidget {
-  const ArxivPanelApp({super.key, required this.firebaseReady});
+class ArxivApp extends StatefulWidget {
+  const ArxivApp({super.key, required this.firebaseReady});
 
   final bool firebaseReady;
 
   @override
-  State<ArxivPanelApp> createState() => _ArxivPanelAppState();
+  State<ArxivApp> createState() => _ArxivAppState();
 }
 
-class _ArxivPanelAppState extends State<ArxivPanelApp> {
+class _ArxivAppState extends State<ArxivApp> {
   late final ThemeProvider _theme = ThemeProvider();
   late final AppState _appState = AppState();
 
@@ -73,7 +73,7 @@ class _ArxivPanelAppState extends State<ArxivPanelApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ArxivPanel',
+      title: 'Arxiv',
       debugShowCheckedModeBanner: false,
       theme: _theme.themeData,
       home: widget.firebaseReady

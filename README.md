@@ -1,4 +1,4 @@
-# ArxivPanel — Research Library App (Flutter + Firebase)
+# Arxiv — Research Library App (Flutter + Firebase)
 
 A cross-platform research-paper library app: browse papers, read with
 reactions and comments, submit your own research for admin review, rank by

@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import 'app_logo_image.dart';
 
 // ---------------------------------------------------------------------------
 // Typography helpers
@@ -278,7 +279,7 @@ class AvatarImage extends StatelessWidget {
 // Brand
 // ---------------------------------------------------------------------------
 
-/// The Σ mark + "ArxivPanel" wordmark from Navbar.tsx.
+/// The gold-book logo + "ArxivLibrary" wordmark.
 class AppLogo extends StatelessWidget {
   const AppLogo({super.key, required this.palette, this.fontSize = 20});
 
@@ -291,27 +292,7 @@ class AppLogo extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [a.accent, a.accentDim],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            'Σ',
-            style: TextStyle(
-              color: a.accentFg,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-        ),
+        const AppLogoImage(size: 28),
         const SizedBox(width: 8),
         RichText(
           text: TextSpan(
@@ -323,7 +304,7 @@ class AppLogo extends StatelessWidget {
             children: [
               const TextSpan(text: 'Arxiv'),
               TextSpan(
-                text: 'Panel',
+                text: 'Library',
                 style: TextStyle(color: a.accent),
               ),
             ],
