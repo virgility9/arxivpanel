@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../utils/images.dart';
 import 'app_logo_image.dart';
 
 // ---------------------------------------------------------------------------
@@ -245,6 +246,29 @@ class AvatarImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fallback = Container(
+      color: const Color(0xFF2A2A3A),
+      child: const Center(
+        child: Text('👤', style: TextStyle(fontSize: 16)),
+      ),
+    );
+    // Custom avatars are stored as inline data URLs (no Storage needed);
+    // presets and legacy avatars are network URLs.
+    final Widget image = isDataUrl(url)
+        ? Image.memory(
+            dataUrlToBytes(url),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, _, _) => fallback,
+          )
+        : Image.network(
+            url,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, _, _) => fallback,
+          );
     return Container(
       width: size,
       height: size,
@@ -257,20 +281,7 @@ class AvatarImage extends StatelessWidget {
               )
             : null,
       ),
-      child: ClipOval(
-        child: Image.network(
-          url,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (context, _, _) => Container(
-            color: const Color(0xFF2A2A3A),
-            child: const Center(
-              child: Text('👤', style: TextStyle(fontSize: 16)),
-            ),
-          ),
-        ),
-      ),
+      child: ClipOval(child: image),
     );
   }
 }

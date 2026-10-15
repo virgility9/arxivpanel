@@ -15,6 +15,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../utils/file_pick.dart';
+import '../utils/images.dart';
 import '../widgets/shared.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -73,11 +74,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final c = p.c;
     final a = p.accent;
     var saving = false;
-    // Avatar source: either a picked image (bytes, uploaded on save) or a
-    // URL (current avatar or a preset).
+    // Avatar source: either a picked image (bytes, stored as a data URL on
+    // save — no Blaze billing needed) or a URL (current avatar or a preset).
     var avatarUrl = user.avatar;
     Uint8List? avatarBytes;
-    var avatarExt = 'jpg';
     await showDialog(
       context: context,
       // Locked: the dialog must still be the top route when the async
@@ -93,20 +93,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             setDialogState(() => saving = true);
             try {
               final username = _nameCtrl.text.trim();
-              // A picked image is uploaded to Storage first; on failure
-              // the toast is shown and the dialog stays open for a retry.
+              // A picked image is downscaled and stored inline in the user
+              // document as a data URL — no upload service needed.
               var avatar = avatarUrl;
               if (avatarBytes != null) {
-                final uploaded = await widget.appState.uploadAvatar(
-                  user.id,
-                  avatarBytes!,
-                  avatarExt,
-                );
-                if (uploaded == null) {
+                try {
+                  avatar = avatarToDataUrl(avatarBytes!);
+                } catch (e) {
+                  widget.appState.showToast(
+                    'Could not process the image (${shortError(e)})',
+                    '⚠️',
+                  );
                   setDialogState(() => saving = false);
                   return;
                 }
-                avatar = uploaded;
               }
               await widget.appState.updateUser(
                 user.copyWith(
@@ -146,8 +146,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // --------------------------- avatar picker (device)
-                    // Pick an image from device storage; it is uploaded to
-                    // Firebase Storage on save (needs the Blaze plan).
+                    // Pick an image from device storage; it is downscaled and
+                    // stored in your profile on save (no Blaze billing needed).
                     LabeledField(
                       palette: p,
                       label: 'Profile Picture',
@@ -187,9 +187,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             if (picked == null) return;
                                             setDialogState(() {
                                               avatarBytes = picked.bytes;
-                                              final ext = picked.extension;
-                                              avatarExt =
-                                                  ext.isEmpty ? 'jpg' : ext;
                                             });
                                           } catch (e) {
                                             widget.appState.showToast(
@@ -651,13 +648,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       child: ClipOval(
-        child: Image.network(
-          user.avatar,
-          fit: BoxFit.cover,
-          loadingBuilder: (ctx, child, progress) =>
-              progress == null ? child : fallback,
-          errorBuilder: (_, _, _) => fallback,
-        ),
+        // Custom avatars are inline data URLs; presets are network URLs.
+        child: isDataUrl(user.avatar)
+            ? Image.memory(
+                dataUrlToBytes(user.avatar),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallback,
+              )
+            : Image.network(
+                user.avatar,
+                fit: BoxFit.cover,
+                loadingBuilder: (ctx, child, progress) =>
+                    progress == null ? child : fallback,
+                errorBuilder: (_, _, _) => fallback,
+              ),
       ),
     );
   }

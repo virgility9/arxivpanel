@@ -137,12 +137,11 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       status: PaperStatus.pending,
       submittedAt: DateTime.now(),
     );
-    // The paper doc is created first so the PDF has a stable Storage path;
-    // the download URL is then attached to the paper.
+    // The paper doc is created first, then the PDF uploads to Cloudinary
+    // (free tier) and its URL is attached to the paper.
     final paperId = await widget.appState.submitPaper(paper);
     if (paperId != null && _pdfBytes != null) {
       final pdfUrl = await widget.appState.uploadPaperPdf(
-        paperId,
         _pdfBytes!,
         _pdfName ?? 'paper.pdf',
       );
@@ -601,7 +600,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
               ),
             const SizedBox(height: 4),
             Text(
-              'The PDF is uploaded to Firebase Storage when you submit.',
+              'The PDF is uploaded (free Cloudinary hosting) when you submit.',
               style: monoStyle(p, size: 9, color: p.c.faint),
             ),
           ],

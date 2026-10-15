@@ -16,8 +16,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/auth_repository.dart';
+import '../data/cloudinary_config.dart';
+import '../data/cloudinary_repository.dart';
 import '../data/firestore_repository.dart';
-import '../data/storage_repository.dart';
 import '../firebase/firebase_config.dart';
 import '../models/models.dart';
 
@@ -29,7 +30,7 @@ class AppState extends ChangeNotifier {
     }
     _repo = FirestoreRepository();
     _authRepo = AuthRepository();
-    _storageRepo = StorageRepository();
+    _cloudinaryRepo = CloudinaryRepository();
     _firebaseReady = true;
     _subscribePapers();
     _usersSub = _repo!.watchUsers().listen((users) {
@@ -47,7 +48,7 @@ class AppState extends ChangeNotifier {
 
   FirestoreRepository? _repo;
   AuthRepository? _authRepo;
-  StorageRepository? _storageRepo;
+  CloudinaryRepository? _cloudinaryRepo;
 
   StreamSubscription<List<Paper>>? _papersSub;
 
@@ -378,43 +379,25 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Uploads a new avatar image for [uid] to Firebase Storage.
-  /// Returns the download URL, or null when the upload failed (most
-  /// commonly: the Blaze plan / Storage isn't enabled yet).
-  Future<String?> uploadAvatar(
-    String uid,
+  /// Uploads a paper PDF to Cloudinary (free tier, no Blaze billing needed).
+  /// Returns the file URL, or null when the upload failed or Cloudinary
+  /// isn't configured yet (see `lib/data/cloudinary_config.dart`).
+  Future<String?> uploadPaperPdf(
     Uint8List bytes,
-    String extension,
+    String fileName,
   ) async {
-    if (!_firebaseReady) return null;
-    try {
-      return await _storageRepo!.uploadAvatar(uid, bytes, extension);
-    } catch (e) {
-      debugPrint('avatar upload failed: $e');
+    if (!CloudinaryConfig.isConfigured) {
       showToast(
-        'Upload failed — enable Firebase Storage (Blaze plan) first.',
+        'PDF uploads need a free Cloudinary setup first — see the setup guide.',
         '⚠️',
       );
       return null;
     }
-  }
-
-  /// Uploads a paper PDF to Firebase Storage. Returns the download URL,
-  /// or null when the upload failed.
-  Future<String?> uploadPaperPdf(
-    String paperId,
-    Uint8List bytes,
-    String fileName,
-  ) async {
-    if (!_firebaseReady) return null;
     try {
-      return await _storageRepo!.uploadPaperPdf(paperId, bytes, fileName);
+      return await _cloudinaryRepo!.uploadPdf(bytes, fileName);
     } catch (e) {
       debugPrint('PDF upload failed: $e');
-      showToast(
-        'PDF upload failed — enable Firebase Storage (Blaze plan) first.',
-        '⚠️',
-      );
+      showToast('PDF upload failed. Try again.', '⚠️');
       return null;
     }
   }

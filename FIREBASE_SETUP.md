@@ -50,25 +50,43 @@ You never need the Firebase CLI or `flutterfire configure`.
    and paste into the Rules editor.
 4. Click **Publish**. Wait for "Rules published successfully".
 
-## Step 5 — Upgrade to Blaze, create the Storage bucket, install its rules
+## Step 5 — Firebase Storage (OPTIONAL — skip this)
 
-> **Required for profile pictures and paper PDFs.** File uploads only work
-> on the **Blaze (pay-as-you-go)** plan — Storage cannot be enabled on the
-> free Spark plan. The free quotas still apply on Blaze, so a small app like
-> this stays within the free tier; billing is only there as a backstop.
+Firebase Storage is **no longer needed** for this app:
+
+- **Profile pictures** are stored inline in the Firestore user document
+  (downscaled data URLs) — works on the free Spark plan.
+- **Paper PDFs** are hosted on **Cloudinary's free tier** (see Step 5b) —
+  no credit card required.
+
+Only do this step if you ever want Firebase Storage for something else. It
+requires the **Blaze (pay-as-you-go)** plan (a card is required, though the
+free quotas cover this app's usage):
 
 1. In the Firebase console, click the plan badge at the bottom-left (it says
-   **Spark**) → **Upgrade** → set up Cloud Billing (a card is required, but
-   the free quotas cover this app's usage).
+   **Spark**) → **Upgrade** → set up Cloud Billing.
 2. In the left sidebar, go to **Build → Storage**.
 3. Click **Get started** → **Next** through the defaults → **Done**.
 4. Open the **Rules** tab.
 5. Replace the contents with the entire contents of `storage.rules` from this
    repo → **Publish**.
 
-If an upload ever fails with a permissions error, re-check this step: the
-bucket must exist, the rules above must be published, and the project must
-be on Blaze.
+## Step 5b — Cloudinary setup for paper PDFs (free, no card)
+
+Paper PDFs are uploaded to [Cloudinary](https://cloudinary.com)'s free tier
+(no credit card required).
+
+1. Sign up at https://cloudinary.com (free plan).
+2. On the dashboard, copy your **Cloud name**.
+3. Click the gear icon (Settings) → **Upload** tab → scroll to
+   **Upload presets** → **Add upload preset**.
+4. Set **Signing mode** to **Unsigned** → **Save**. Copy the **Preset name**.
+5. Open `lib/data/cloudinary_config.dart` in the repo and paste both values
+   into `cloudName` and `uploadPreset`.
+
+Until this is done, submitting a paper with a PDF shows a toast asking for
+the Cloudinary setup — the paper itself is still submitted, just without
+the PDF attached.
 
 ## Step 6 — Register the Android app & add `google-services.json`
 
