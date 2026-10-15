@@ -138,15 +138,20 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       submittedAt: DateTime.now(),
     );
     // The paper doc is created first, then the PDF uploads to Cloudinary
-    // (free tier) and its URL is attached to the paper.
+    // (free tier); the PDF's URL and its auto-generated cover (the first
+    // page) are then attached to the paper.
     final paperId = await widget.appState.submitPaper(paper);
     if (paperId != null && _pdfBytes != null) {
-      final pdfUrl = await widget.appState.uploadPaperPdf(
+      final uploaded = await widget.appState.uploadPaperPdf(
         _pdfBytes!,
         _pdfName ?? 'paper.pdf',
       );
-      if (pdfUrl != null) {
-        await widget.appState.setPaperPdfUrl(paperId, pdfUrl);
+      if (uploaded != null) {
+        await widget.appState.setPaperPdfAndCover(
+          paperId,
+          uploaded.fileUrl,
+          uploaded.coverUrl,
+        );
       }
     }
     if (!mounted) return;
@@ -626,6 +631,55 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
 
   Widget _buildCoverSection(AppPalette p) {
     final c = p.c;
+    // A picked PDF supplies the cover automatically (its first page), so
+    // the manual picker is hidden while one is attached.
+    if (_pdfBytes != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(palette: p, text: 'Cover Image'),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: c.surface,
+              border: Border.all(color: c.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.auto_awesome_outlined,
+                  size: 28,
+                  color: p.accent.accent,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Automatic cover',
+                        style: bodyStyle(
+                          p,
+                          size: 13,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'The first page of your PDF will be used as the cover when you submit.',
+                        style: bodyStyle(p, size: 12, color: c.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

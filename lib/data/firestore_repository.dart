@@ -303,11 +303,17 @@ class FirestoreRepository {
     return ref.id;
   }
 
-  /// Attaches the uploaded PDF's download URL to a paper. Authors may only
-  /// change `pdfUrl` — `authorId`/`status` are guarded by the security rules.
-  Future<void> setPaperPdfUrl(String paperId, String url) {
+  /// Attaches the uploaded PDF's URL and its auto-generated cover (the
+  /// PDF's first page) to a paper. Authors may only change these fields —
+  /// `authorId`/`status` are guarded by the security rules.
+  Future<void> setPaperPdfAndCover(
+    String paperId,
+    String pdfUrl,
+    String coverUrl,
+  ) {
     return _firestore.collection('papers').doc(paperId).update({
-      'pdfUrl': url,
+      'pdfUrl': pdfUrl,
+      'coverImage': coverUrl,
     });
   }
 

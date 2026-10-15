@@ -366,23 +366,29 @@ class AppState extends ChangeNotifier {
     return id;
   }
 
-  /// Attaches an uploaded PDF's download URL to a paper.
-  Future<bool> setPaperPdfUrl(String paperId, String url) async {
+  /// Attaches an uploaded PDF's URL and its auto-generated cover (the
+  /// PDF's first page) to a paper.
+  Future<bool> setPaperPdfAndCover(
+    String paperId,
+    String pdfUrl,
+    String coverUrl,
+  ) async {
     if (!_firebaseReady) return false;
     try {
-      await _repo!.setPaperPdfUrl(paperId, url);
+      await _repo!.setPaperPdfAndCover(paperId, pdfUrl, coverUrl);
       return true;
     } catch (e) {
-      debugPrint('setPaperPdfUrl failed: $e');
+      debugPrint('setPaperPdfAndCover failed: $e');
       showToast('Could not attach the PDF.', '⚠️');
       return false;
     }
   }
 
   /// Uploads a paper PDF to Cloudinary (free tier, no Blaze billing needed).
-  /// Returns the file URL, or null when the upload failed or Cloudinary
-  /// isn't configured yet (see `lib/data/cloudinary_config.dart`).
-  Future<String?> uploadPaperPdf(
+  /// Returns the file URL and the auto-generated cover (the PDF's first
+  /// page), or null when the upload failed or Cloudinary isn't configured
+  /// yet (see `lib/data/cloudinary_config.dart`).
+  Future<({String fileUrl, String coverUrl})?> uploadPaperPdf(
     Uint8List bytes,
     String fileName,
   ) async {
@@ -394,7 +400,11 @@ class AppState extends ChangeNotifier {
       return null;
     }
     try {
-      return await _cloudinaryRepo!.uploadPdf(bytes, fileName);
+      final uploaded = await _cloudinaryRepo!.uploadPdf(bytes, fileName);
+      return (
+        fileUrl: uploaded.fileUrl,
+        coverUrl: CloudinaryRepository.firstPageCover(uploaded.publicId),
+      );
     } catch (e) {
       debugPrint('PDF upload failed: $e');
       showToast('PDF upload failed. Try again.', '⚠️');
