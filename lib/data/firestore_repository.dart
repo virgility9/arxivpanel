@@ -409,6 +409,25 @@ class FirestoreRepository {
   // Users
   // ------------------------------------------------------------------
 
+  /// Streams every user document in the `users` collection.
+  ///
+  /// User profiles are publicly readable per `firestore.rules`, so this
+  /// powers the admin console's user-management section. Snapshot errors
+  /// are logged and the stream keeps its last good value.
+  Stream<List<AppUser>> watchUsers() {
+    return _firestore.collection('users').snapshots().map((snap) {
+      final users = [
+        for (final doc in snap.docs) AppUser.fromJson(doc.id, doc.data()),
+      ];
+      users.sort((a, b) => a.username.toLowerCase().compareTo(
+        b.username.toLowerCase(),
+      ));
+      return users;
+    }).handleError((Object e, StackTrace s) {
+      debugPrint('[FirestoreRepository] users snapshot error: $e');
+    });
+  }
+
   /// Streams the user document at `users/{uid}`, or `null` when missing.
   Stream<AppUser?> watchUser(String uid) {
     return _firestore
@@ -431,6 +450,26 @@ class FirestoreRepository {
         .collection('users')
         .doc(user.id)
         .set(user.toJson(), SetOptions(merge: true));
+  }
+
+  /// Deletes a user document. Only admins may do this per `firestore.rules`.
+  ///
+  /// The user's `bookmarks` and `history` subcollections are removed in the
+  /// same batch; papers they authored are kept (author info is denormalized
+  /// onto the paper documents).
+  Future<void> deleteUser(String uid) async {
+    final docRef = _firestore.collection('users').doc(uid);
+    final bookmarks = await docRef.collection('bookmarks').get();
+    final history = await docRef.collection('history').get();
+    final batch = _firestore.batch();
+    for (final doc in bookmarks.docs) {
+      batch.delete(doc.reference);
+    }
+    for (final doc in history.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.delete(docRef);
+    await batch.commit();
   }
 
   // ------------------------------------------------------------------

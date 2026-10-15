@@ -34,6 +34,11 @@ class AppState extends ChangeNotifier {
       _papersLoaded = true;
       notifyListeners();
     });
+    _usersSub = _repo!.watchUsers().listen((users) {
+      _users = users;
+      _usersLoaded = true;
+      notifyListeners();
+    });
     _authSub = _authRepo!.watchAuthUser().listen(_onAuthUser);
   }
 
@@ -46,6 +51,7 @@ class AppState extends ChangeNotifier {
   AuthRepository? _authRepo;
 
   StreamSubscription<List<Paper>>? _papersSub;
+  StreamSubscription<List<AppUser>>? _usersSub;
   StreamSubscription<AppUser?>? _authSub;
   StreamSubscription<Set<String>>? _bookmarksSub;
   StreamSubscription<List<ReadEntry>>? _historySub;
@@ -54,6 +60,8 @@ class AppState extends ChangeNotifier {
   AppView _view = AppView.library;
   List<Paper> _papers = <Paper>[];
   bool _papersLoaded = false;
+  List<AppUser> _users = <AppUser>[];
+  bool _usersLoaded = false;
   String? _selectedPaperId;
   Set<String> _bookmarks = <String>{};
   List<ReadEntry> _readingHistory = <ReadEntry>[];
@@ -83,6 +91,13 @@ class AppState extends ChangeNotifier {
   Set<String> get bookmarks => _bookmarks;
   List<ReadEntry> get readingHistory => _readingHistory;
   List<AppToast> get toasts => _toasts;
+
+  /// All registered users (admin console). Empty until the users stream
+  /// emits; see [usersResolved].
+  List<AppUser> get users => _users;
+
+  /// True once the users stream has emitted at least once.
+  bool get usersResolved => _usersLoaded || !_firebaseReady;
 
   List<Paper> get approvedPapers =>
       _papers.where((p) => p.status == PaperStatus.approved).toList();
@@ -316,41 +331,93 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------------------- admin
 
-  void approvePaper(String paperId) {
-    if (!_firebaseReady) return;
-    unawaited(_repo!.updatePaperStatus(paperId, PaperStatus.approved));
-    showToast('Paper approved and published!', '✅');
+  /// Approves a paper. Returns true when Firestore accepted the write;
+  /// surfaces a toast either way so a rejected write (e.g. unpublished
+  /// rules) can never look like a success.
+  Future<bool> approvePaper(String paperId) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.updatePaperStatus(paperId, PaperStatus.approved);
+      showToast('Paper approved and published!', '✅');
+      return true;
+    } catch (e) {
+      debugPrint('approvePaper failed: $e');
+      showToast('Could not approve the paper.', '⚠️');
+      return false;
+    }
   }
 
-  void rejectPaper(String paperId, String reason) {
-    if (!_firebaseReady) return;
-    unawaited(
-      _repo!.updatePaperStatus(paperId, PaperStatus.rejected, reason: reason),
-    );
-    showToast('Paper rejected.', '❌');
+  Future<bool> rejectPaper(String paperId, String reason) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.updatePaperStatus(paperId, PaperStatus.rejected,
+          reason: reason);
+      showToast('Paper rejected.', '❌');
+      return true;
+    } catch (e) {
+      debugPrint('rejectPaper failed: $e');
+      showToast('Could not reject the paper.', '⚠️');
+      return false;
+    }
   }
 
-  void requestRevision(String paperId, String reason) {
-    if (!_firebaseReady) return;
-    unawaited(
-      _repo!.updatePaperStatus(paperId, PaperStatus.revision, reason: reason),
-    );
-    showToast('Revision request sent.');
+  Future<bool> requestRevision(String paperId, String reason) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.updatePaperStatus(paperId, PaperStatus.revision,
+          reason: reason);
+      showToast('Revision request sent.');
+      return true;
+    } catch (e) {
+      debugPrint('requestRevision failed: $e');
+      showToast('Could not send the revision request.', '⚠️');
+      return false;
+    }
   }
 
-  void archivePaper(String paperId) {
-    if (!_firebaseReady) return;
-    unawaited(_repo!.updatePaperStatus(paperId, PaperStatus.archived));
-    showToast('Paper archived.');
+  Future<bool> archivePaper(String paperId) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.updatePaperStatus(paperId, PaperStatus.archived);
+      showToast('Paper archived.');
+      return true;
+    } catch (e) {
+      debugPrint('archivePaper failed: $e');
+      showToast('Could not archive the paper.', '⚠️');
+      return false;
+    }
   }
 
   /// Deletes the paper document and its comments/reactions subcollections.
   /// Other users' bookmark documents pointing at this paper are left orphaned
   /// (acceptable — bookmarks stream only id lists and UI guards missing papers).
-  void deletePaper(String paperId) {
-    if (!_firebaseReady) return;
-    unawaited(_repo!.deletePaper(paperId));
-    showToast('Paper deleted', '🗑');
+  Future<bool> deletePaper(String paperId) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.deletePaper(paperId);
+      showToast('Paper deleted', '🗑');
+      return true;
+    } catch (e) {
+      debugPrint('deletePaper failed: $e');
+      showToast('Could not delete the paper.', '⚠️');
+      return false;
+    }
+  }
+
+  /// Deletes a user profile (admin only per `firestore.rules`). The user's
+  /// papers are kept. Returns false — and toasts — when the write is
+  /// rejected.
+  Future<bool> deleteUser(String uid) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.deleteUser(uid);
+      showToast('User deleted', '🗑');
+      return true;
+    } catch (e) {
+      debugPrint('deleteUser failed: $e');
+      showToast('Could not delete the user.', '⚠️');
+      return false;
+    }
   }
 
   // -------------------------------------------------------------- lifecycle
@@ -358,6 +425,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _papersSub?.cancel();
+    _usersSub?.cancel();
     _authSub?.cancel();
     _cancelUserSubs();
     _repo?.dispose();

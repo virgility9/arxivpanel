@@ -1,9 +1,14 @@
 /// Admin console ported from `src/components/AdminPanel.tsx`.
 ///
 /// Desktop-style moderation console: side rail (or a segmented control on
-/// narrow screens), a dashboard with platform stats + recent activity, a
-/// filterable papers list, and a paper detail dialog with approve / reject /
-/// revision / archive actions.
+/// narrow screens), a dashboard with live platform stats + a moderation
+/// queue, a filterable papers list, a user-management section, and a paper
+/// detail dialog with approve / reject / revision / archive / delete actions.
+///
+/// Every number and action on this screen is backed by Firestore: stats are
+/// derived from the live papers/users streams, and moderation writes go
+/// through [AppState] which toasts on failure so a rejected write can never
+/// look like a success.
 library;
 
 import 'package:flutter/material.dart';
@@ -74,9 +79,11 @@ class AdminScreen extends StatefulWidget {
 }
 
 class _AdminScreenState extends State<AdminScreen> {
-  int _section = 0; // 0 = dashboard, 1 = papers
+  int _section = 0; // 0 = dashboard, 1 = papers, 2 = users
   final _searchController = TextEditingController();
+  final _userSearchController = TextEditingController();
   String _search = '';
+  String _userSearch = '';
   String _statusFilter = 'all';
   String _fieldFilter = 'all';
   String _yearFilter = 'all';
@@ -91,6 +98,7 @@ class _AdminScreenState extends State<AdminScreen> {
   void dispose() {
     widget.appState.removeListener(_onAppState);
     _searchController.dispose();
+    _userSearchController.dispose();
     super.dispose();
   }
 
@@ -105,11 +113,53 @@ class _AdminScreenState extends State<AdminScreen> {
     });
   }
 
+  void _openUsers() => setState(() => _section = 2);
+
+  /// Generic destructive-action confirmation. Returns true when the user
+  /// confirms.
+  Future<bool> _confirmAction({
+    required String title,
+    required String body,
+    String confirmLabel = 'Delete',
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE06B6B),
+            ),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   // ------------------------------------------------------------ derived data
 
   List<Paper> get _allPapers => widget.appState.papers;
 
-  int get _uniqueStudents => _allPapers.map((p) => p.authorId).toSet().length;
+  List<AppUser> get _allUsers => widget.appState.users;
+
+  int get _totalViews => _allPapers.fold<int>(0, (s, p) => s + p.views);
+
+  List<Paper> get _pendingQueue {
+    final list = _allPapers
+        .where((p) => p.status == PaperStatus.pending)
+        .toList();
+    list.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+    return list;
+  }
 
   List<String> get _fields =>
       _allPapers.map((p) => p.field).toSet().toList()..sort();
@@ -143,6 +193,18 @@ class _AdminScreenState extends State<AdminScreen> {
     return list;
   }
 
+  List<AppUser> get _filteredUsers {
+    final query = _userSearch.trim().toLowerCase();
+    if (query.isEmpty) return _allUsers;
+    return _allUsers.where((u) {
+      return u.username.toLowerCase().contains(query) ||
+          u.email.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  int _papersBy(AppUser u) =>
+      _allPapers.where((p) => p.authorId == u.id).length;
+
   // ------------------------------------------------------------------ build
 
   @override
@@ -174,6 +236,8 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildRail(AppPalette p) {
     final c = p.c;
+    final userCount =
+        widget.appState.usersResolved ? widget.appState.users.length : 0;
     return Container(
       width: 230,
       color: c.surface,
@@ -208,6 +272,15 @@ class _AdminScreenState extends State<AdminScreen> {
             active: _section == 1,
             badge: widget.appState.pendingPapers.length,
             onTap: () => _openPapers(),
+          ),
+          const SizedBox(height: 4),
+          _railNav(
+            p,
+            icon: Icons.people,
+            label: 'Users',
+            active: _section == 2,
+            badge: userCount,
+            onTap: _openUsers,
           ),
           const Spacer(),
           const Divider(height: 1),
@@ -379,6 +452,7 @@ class _AdminScreenState extends State<AdminScreen> {
         children: [
           tab(Icons.dashboard, 'Dashboard', 0),
           tab(Icons.description, 'Papers', 1),
+          tab(Icons.people, 'Users', 2),
         ],
       ),
     );
@@ -396,8 +470,10 @@ class _AdminScreenState extends State<AdminScreen> {
           const SizedBox(height: 24),
           if (_section == 0)
             _buildDashboard(p, wide)
+          else if (_section == 1)
+            _buildPapers(p, wide)
           else
-            _buildPapers(p, wide),
+            _buildUsers(p),
         ],
       ),
     );
@@ -405,6 +481,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildTopbar(AppPalette p) {
     final c = p.c;
+    final titles = ['Dashboard', 'Paper & Thesis Management', 'User Management'];
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -423,7 +500,7 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                _section == 0 ? 'Dashboard' : 'Paper & Thesis Management',
+                titles[_section],
                 style: displayStyle(p, size: 28, weight: FontWeight.w700),
               ),
             ],
@@ -486,6 +563,7 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _buildWelcome(AppPalette p, bool wide) {
+    final pending = widget.appState.pendingPapers.length;
     final inner = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -506,7 +584,9 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Here is what is happening with the research community today.',
+          pending > 0
+              ? '$pending ${pending == 1 ? 'paper needs' : 'papers need'} your review right now.'
+              : 'Everything is reviewed — here is the state of the research community.',
           style: bodyStyle(p, size: 14, color: p.c.muted),
         ),
       ],
@@ -546,37 +626,25 @@ class _AdminScreenState extends State<AdminScreen> {
     final rejected = _allPapers
         .where((x) => x.status == PaperStatus.rejected)
         .length;
+    final usersLabel = widget.appState.usersResolved
+        ? formatCount(widget.appState.users.length)
+        : '…';
     final cards = [
-      _statCard(
-        p,
-        icon: Icons.people,
-        iconColor: const Color(0xFF7C6AF7),
-        label: 'Contributors',
-        value: _uniqueStudents,
-        detail: 'Unique authors in the archive',
-      ),
-      _statCard(
-        p,
-        icon: Icons.school,
-        iconColor: const Color(0xFF60A5FA),
-        label: 'Total students',
-        value: _uniqueStudents,
-        detail: '$_uniqueStudents active contributors',
-      ),
       _statCard(
         p,
         icon: Icons.description,
         iconColor: p.c.muted,
-        label: 'Uploaded papers',
-        value: _allPapers.length,
+        label: 'Total papers',
+        value: formatCount(_allPapers.length),
         detail: 'Across all categories',
+        onTap: () => _openPapers(),
       ),
       _statCard(
         p,
         icon: Icons.schedule,
         iconColor: p.accent.accent,
-        label: 'Pending validation',
-        value: pending,
+        label: 'Pending review',
+        value: formatCount(pending),
         detail: 'Requires your attention',
         onTap: () => _openPapers('pending'),
       ),
@@ -585,16 +653,33 @@ class _AdminScreenState extends State<AdminScreen> {
         icon: Icons.check,
         iconColor: p.success,
         label: 'Approved papers',
-        value: approved,
+        value: formatCount(approved),
         detail: 'Published in the library',
         onTap: () => _openPapers('approved'),
+      ),
+      _statCard(
+        p,
+        icon: Icons.people,
+        iconColor: const Color(0xFF7C6AF7),
+        label: 'Registered users',
+        value: usersLabel,
+        detail: 'Accounts in the database',
+        onTap: _openUsers,
+      ),
+      _statCard(
+        p,
+        icon: Icons.visibility,
+        iconColor: const Color(0xFF60A5FA),
+        label: 'Total views',
+        value: formatCount(_totalViews),
+        detail: 'Reads across all papers',
       ),
       _statCard(
         p,
         icon: Icons.close,
         iconColor: p.danger,
         label: 'Rejected papers',
-        value: rejected,
+        value: formatCount(rejected),
         detail: 'Did not meet guidelines',
         onTap: () => _openPapers('rejected'),
       ),
@@ -615,7 +700,7 @@ class _AdminScreenState extends State<AdminScreen> {
     required IconData icon,
     required Color iconColor,
     required String label,
-    required int value,
+    required String value,
     required String detail,
     VoidCallback? onTap,
   }) {
@@ -645,7 +730,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  formatCount(value),
+                  value,
                   style: displayStyle(p, size: 24, weight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
@@ -671,22 +756,25 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _buildDashboardPanels(AppPalette p, bool wide) {
-    final recent = _card(p, _buildRecentPapers(p));
+    final queue = _card(p, _buildReviewQueue(p));
     final activity = _card(p, _buildActivity(p));
     if (wide) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 2, child: recent),
+          Expanded(flex: 2, child: queue),
           const SizedBox(width: 20),
           Expanded(child: activity),
         ],
       );
     }
-    return Column(children: [recent, const SizedBox(height: 20), activity]);
+    return Column(children: [queue, const SizedBox(height: 20), activity]);
   }
 
-  Widget _buildRecentPapers(AppPalette p) {
+  /// The moderator's work queue: pending papers with one-tap approve.
+  /// Rejections need a reason, so they open the full review dialog.
+  Widget _buildReviewQueue(AppPalette p) {
+    final queue = _pendingQueue.take(4).toList();
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -699,81 +787,99 @@ class _AdminScreenState extends State<AdminScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Recently uploaded papers',
+                      'Needs review',
                       style: displayStyle(p, size: 17, weight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Latest submissions from students',
+                      'Submissions waiting for moderation',
                       style: bodyStyle(p, size: 12, color: p.c.muted),
                     ),
                   ],
                 ),
               ),
               TextButton(
-                onPressed: () => _openPapers(),
+                onPressed: () => _openPapers('pending'),
                 child: const Text('View all →'),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          ..._recentlyUploaded.map((paper) {
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () => _openDetail(paper),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(
-                    children: [
-                      NetImage(
-                        url: paper.coverImage,
-                        width: 44,
-                        height: 60,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              paper.title,
-                              style: displayStyle(
-                                p,
-                                size: 14,
-                                weight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${paper.author} · ${paper.field}',
-                              style: monoStyle(p, size: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      StatusBadge(palette: p, status: paper.status),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 88,
-                        child: Text(
-                          timeAgo(paper.submittedAt),
-                          style: monoStyle(p, size: 11),
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, size: 16, color: p.c.muted),
-                    ],
+          if (queue.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    size: 20,
+                    color: p.success,
                   ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'All caught up — nothing waiting for review.',
+                      style: bodyStyle(p, size: 13, color: p.c.muted),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...queue.map(
+              (paper) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    NetImage(
+                      url: paper.coverImage,
+                      width: 36,
+                      height: 48,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            paper.title,
+                            style: displayStyle(
+                              p,
+                              size: 13,
+                              weight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${paper.author} · ${timeAgo(paper.submittedAt)}',
+                            style: monoStyle(p, size: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GhostButton(
+                      palette: p,
+                      label: 'Review',
+                      onPressed: () => _openDetail(paper),
+                    ),
+                    const SizedBox(width: 8),
+                    GoldButton(
+                      palette: p,
+                      label: 'Approve',
+                      minHeight: 36,
+                      onPressed: () =>
+                          widget.appState.approvePaper(paper.id),
+                    ),
+                  ],
                 ),
               ),
-            );
-          }),
+            ),
         ],
       ),
     );
@@ -990,7 +1096,7 @@ class _AdminScreenState extends State<AdminScreen> {
           const SizedBox(width: 12),
           Expanded(child: year),
         ],
-      );
+      ),
     }
     return Column(
       children: [
@@ -1076,6 +1182,218 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
+  // ------------------------------------------------------------- users list
+
+  /// User management, backed by the live `users` collection stream.
+  /// Profiles are publicly readable per firestore.rules; deletion is
+  /// admin-only. Admin grants happen in the Firebase console (the rules
+  /// don't allow client-side isAdmin changes), hence the hint below.
+  Widget _buildUsers(AppPalette p) {
+    final users = _filteredUsers;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Registered users',
+                    style: displayStyle(p, size: 22, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Everyone with an account in the database.',
+                    style: bodyStyle(p, size: 13, color: p.c.muted),
+                  ),
+                ],
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.appState.usersResolved
+                      ? formatCount(widget.appState.users.length)
+                      : '…',
+                  style: displayStyle(p, size: 18, weight: FontWeight.w700),
+                ),
+                const SizedBox(width: 6),
+                Text('users', style: monoStyle(p, size: 11)),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _userSearchController,
+          onChanged: (v) => setState(() => _userSearch = v),
+          decoration: const InputDecoration(
+            hintText: 'Search username or email...',
+            prefixIcon: Icon(Icons.search, size: 17),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (!widget.appState.usersResolved)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (users.isEmpty)
+          _card(
+            p,
+            EmptyState(
+              palette: p,
+              icon: '👥',
+              title: _userSearch.trim().isEmpty
+                  ? 'No users yet'
+                  : 'No users found',
+              sub: _userSearch.trim().isEmpty
+                  ? 'Accounts appear here once people sign up.'
+                  : 'Try a different search.',
+            ),
+          )
+        else
+          ...users.map((u) => _buildUserRow(p, u)),
+        const SizedBox(height: 16),
+        Text(
+          'Admin access is granted in the Firebase console (admins collection) — '
+          'it cannot be changed from inside the app.',
+          style: monoStyle(p, size: 10, color: p.c.faint),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUserRow(AppPalette p, AppUser u) {
+    final c = p.c;
+    final isSelf = widget.appState.user?.id == u.id;
+    final papers = _papersBy(u);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          AvatarImage(url: u.avatar, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        u.username,
+                        style:
+                            bodyStyle(p, size: 14, weight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (u.isAdmin) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: p.accent.accent.withValues(alpha: 0.15),
+                          border: Border.all(
+                            color: p.accent.accent.withValues(alpha: 0.4),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'ADMIN',
+                          style: monoStyle(
+                            p,
+                            size: 9,
+                            weight: FontWeight.w700,
+                            color: p.accent.accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (isSelf) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: c.surface2,
+                          border: Border.all(color: c.border),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'YOU',
+                          style: monoStyle(p, size: 9, color: c.muted),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  u.email,
+                  style: monoStyle(p, size: 11, color: c.textSub),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    if ((u.institution ?? '').isNotEmpty) u.institution!,
+                    '$papers ${papers == 1 ? 'paper' : 'papers'}',
+                    'joined ${u.joinedAt}',
+                  ].join(' · '),
+                  style: monoStyle(p, size: 10, color: c.faint),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (isSelf)
+            Tooltip(
+              message: 'You cannot delete your own account here',
+              child: Icon(Icons.lock_outline, size: 18, color: c.faint),
+            )
+          else
+            IconButton(
+              tooltip: 'Delete ${u.username}',
+              icon: const Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: Color(0xFFE06B6B),
+              ),
+              onPressed: () async {
+                final ok = await _confirmAction(
+                  title: 'Delete user?',
+                  body:
+                      '“${u.username}” will lose access immediately. Their papers stay in the archive.',
+                );
+                if (ok) await widget.appState.deleteUser(u.id);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
   // ------------------------------------------------------------ detail dialog
 
   void _openDetail(Paper paper) {
@@ -1091,7 +1409,7 @@ class _AdminScreenState extends State<AdminScreen> {
             final c = p.c;
             final cur = widget.appState.paperById(paper.id) ?? paper;
 
-            void submitReview() {
+            Future<void> submitReview() async {
               if (reviewAction == null) return;
               if (reason.trim().isEmpty) {
                 setD(() {
@@ -1101,12 +1419,23 @@ class _AdminScreenState extends State<AdminScreen> {
                 });
                 return;
               }
-              if (reviewAction == 'reject') {
-                widget.appState.rejectPaper(cur.id, reason.trim());
-              } else {
-                widget.appState.requestRevision(cur.id, reason.trim());
-              }
-              Navigator.of(ctx).pop();
+              final ok = reviewAction == 'reject'
+                  ? await widget.appState.rejectPaper(cur.id, reason.trim())
+                  : await widget.appState.requestRevision(cur.id, reason.trim());
+              // The write may fail (e.g. unpublished rules) — AppState already
+              // toasted the error, so keep the dialog open for a retry.
+              if (ok && ctx.mounted) Navigator.of(ctx).pop();
+            }
+
+            Future<void> deleteCurrent() async {
+              final ok = await _confirmAction(
+                title: 'Delete paper?',
+                body:
+                    '“${cur.title}” and all its comments and reactions will be permanently removed.',
+              );
+              if (!ok) return;
+              final deleted = await widget.appState.deletePaper(cur.id);
+              if (deleted && ctx.mounted) Navigator.of(ctx).pop();
             }
 
             Widget metaCell(String label, String value) {
@@ -1361,9 +1690,12 @@ class _AdminScreenState extends State<AdminScreen> {
                                       palette: p,
                                       label: 'Approve',
                                       minHeight: 40,
-                                      onPressed: () {
-                                        widget.appState.approvePaper(cur.id);
-                                        Navigator.of(ctx).pop();
+                                      onPressed: () async {
+                                        final ok = await widget.appState
+                                            .approvePaper(cur.id);
+                                        if (ok && ctx.mounted) {
+                                          Navigator.of(ctx).pop();
+                                        }
                                       },
                                     ),
                                   ],
@@ -1372,11 +1704,20 @@ class _AdminScreenState extends State<AdminScreen> {
                                     GhostButton(
                                       palette: p,
                                       label: 'Archive',
-                                      onPressed: () {
-                                        widget.appState.archivePaper(cur.id);
-                                        Navigator.of(ctx).pop();
+                                      onPressed: () async {
+                                        final ok = await widget.appState
+                                            .archivePaper(cur.id);
+                                        if (ok && ctx.mounted) {
+                                          Navigator.of(ctx).pop();
+                                        }
                                       },
                                     ),
+                                  GhostButton(
+                                    palette: p,
+                                    label: 'Delete',
+                                    color: p.danger,
+                                    onPressed: deleteCurrent,
+                                  ),
                                 ],
                               ),
                             ],

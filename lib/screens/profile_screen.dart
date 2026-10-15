@@ -5,6 +5,8 @@
 /// web app is intentionally skipped — the current avatar is kept.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -105,7 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
-    if (ok == true) widget.appState.deletePaper(paper.id);
+    if (ok == true) unawaited(widget.appState.deletePaper(paper.id));
   }
 
   @override
