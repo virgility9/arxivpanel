@@ -7,7 +7,6 @@ library;
 
 import 'dart:async';
 import 'dart:js_interop';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/foundation.dart';
@@ -66,10 +65,16 @@ Future<PickedFile?> _pickWebFile(PickKind kind) {
 
   var done = false;
 
+  // The JS listener wrappers are declared up-front (assigned below) so the
+  // control functions defined next can reference them.
+  late JSFunction changeJs;
+  late JSFunction cancelJs;
+  late JSFunction focusJs;
+
   void cleanup() {
-    input.removeEventListener('change', _changeJs);
-    input.removeEventListener('cancel', _cancelJs);
-    web.window.removeEventListener('focus', _focusJs);
+    input.removeEventListener('change', changeJs);
+    input.removeEventListener('cancel', cancelJs);
+    web.window.removeEventListener('focus', focusJs);
     input.remove();
   }
 
@@ -128,18 +133,17 @@ Future<PickedFile?> _pickWebFile(PickKind kind) {
     }
   }
 
-  // Declared after the functions that reference them; assigned before use.
-  late final JSFunction _changeJs = onChange.toJS;
-  late final JSFunction _cancelJs = ((web.Event _) => finish(null)).toJS;
-  late final JSFunction _focusJs = ((web.Event _) {
+  changeJs = onChange.toJS;
+  cancelJs = ((web.Event _) => finish(null)).toJS;
+  focusJs = ((web.Event _) {
     // Fires when the dialog closes without a selection AND on unrelated
     // refocuses; the delay + `done` guard keep it from racing `change`.
     Future.delayed(const Duration(milliseconds: 600), () => finish(null));
   }).toJS;
 
-  input.addEventListener('change', _changeJs);
-  input.addEventListener('cancel', _cancelJs);
-  web.window.addEventListener('focus', _focusJs);
+  input.addEventListener('change', changeJs);
+  input.addEventListener('cancel', cancelJs);
+  web.window.addEventListener('focus', focusJs);
 
   web.document.body!.append(input);
   input.click();
