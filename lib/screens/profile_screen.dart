@@ -1,11 +1,10 @@
-/// Profile screen ported from `src/components/ProfilePage.tsx`.
-///
-/// Banner + overlapping identity row, edit-profile form, stats grid, and
-/// tabbed lists (My Papers / History / Saved). Avatar file-upload from the
-/// web app is intentionally skipped — the current avatar is kept.
+/// Profile screen: centered identity header (avatar, name, joined date),
+/// Edit Profile / Sign Out actions, 2×2 stat cards, and tabbed lists
+/// (My Papers / History / Saved).
 library;
 
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -33,7 +32,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   int _tab = 0;
-  bool _editing = false;
 
   late final TextEditingController _nameCtrl;
   late final TextEditingController _instCtrl;
@@ -66,7 +64,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _webCtrl.text = user.website ?? '';
   }
 
-  Future<void> _save(AppUser user) async {
+  /// Persists the edit dialog form, then closes the dialog on success.
+  Future<void> _save(BuildContext dialogCtx, AppUser user) async {
     final username = _nameCtrl.text.trim();
     try {
       await widget.appState.updateUser(
@@ -78,12 +77,136 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
       if (!mounted) return;
-      setState(() => _editing = false);
+      Navigator.of(dialogCtx).pop();
     } catch (_) {
       // updateUser already toasts on success; surface failures too instead
-      // of leaving the optimistic edit silently applied.
+      // of leaving the dialog open with no feedback.
       widget.appState.showToast('Could not save profile', '⚠️');
     }
+  }
+
+  /// Edit-profile dialog: display name, institution, bio, website.
+  Future<void> _openEditDialog(AppUser user) async {
+    _resetEditFields(user);
+    final p = widget.theme.palette;
+    final c = p.c;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        title: Text(
+          'Edit Profile',
+          style: displayStyle(p, size: 18, weight: FontWeight.w600),
+        ),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LabeledField(
+                  palette: p,
+                  label: 'Display Name',
+                  child: TextField(
+                    controller: _nameCtrl,
+                    style: bodyStyle(p, size: 14),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LabeledField(
+                  palette: p,
+                  label: 'Institution',
+                  child: TextField(
+                    controller: _instCtrl,
+                    style: bodyStyle(p, size: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'University / Lab',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LabeledField(
+                  palette: p,
+                  label: 'Bio',
+                  child: TextField(
+                    controller: _bioCtrl,
+                    maxLines: 3,
+                    style: bodyStyle(p, size: 14),
+                    decoration: const InputDecoration(
+                      hintText:
+                          'Tell the research community about yourself…',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LabeledField(
+                  palette: p,
+                  label: 'Website / ORCID',
+                  child: TextField(
+                    controller: _webCtrl,
+                    style: bodyStyle(p, size: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'https://orcid.org/…',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Cancel', style: TextStyle(color: c.muted)),
+          ),
+          GoldButton(
+            palette: p,
+            label: 'Save Changes',
+            minHeight: 40,
+            onPressed: () => _save(ctx, user),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sign-out with a confirmation step.
+  Future<void> _confirmSignOut() async {
+    final p = widget.theme.palette;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.c.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        title: Text(
+          'Sign out?',
+          style: displayStyle(p, size: 17, weight: FontWeight.w600),
+        ),
+        content: Text(
+          'You will need to sign in again to access your papers and saved items.',
+          style: bodyStyle(p, size: 14, color: p.c.muted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel', style: TextStyle(color: p.c.muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE06B6B),
+            ),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await widget.appState.logout();
   }
 
   Future<void> _confirmDelete(Paper paper) async {
@@ -134,9 +257,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         final isNarrow = MediaQuery.of(context).size.width < 700;
-        final bannerH = isNarrow ? 120.0 : 160.0;
-        final avatarSize = isNarrow ? 72.0 : 96.0;
-        final overlap = isNarrow ? 40.0 : 52.0;
         final hPad = isNarrow ? 16.0 : 24.0;
 
         // -------------------------------------------------- derived data
@@ -176,62 +296,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ------------------------------------------------- banner
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    height: bannerH,
-                    decoration: BoxDecoration(
-                      // Palette-derived gradient: the old navy gradient was
-                      // hardcoded and looked wrong in light mode.
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          p.accent.accent.withValues(
-                              alpha: p.mode == AppMode.dark ? 0.35 : 0.18),
-                          c.surface2,
-                          c.bg,
-                        ],
-                        stops: const [0.0, 0.5, 1.0],
-                      ),
-                      border: Border(bottom: BorderSide(color: c.border)),
-                    ),
-                  ),
-                  // identity row overlapping the banner
-                  Positioned(
-                    top: bannerH - overlap,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 860),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: hPad),
-                          child: _identityRow(p, c, user, isNarrow, avatarSize),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: avatarSize - overlap + 32),
+              // --------------------------------------- centered header
+              _header(p, c, a, user, isNarrow),
+              const SizedBox(height: 24),
 
-              // -------------------------------------------------- body
+              // --------------------------------------------- body
               Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 860),
+                  constraints: const BoxConstraints(maxWidth: 720),
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: hPad),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (_editing)
-                          _editForm(p, c, user, isNarrow)
-                        else
-                          _bioBlock(p, c, user),
-                        const SizedBox(height: 28),
+                        _bioBlock(p, c, user),
                         _statsGrid(
                           p,
                           isNarrow,
@@ -240,24 +318,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           totalReactions,
                           '${(totalReadSeconds / 60).round()}m',
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
                         _tabsRow(p, c, a, tabs, isNarrow),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
                         if (!widget.appState.papersResolved)
                           // Papers are still loading from Firestore; don't
                           // flash "No papers yet" on the tab counts.
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 48),
-                            child: Center(child: CircularProgressIndicator()),
+                            child: Center(
+                                child: CircularProgressIndicator()),
                           )
                         else if (_tab == 0)
                           myPapers.isEmpty
-                              ? EmptyState(
-                                  palette: p,
-                                  icon: '📝',
+                              ? _emptyTab(
+                                  p,
+                                  icon: '📄',
                                   title: 'No papers yet',
                                   sub:
-                                      'Submit your first paper to see it here.',
+                                      'Papers you publish will show up here.',
+                                  actionLabel: 'Submit a paper',
+                                  onAction: () => widget.appState
+                                      .navigate(AppView.post),
                                 )
                               : _paperList(
                                   p,
@@ -268,8 +350,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 )
                         else if (_tab == 1)
                           historyPapers.isEmpty
-                              ? EmptyState(
-                                  palette: p,
+                              ? _emptyTab(
+                                  p,
                                   icon: '📖',
                                   title: 'No reading history',
                                   sub: 'Papers you open will appear here.',
@@ -277,8 +359,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               : _historyList(p, c, historyPapers)
                         else
                           savedPapers.isEmpty
-                              ? EmptyState(
-                                  palette: p,
+                              ? _emptyTab(
+                                  p,
                                   icon: '🔖',
                                   title: 'No saved papers',
                                   sub:
@@ -300,210 +382,148 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ------------------------------------------------------------ sections
 
-  Widget _identityRow(
+  /// Centered identity header: gradient banner with overlapping avatar,
+  /// name, joined date, and the Edit Profile / Sign Out actions.
+  Widget _header(
     AppPalette p,
     AppColors c,
+    AccentPalette a,
     AppUser user,
     bool isNarrow,
-    double avatarSize,
   ) {
-    return Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.end,
-      spacing: 16,
-      runSpacing: 12,
+    const bannerH = 120.0;
+    const overlap = 44.0;
+    final avatarSize = isNarrow ? 88.0 : 96.0;
+    return Column(
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
+        Stack(
+          clipBehavior: Clip.none,
           children: [
             Container(
+              height: bannerH,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: p.accent.accent.withValues(alpha: 0.25),
-                    blurRadius: 24,
-                  ),
-                ],
-              ),
-              child: AvatarImage(
-                url: user.avatar,
-                size: avatarSize,
-                borderColor: p.accent.accent,
-                borderWidth: 3,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    p.accent.accent.withValues(
+                        alpha: p.mode == AppMode.dark ? 0.35 : 0.18),
+                    c.surface2,
+                    c.bg,
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                ),
+                border: Border(bottom: BorderSide(color: c.border)),
               ),
             ),
-            const SizedBox(width: 16),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.username,
-                    style: displayStyle(
-                      p,
-                      size: isNarrow ? 20 : 26,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  if (user.institution != null && user.institution!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        user.institution!,
-                        style: monoStyle(p, size: 11, color: c.muted),
+            Positioned(
+              top: bannerH - overlap,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: a.accent.withValues(alpha: 0.25),
+                        blurRadius: 24,
                       ),
-                    ),
-                  Text(
-                    'Joined ${formatMonthYear(user.joinedAt)}',
-                    style: monoStyle(p, size: 10, color: c.fainter),
+                    ],
                   ),
-                ],
+                  child: AvatarImage(
+                    url: user.avatar,
+                    size: avatarSize,
+                    borderColor: a.accent,
+                    borderWidth: 2.5,
+                  ),
+                ),
               ),
             ),
           ],
         ),
+        SizedBox(height: overlap + 12),
         Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GhostButton(
-                palette: p,
-                label: _editing ? 'Cancel' : 'Edit Profile',
-                color: _editing ? const Color(0xFFE06B6B) : null,
-                onPressed: () {
-                  setState(() {
-                    if (!_editing) _resetEditFields(user);
-                    _editing = !_editing;
-                  });
-                },
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            user.username,
+            style: displayStyle(p, size: 22, weight: FontWeight.w700),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Joined ${formatMonthYear(user.joinedAt)}',
+          style: monoStyle(p, size: 11, color: c.muted),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GoldButton(
+                      palette: p,
+                      label: 'Edit Profile',
+                      minHeight: 44,
+                      onPressed: () => _openEditDialog(user),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GhostButton(
+                    palette: p,
+                    label: 'Sign Out',
+                    color: const Color(0xFFE06B6B),
+                    minHeight: 44,
+                    onPressed: _confirmSignOut,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              GhostButton(
-                palette: p,
-                label: 'Sign Out',
-                color: const Color(0xFFE06B6B),
-                onPressed: widget.appState.logout,
-              ),
-            ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _editForm(AppPalette p, AppColors c, AppUser user, bool isNarrow) {
-    final nameField = LabeledField(
-      palette: p,
-      label: 'Display Name',
-      child: TextField(controller: _nameCtrl, style: bodyStyle(p, size: 14)),
-    );
-    final instField = LabeledField(
-      palette: p,
-      label: 'Institution',
-      child: TextField(
-        controller: _instCtrl,
-        style: bodyStyle(p, size: 14),
-        decoration: const InputDecoration(hintText: 'University / Lab'),
-      ),
-    );
-    return Container(
-      padding: EdgeInsets.all(isNarrow ? 16 : 24),
-      margin: const EdgeInsets.only(bottom: 28),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Edit Profile', style: displayStyle(p, size: 17)),
-          const SizedBox(height: 16),
-          if (isNarrow) ...[
-            nameField,
-            const SizedBox(height: 14),
-            instField,
-          ] else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: nameField),
-                const SizedBox(width: 14),
-                Expanded(child: instField),
-              ],
-            ),
-          const SizedBox(height: 14),
-          LabeledField(
-            palette: p,
-            label: 'Bio',
-            child: TextField(
-              controller: _bioCtrl,
-              maxLines: 3,
-              style: bodyStyle(p, size: 14),
-              decoration: const InputDecoration(
-                hintText: 'Tell the research community about yourself…',
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          LabeledField(
-            palette: p,
-            label: 'Website / ORCID',
-            child: TextField(
-              controller: _webCtrl,
-              style: bodyStyle(p, size: 14),
-              decoration: const InputDecoration(
-                hintText: 'https://orcid.org/…',
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: GoldButton(
-              palette: p,
-              label: 'Save Changes',
-              minHeight: 40,
-              onPressed: () => _save(user),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  /// Centered bio + website, rendered only when there is something to show.
   Widget _bioBlock(AppPalette p, AppColors c, AppUser user) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (user.bio.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              user.bio,
-              style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
-            ),
-          ),
-        if (user.website != null && user.website!.isNotEmpty)
-          InkWell(
-            onTap: () => _openWebsite(user.website!),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+    final hasBio = user.bio.isNotEmpty;
+    final hasSite = user.website != null && user.website!.isNotEmpty;
+    if (!hasBio && !hasSite) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          if (hasBio)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                user.website!,
-                style: monoStyle(p, size: 11, color: p.info).copyWith(
-                  decoration: TextDecoration.underline,
+                user.bio,
+                style: bodyStyle(p, size: 14, color: c.textSub, height: 1.6),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          if (hasSite)
+            InkWell(
+              onTap: () => _openWebsite(user.website!),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  user.website!,
+                  style: monoStyle(p, size: 11, color: p.info).copyWith(
+                    decoration: TextDecoration.underline,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -555,6 +575,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ---------------------------------------------------------------- stats
+
   Widget _statsGrid(
     AppPalette p,
     bool isNarrow,
@@ -569,41 +591,92 @@ class _ProfileScreenState extends State<ProfileScreen> {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
-      // Tiles must fit icon + value + label with room to spare at the
-      // largest text-size setting (1.75 was 24px too short on phones).
-      childAspectRatio: 1.35,
+      // Tiles must fit the icon tile + value + label with room to spare.
+      childAspectRatio: 1.25,
       children: [
-        StatTile(
-          palette: p,
+        _statCard(
+          p,
           icon: '📄',
           value: '$papers',
           label: 'Papers',
           color: p.accent.accent,
         ),
-        StatTile(
-          palette: p,
+        _statCard(
+          p,
           icon: '👁',
           value: views,
           label: 'Total Views',
           color: const Color(0xFF7C6AF7),
         ),
-        StatTile(
-          palette: p,
+        _statCard(
+          p,
           icon: '🔥',
           value: '$reactions',
-          label: 'Reactions received',
+          label: 'Reactions Received',
           color: const Color(0xFFE06B6B),
         ),
-        StatTile(
-          palette: p,
+        _statCard(
+          p,
           icon: '⏱',
           value: readTime,
-          label: 'Read time',
+          label: 'Read Time',
           color: const Color(0xFF4ADE80),
         ),
       ],
     );
   }
+
+  /// One stat card: tinted icon tile, colored value, uppercase label.
+  Widget _statCard(
+    AppPalette p, {
+    required String icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    final c = p.c;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: Text(icon, style: const TextStyle(fontSize: 17)),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: color,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label.toUpperCase(),
+            style: monoStyle(p, size: 9, color: c.muted, letterSpacing: 0.05),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------------- tabs
 
   Widget _tabsRow(
     AppPalette p,
@@ -670,6 +743,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  /// Empty tab state: dashed circle icon, title, subtitle, optional action.
+  Widget _emptyTab(
+    AppPalette p, {
+    required String icon,
+    required String title,
+    required String sub,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    final c = p.c;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 36),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 76,
+            height: 76,
+            child: CustomPaint(
+              painter: _DashedCirclePainter(color: c.faint),
+              child: Center(
+                child: Text(icon, style: const TextStyle(fontSize: 28)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: displayStyle(p, size: 16, weight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            sub,
+            style: bodyStyle(p, size: 13, color: c.muted),
+            textAlign: TextAlign.center,
+          ),
+          if (actionLabel != null) ...[
+            const SizedBox(height: 16),
+            GoldButton(
+              palette: p,
+              label: actionLabel,
+              minHeight: 44,
+              onPressed: onAction,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------------- lists
 
   Widget _paperRow(
     AppPalette p,
@@ -833,4 +957,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
+}
+
+/// Dashed circle used by the profile empty states.
+class _DashedCirclePainter extends CustomPainter {
+  _DashedCirclePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final r = size.width / 2 - 2;
+    final rect = Rect.fromCircle(
+      center: Offset(size.width / 2, size.height / 2),
+      radius: r,
+    );
+    const dashPx = 6.0;
+    const gapPx = 5.0;
+    final circ = 2 * pi * r;
+    var drawn = 0.0;
+    while (drawn < circ) {
+      final startAngle = (drawn / circ) * 2 * pi - pi / 2;
+      final sweep = (dashPx / circ) * 2 * pi;
+      canvas.drawArc(rect, startAngle, sweep, false, paint);
+      drawn += dashPx + gapPx;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
