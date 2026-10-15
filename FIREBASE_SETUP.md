@@ -116,21 +116,29 @@ You never need the Firebase CLI or `flutterfire configure`.
 
 ## Step 9 — Make yourself an admin
 
-The Admin panel (paper approvals) is gated by an `admins` collection. The
-first admin must be created manually:
+Admin access has **two parts**, both set in the console:
 
-1. Run the app once and **register** an account (or use an existing one),
-   then sign out. This creates your Auth user.
-2. Go to **Build → Authentication → Users** in the console, find your user,
-   and **copy its User UID**.
-3. Go to **Build → Firestore Database → Data** tab.
-4. Click **Start collection** → Collection ID: `admins` → **Next**.
-5. Document ID: **paste your UID** → add one field, e.g.
-   `role` (string) = `owner` → **Save**.
-6. Sign back in — the Admin tab now appears in the app.
+1. **App access** (makes the Admin tab appear): **Build → Firestore
+   Database → Data** → open the `users` collection → open the document whose
+   ID is your UID → set the `isAdmin` field to `true` (boolean) → **Update**.
+   New accounts are created with `isAdmin: false`, and the security rules
+   don't allow changing it from inside the app, so this step must be done
+   here.
+2. **Database permission** (lets approvals, rejections and deletions actually
+   save): in **Firestore Database → Data**, open the `admins` collection
+   (create it first if it doesn't exist: **Start collection** → Collection ID
+   `admins` → **Next**) → **Add document** → Document ID: **paste your UID**
+   → add one field, e.g. `role` (string) = `owner` → **Save**. The security
+   rules check this collection before allowing any admin write, and the very
+   first document must be created here because no admin exists yet to create
+   it.
 
-> To add more admins later, repeat with their UIDs (or do it from the app
-> once an admin panel for user management exists).
+To find a UID: **Build → Authentication → Users** → copy the **User UID**
+(it's also the document ID in the `users` collection).
+
+Sign out and back in — the Admin tab appears in the app.
+
+> To add more admins later, repeat both steps with their UIDs.
 
 ## Step 10 — Seed content
 
