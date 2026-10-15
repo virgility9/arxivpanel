@@ -64,111 +64,128 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _webCtrl.text = user.website ?? '';
   }
 
-  /// Persists the edit dialog form, then closes the dialog on success.
-  Future<void> _save(BuildContext dialogCtx, AppUser user) async {
-    final username = _nameCtrl.text.trim();
-    try {
-      await widget.appState.updateUser(
-        user.copyWith(
-          username: username.isEmpty ? user.username : username,
-          institution: _instCtrl.text.trim(),
-          bio: _bioCtrl.text,
-          website: _webCtrl.text.trim(),
-        ),
-      );
-      if (!mounted) return;
-      Navigator.of(dialogCtx).pop();
-    } catch (_) {
-      // updateUser already toasts on success; surface failures too instead
-      // of leaving the dialog open with no feedback.
-      widget.appState.showToast('Could not save profile', '⚠️');
-    }
-  }
-
   /// Edit-profile dialog: display name, institution, bio, website.
   Future<void> _openEditDialog(AppUser user) async {
     _resetEditFields(user);
     final p = widget.theme.palette;
     final c = p.c;
+    var saving = false;
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: c.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        title: Text(
-          'Edit Profile',
-          style: displayStyle(p, size: 18, weight: FontWeight.w600),
-        ),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                LabeledField(
-                  palette: p,
-                  label: 'Display Name',
-                  child: TextField(
-                    controller: _nameCtrl,
-                    style: bodyStyle(p, size: 14),
-                  ),
+      // Locked: the dialog must still be the top route when the async
+      // write below completes, otherwise pop() would hit the wrong page.
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          // Runs the Firestore write, then closes the dialog. The navigator
+          // is captured before the async gap so no BuildContext is used
+          // after the await (use_build_context_synchronously).
+          Future<void> save() async {
+            final navigator = Navigator.of(ctx);
+            setDialogState(() => saving = true);
+            try {
+              final username = _nameCtrl.text.trim();
+              await widget.appState.updateUser(
+                user.copyWith(
+                  username: username.isEmpty ? user.username : username,
+                  institution: _instCtrl.text.trim(),
+                  bio: _bioCtrl.text,
+                  website: _webCtrl.text.trim(),
                 ),
-                const SizedBox(height: 12),
-                LabeledField(
-                  palette: p,
-                  label: 'Institution',
-                  child: TextField(
-                    controller: _instCtrl,
-                    style: bodyStyle(p, size: 14),
-                    decoration: const InputDecoration(
-                      hintText: 'University / Lab',
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                LabeledField(
-                  palette: p,
-                  label: 'Bio',
-                  child: TextField(
-                    controller: _bioCtrl,
-                    maxLines: 3,
-                    style: bodyStyle(p, size: 14),
-                    decoration: const InputDecoration(
-                      hintText:
-                          'Tell the research community about yourself…',
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                LabeledField(
-                  palette: p,
-                  label: 'Website / ORCID',
-                  child: TextField(
-                    controller: _webCtrl,
-                    style: bodyStyle(p, size: 14),
-                    decoration: const InputDecoration(
-                      hintText: 'https://orcid.org/…',
-                    ),
-                  ),
-                ),
-              ],
+              );
+            } catch (_) {
+              // updateUser already toasts on success; surface failures too
+              // and re-enable the actions instead of leaving the dialog
+              // stuck in the saving state.
+              widget.appState.showToast('Could not save profile', '⚠️');
+              setDialogState(() => saving = false);
+              return;
+            }
+            // Safe: the barrier is locked and both actions were disabled
+            // while saving, so the dialog is still the top route.
+            navigator.pop();
+          }
+
+          return AlertDialog(
+            backgroundColor: c.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel', style: TextStyle(color: c.muted)),
-          ),
-          GoldButton(
-            palette: p,
-            label: 'Save Changes',
-            minHeight: 40,
-            onPressed: () => _save(ctx, user),
-          ),
-        ],
+            title: Text(
+              'Edit Profile',
+              style: displayStyle(p, size: 18, weight: FontWeight.w600),
+            ),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LabeledField(
+                      palette: p,
+                      label: 'Display Name',
+                      child: TextField(
+                        controller: _nameCtrl,
+                        style: bodyStyle(p, size: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    LabeledField(
+                      palette: p,
+                      label: 'Institution',
+                      child: TextField(
+                        controller: _instCtrl,
+                        style: bodyStyle(p, size: 14),
+                        decoration: const InputDecoration(
+                          hintText: 'University / Lab',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    LabeledField(
+                      palette: p,
+                      label: 'Bio',
+                      child: TextField(
+                        controller: _bioCtrl,
+                        maxLines: 3,
+                        style: bodyStyle(p, size: 14),
+                        decoration: const InputDecoration(
+                          hintText:
+                              'Tell the research community about yourself…',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    LabeledField(
+                      palette: p,
+                      label: 'Website / ORCID',
+                      child: TextField(
+                        controller: _webCtrl,
+                        style: bodyStyle(p, size: 14),
+                        decoration: const InputDecoration(
+                          hintText: 'https://orcid.org/…',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.of(ctx).pop(),
+                child: Text('Cancel', style: TextStyle(color: c.muted)),
+              ),
+              GoldButton(
+                palette: p,
+                label: 'Save Changes',
+                minHeight: 40,
+                loading: saving,
+                onPressed: saving ? null : save,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
