@@ -1,8 +1,9 @@
 /// Settings screen ported from `src/components/SettingsView.tsx`.
 ///
-/// Theme controls (color mode, accent color, text size) write through
+/// Theme controls (color mode, accent color) write through
 /// [ThemeProvider.update]; the provider notifies and the root MaterialApp
-/// rebuilds with the new [ThemeData], so changes apply live.
+/// rebuilds with the new [ThemeData], so changes apply live. Text size is
+/// fixed at the Normal scale — there is no text-size control.
 library;
 
 import 'package:flutter/material.dart';
@@ -66,7 +67,20 @@ class SettingsScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text(dark ? '🌙' : '☀️', style: const TextStyle(fontSize: 24)),
+                // Fixed-size slot: some emoji glyphs (notably ☀️ on Windows)
+                // render far larger than their font size, so the icon is
+                // fitted into a fixed box and can never blow up the card.
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: Text(
+                      dark ? '🌙' : '☀️',
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -178,50 +192,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  // -- Text size segmented control ----------------------------------------------
-  Widget _fontScaleSegment(AppPalette p, AppFontScale scale) {
-    final c = p.c;
-    final a = p.accent;
-    final active = theme.fontScale == scale;
-    return Expanded(
-      child: Material(
-        color: active ? a.accent : Colors.transparent,
-        child: InkWell(
-          onTap: () => theme.update(fontScale: scale),
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 64),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Aa',
-                  style: displayStyle(
-                    p,
-                    size: scale.baseSize,
-                    weight: FontWeight.w600,
-                    color: active ? a.accentFg : c.text,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  scale.label,
-                  style: monoStyle(
-                    p,
-                    size: 9,
-                    letterSpacing: 0.04,
-                    color: active ? a.accentFg : c.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final p = theme.palette;
@@ -304,25 +274,6 @@ class SettingsScreen extends StatelessWidget {
                                 .toList(),
                           );
                         },
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Text Size
-                      _groupTitle(p, 'Text Size'),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: c.surface,
-                            border: Border.all(color: c.border),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: AppFontScale.values
-                                .map((scale) => _fontScaleSegment(p, scale))
-                                .toList(),
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 40),
 

@@ -148,7 +148,11 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                 ? _buildSignInPrompt(p)
                 : _submitted
                 ? _buildSuccess(p)
-                : _buildForm(p, user),
+                : _buildForm(
+                    p,
+                    user,
+                    MediaQuery.of(context).size.width < 560,
+                  ),
           ),
         ),
       ),
@@ -264,7 +268,38 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
 
   // ------------------------------------------------------------------- form
 
-  Widget _buildForm(AppPalette p, AppUser user) {
+  Widget _fieldField(AppPalette p, List<String> fields) {
+    return LabeledField(
+      palette: p,
+      label: 'Field',
+      child: DropdownButtonFormField<String>(
+        initialValue: _field,
+        isExpanded: true,
+        dropdownColor: p.c.surface,
+        style: TextStyle(color: p.c.text, fontSize: 14),
+        items: fields
+            .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+            .toList(),
+        onChanged: (v) {
+          if (v != null) setState(() => _field = v);
+        },
+      ),
+    );
+  }
+
+  Widget _pagesField(AppPalette p) {
+    return LabeledField(
+      palette: p,
+      label: 'Pages',
+      error: _errors['pages'],
+      child: TextField(
+        controller: _pages,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(hintText: '42'),
+      ),
+    );
+  }
+  Widget _buildForm(AppPalette p, AppUser user, bool narrow) {
     final fields = AppConstants.fields.where((f) => f != 'All Fields').toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,43 +369,26 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           ),
         ),
         const SizedBox(height: 18),
-        // Field + Pages
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: LabeledField(
-                palette: p,
-                label: 'Field',
-                child: DropdownButtonFormField<String>(
-                  initialValue: _field,
-                  isExpanded: true,
-                  dropdownColor: p.c.surface,
-                  style: TextStyle(color: p.c.text, fontSize: 14),
-                  items: fields
-                      .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) setState(() => _field = v);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: LabeledField(
-                palette: p,
-                label: 'Pages',
-                error: _errors['pages'],
-                child: TextField(
-                  controller: _pages,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(hintText: '42'),
-                ),
-              ),
-            ),
-          ],
-        ),
+        // Field + Pages — side by side on wide screens, stacked on narrow
+        // screens so the dropdowns never get cramped.
+        if (narrow)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldField(p, fields),
+              const SizedBox(height: 18),
+              _pagesField(p),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _fieldField(p, fields)),
+              const SizedBox(width: 14),
+              Expanded(child: _pagesField(p)),
+            ],
+          ),
         const SizedBox(height: 18),
         // Institution
         LabeledField(
