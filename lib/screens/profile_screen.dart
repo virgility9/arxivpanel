@@ -178,23 +178,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   onPressed: saving
                                       ? null
                                       : () async {
-                                          final result =
-                                              await FilePicker.platform
-                                                  .pickFiles(
-                                            type: FileType.image,
-                                            withData: true,
-                                          );
-                                          if (result == null ||
-                                              result.files.isEmpty) {
-                                            return;
+                                          try {
+                                            final file =
+                                                await FilePicker.pickFile(
+                                              type: FileType.image,
+                                            );
+                                            // Null = the user cancelled.
+                                            if (file == null) return;
+                                            final bytes =
+                                                await file.readAsBytes();
+                                            setDialogState(() {
+                                              avatarBytes = bytes;
+                                              avatarExt =
+                                                  file.extension ?? 'jpg';
+                                            });
+                                          } catch (_) {
+                                            widget.appState.showToast(
+                                              'Could not read the image',
+                                              '⚠️',
+                                            );
                                           }
-                                          final file = result.files.first;
-                                          if (file.bytes == null) return;
-                                          setDialogState(() {
-                                            avatarBytes = file.bytes;
-                                            avatarExt =
-                                                file.extension ?? 'jpg';
-                                          });
                                         },
                                   icon: const Icon(
                                     Icons.upload_outlined,

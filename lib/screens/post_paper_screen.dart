@@ -7,7 +7,6 @@
 library;
 
 import 'dart:js_interop';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -160,18 +159,21 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
 
   /// Picks a PDF from device storage.
   Future<void> _pickPdf() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.bytes == null) return;
-    setState(() {
-      _pdfBytes = file.bytes;
-      _pdfName = file.name;
-    });
+    try {
+      final file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+      // Null = the user cancelled.
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      setState(() {
+        _pdfBytes = bytes;
+        _pdfName = file.name;
+      });
+    } catch (_) {
+      widget.appState.showToast('Could not read the PDF', '⚠️');
+    }
   }
 
   /// Previews the picked PDF inline (web) from a blob URL — no upload yet.
