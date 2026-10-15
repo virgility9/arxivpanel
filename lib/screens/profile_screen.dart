@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/constants.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -36,6 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _instCtrl;
   late final TextEditingController _bioCtrl;
   late final TextEditingController _webCtrl;
+  late final TextEditingController _avatarCtrl;
 
   @override
   void initState() {
@@ -45,6 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _instCtrl = TextEditingController(text: user?.institution ?? '');
     _bioCtrl = TextEditingController(text: user?.bio ?? '');
     _webCtrl = TextEditingController(text: user?.website ?? '');
+    _avatarCtrl = TextEditingController(text: user?.avatar ?? '');
   }
 
   @override
@@ -53,6 +56,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _instCtrl.dispose();
     _bioCtrl.dispose();
     _webCtrl.dispose();
+    _avatarCtrl.dispose();
     super.dispose();
   }
 
@@ -61,13 +65,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _instCtrl.text = user.institution ?? '';
     _bioCtrl.text = user.bio;
     _webCtrl.text = user.website ?? '';
+    _avatarCtrl.text = user.avatar;
   }
 
-  /// Edit-profile dialog: display name, institution, bio, website.
+  /// Edit-profile dialog: avatar, display name, institution, bio, website.
   Future<void> _openEditDialog(AppUser user) async {
     _resetEditFields(user);
     final p = widget.theme.palette;
     final c = p.c;
+    final a = p.accent;
     var saving = false;
     await showDialog(
       context: context,
@@ -84,9 +90,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             setDialogState(() => saving = true);
             try {
               final username = _nameCtrl.text.trim();
+              final avatar = _avatarCtrl.text.trim();
               await widget.appState.updateUser(
                 user.copyWith(
                   username: username.isEmpty ? user.username : username,
+                  avatar: avatar.isEmpty ? user.avatar : avatar,
                   institution: _instCtrl.text.trim(),
                   bio: _bioCtrl.text,
                   website: _webCtrl.text.trim(),
@@ -120,6 +128,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // --------------------------------- avatar picker
+                    // No file uploads: Firebase Storage needs Blaze billing,
+                    // so avatars are preset gallery images or a custom URL.
+                    LabeledField(
+                      palette: p,
+                      label: 'Profile Picture',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              AvatarImage(
+                                url: _avatarCtrl.text,
+                                size: 52,
+                                borderColor: a.accent,
+                                borderWidth: 2,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Tap a preset below, or paste any image URL.',
+                                  style: bodyStyle(
+                                    p,
+                                    size: 12,
+                                    color: c.muted,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              for (final url in AppConstants.randomAvatars)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(right: 8),
+                                  child: InkWell(
+                                    borderRadius:
+                                        BorderRadius.circular(22),
+                                    onTap: saving
+                                        ? null
+                                        : () => setDialogState(
+                                              () =>
+                                                  _avatarCtrl.text = url,
+                                            ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color:
+                                              _avatarCtrl.text == url
+                                                  ? a.accent
+                                                  : Colors.transparent,
+                                          width: 2.5,
+                                        ),
+                                      ),
+                                      child: ClipOval(
+                                        child: Image.network(
+                                          url,
+                                          width: 40,
+                                          height: 40,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) =>
+                                              Container(
+                                            width: 40,
+                                            height: 40,
+                                            color: c.surface2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _avatarCtrl,
+                            style: bodyStyle(p, size: 14),
+                            decoration: const InputDecoration(
+                              hintText: 'https://… (custom image URL)',
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     LabeledField(
                       palette: p,
                       label: 'Display Name',
