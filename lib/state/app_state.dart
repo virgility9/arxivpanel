@@ -209,12 +209,25 @@ class AppState extends ChangeNotifier {
     return _authRepo!.sendPasswordReset(email: email);
   }
 
-  /// Signs the current user out. The auth stream clears the user, bookmarks
-  /// and reading history asynchronously.
+  /// Signs the current user out. Local auth state is cleared synchronously
+  /// here instead of waiting on the auth stream, so the UI updates even if
+  /// Firebase's sign-out or the stream round-trip fails or is delayed.
+  /// (A later auth-stream event is harmless — [_onAuthUser] with null is
+  /// idempotent.)
   Future<void> logout() async {
     if (!_firebaseReady) return;
-    await _authRepo!.signOut();
+    try {
+      await _authRepo!.signOut();
+    } catch (e) {
+      debugPrint('[AppState] signOut failed: $e');
+    }
+    _user = null;
+    _cancelUserSubs();
+    _bookmarks = <String>{};
+    _readingHistory = <ReadEntry>[];
+    _subscribePapers();
     navigate(AppView.library);
+    notifyListeners();
     showToast('Signed out', '👋');
   }
 
