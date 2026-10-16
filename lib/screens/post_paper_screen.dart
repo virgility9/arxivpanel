@@ -1,9 +1,10 @@
 /// Paper submission screen, ported from `src/components/PostPaper.tsx`.
 ///
 /// Auth-gated form: unauthenticated users get a sign-in prompt, a successful
-/// submit shows a confirmation, otherwise a full submission form with cover
-/// picker, title, abstract, field/pages, institution, tags, a PDF file
-/// picker (uploaded to Firebase Storage) and a submitter card.
+/// submit shows a confirmation, otherwise a full submission form with title,
+/// abstract, field/pages, institution, tags, a PDF file picker (uploaded to
+/// Cloudinary on submit) and a submitter card. The cover is always the first
+/// page of the attached PDF — there is no manual cover picker.
 library;
 
 import 'dart:js_interop';
@@ -43,17 +44,22 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   late final TextEditingController _pages;
   late final TextEditingController _institution;
   late final TextEditingController _tags;
-  late final TextEditingController _customCover;
 
   String _field = 'Machine Learning';
-  int _presetIndex = 0;
   Map<String, String> _errors = {};
   bool _loading = false;
   bool _submitted = false;
 
-  /// Picked PDF (device storage), uploaded to Firebase Storage on submit.
+  /// Picked PDF (device storage), uploaded to Cloudinary on submit.
   Uint8List? _pdfBytes;
   String? _pdfName;
+
+  /// Web-only blob URL for the picked PDF, plus a first-page preview widget
+  /// built once per picked file. The widget is cached because every
+  /// [buildPdfView] call registers a new iframe view — rebuilding it on
+  /// every setState would reload the PDF constantly.
+  String? _pdfPreviewUrl;
+  Widget? _pdfCoverPreview;
 
   @override
   void initState() {
@@ -63,7 +69,6 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     _pages = TextEditingController();
     _institution = TextEditingController();
     _tags = TextEditingController();
-    _customCover = TextEditingController();
   }
 
   @override
@@ -73,13 +78,8 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     _pages.dispose();
     _institution.dispose();
     _tags.dispose();
-    _customCover.dispose();
+    _revokePreviewUrl();
     super.dispose();
-  }
-
-  String get _effectiveCover {
-    final custom = _customCover.text.trim();
-    return custom.isNotEmpty ? custom : AppConstants.presetCovers[_presetIndex];
   }
 
   /// Human-readable size of the picked PDF (e.g. "2.4 MB").
@@ -125,7 +125,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           .map((t) => t.trim())
           .where((t) => t.isNotEmpty)
           .toList(),
-      coverImage: _effectiveCover,
+      coverImage: '', // replaced by the PDF's first page after upload below
       publishedAt: DateTime.now().toIso8601String().split('T').first,
       pages: pages!,
       views: 0,
@@ -161,6 +161,17 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     });
   }
 
+  /// Revokes the picked PDF's blob URL (web only). Called when the PDF is
+  /// removed, replaced, or the screen is disposed.
+  void _revokePreviewUrl() {
+    final url = _pdfPreviewUrl;
+    _pdfPreviewUrl = null;
+    _pdfCoverPreview = null;
+    if (url != null && kIsWeb) {
+      web.URL.revokeObjectURL(url);
+    }
+  }
+
   /// Picks a PDF from device storage.
   Future<void> _pickPdf() async {
     try {
@@ -168,8 +179,17 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       // Null = the user cancelled.
       if (picked == null) return;
       setState(() {
+        _revokePreviewUrl();
         _pdfBytes = picked.bytes;
         _pdfName = picked.name;
+        if (kIsWeb) {
+          final blob = web.Blob(
+            [Uint8List.fromList(picked.bytes).buffer.toJS].toJS,
+            web.BlobPropertyBag(type: 'application/pdf'),
+          );
+          _pdfPreviewUrl = web.URL.createObjectURL(blob);
+          _pdfCoverPreview = buildPdfView(_pdfPreviewUrl!);
+        }
       });
     } catch (e) {
       widget.appState.showToast(
@@ -179,19 +199,15 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     }
   }
 
-  /// Previews the picked PDF inline (web) from a blob URL — no upload yet.
+  /// Previews the picked PDF in a dialog (web) — no upload yet. Reuses the
+  /// same blob URL as the inline cover preview.
   void _previewPdf() {
-    final bytes = _pdfBytes;
-    if (bytes == null) return;
     if (!kIsWeb) {
       widget.appState.showToast('PDF preview is only available on web', '⚠️');
       return;
     }
-    final blob = web.Blob(
-      [Uint8List.fromList(bytes).buffer.toJS].toJS,
-      web.BlobPropertyBag(type: 'application/pdf'),
-    );
-    final url = web.URL.createObjectURL(blob);
+    final url = _pdfPreviewUrl;
+    if (url == null) return;
     final p = widget.theme.palette;
     showDialog(
       context: context,
@@ -217,7 +233,9 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           ),
         ],
       ),
-    ).then((_) => web.URL.revokeObjectURL(url));
+    );
+    // No revoke here: the URL is shared with the cover preview and is
+    // revoked when the PDF is removed, replaced, or the screen closes.
   }
 
   @override
@@ -409,9 +427,6 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           ],
         ),
         const SizedBox(height: 24),
-        // Cover
-        _buildCoverSection(p),
-        const SizedBox(height: 24),
         // Title
         LabeledField(
           palette: p,
@@ -590,6 +605,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                       onPressed: _loading
                           ? null
                           : () => setState(() {
+                                _revokePreviewUrl();
                                 _pdfBytes = null;
                                 _pdfName = null;
                               }),
@@ -610,6 +626,9 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 18),
+        // Cover — always the first page of the attached PDF.
+        _buildCoverSection(p),
         const SizedBox(height: 24),
         // Submitter card
         _buildSubmitterCard(p, user),
@@ -629,113 +648,67 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     );
   }
 
+  /// Cover preview: always the first page of the attached PDF. There is no
+  /// manual cover picker — the cover is generated from the PDF on submit.
   Widget _buildCoverSection(AppPalette p) {
     final c = p.c;
-    // A picked PDF supplies the cover automatically (its first page), so
-    // the manual picker is hidden while one is attached.
-    if (_pdfBytes != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionLabel(palette: p, text: 'Cover Image'),
-          const SizedBox(height: 10),
+    final preview = _pdfCoverPreview;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionLabel(palette: p, text: 'Cover'),
+        const SizedBox(height: 10),
+        if (_pdfBytes != null && preview != null)
+          // The picked PDF's first page, rendered live as the cover.
           Container(
-            padding: const EdgeInsets.all(14),
+            width: 160,
+            height: 220,
+            decoration: BoxDecoration(
+              border: Border.all(color: c.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: preview,
+            ),
+          )
+        else
+          // No PDF (or not on web): placeholder until one is picked.
+          Container(
+            width: 160,
+            height: 220,
             decoration: BoxDecoration(
               color: c.surface,
               border: Border.all(color: c.border),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.auto_awesome_outlined,
-                  size: 28,
-                  color: p.accent.accent,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Automatic cover',
-                        style: bodyStyle(
-                          p,
-                          size: 13,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'The first page of your PDF will be used as the cover when you submit.',
-                        style: bodyStyle(p, size: 12, color: c.muted),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionLabel(palette: p, text: 'Cover Image'),
-        const SizedBox(height: 10),
-        // Large preview of the effective cover
-        NetImage(
-          url: _effectiveCover,
-          width: 160,
-          height: 220,
-          fit: BoxFit.cover,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        const SizedBox(height: 12),
-        // Preset thumbnails
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: List.generate(AppConstants.presetCovers.length, (idx) {
-            final selected =
-                _customCover.text.trim().isEmpty && _presetIndex == idx;
-            return GestureDetector(
-              onTap: () => setState(() => _presetIndex = idx),
-              child: Container(
-                width: 52,
-                height: 70,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: selected ? p.accent.accent : c.border,
-                    width: selected ? 2 : 1,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: NetImage(
-                    url: AppConstants.presetCovers[idx],
-                    fit: BoxFit.cover,
-                  ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.picture_as_pdf_outlined,
+                      size: 40,
+                      color: c.faint,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _pdfBytes != null
+                          ? 'Cover preview is only available on web.'
+                          : 'Pick a PDF above — its first page becomes the cover.',
+                      textAlign: TextAlign.center,
+                      style: bodyStyle(p, size: 11, color: c.muted),
+                    ),
+                  ],
                 ),
               ),
-            );
-          }),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _customCover,
-          keyboardType: TextInputType.url,
-          onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            hintText: 'Custom cover URL (optional)',
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         Text(
-          'The web app uploads a cover image file — paste an image URL here as the portable equivalent.',
+          'The cover is always the first page of your PDF, generated automatically when you submit.',
           style: monoStyle(p, size: 9, color: c.faint),
         ),
       ],
