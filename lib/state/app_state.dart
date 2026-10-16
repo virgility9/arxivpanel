@@ -266,6 +266,8 @@ class AppState extends ChangeNotifier {
       return;
     }
     if (v == AppView.admin && _user?.isAdmin != true) return;
+    // Admins do admin tasks only — they cannot open the submit-paper form.
+    if (v == AppView.post && _user?.isAdmin == true) return;
     _recordReadingTime();
     _view = v;
     if (v != AppView.reader) _selectedPaperId = null;

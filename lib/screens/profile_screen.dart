@@ -532,9 +532,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   title: 'No papers yet',
                                   sub:
                                       'Papers you publish will show up here.',
-                                  actionLabel: 'Submit a paper',
-                                  onAction: () => widget.appState
-                                      .navigate(AppView.post),
+                                  // Admins do admin tasks only — no submit
+                                  // action for them.
+                                  actionLabel: widget.appState.user?.isAdmin ==
+                                          true
+                                      ? null
+                                      : 'Submit a paper',
+                                  onAction: widget.appState.user?.isAdmin ==
+                                          true
+                                      ? null
+                                      : () => widget.appState
+                                          .navigate(AppView.post),
                                 )
                               : _paperList(
                                   p,

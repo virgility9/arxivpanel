@@ -532,13 +532,15 @@ class _BottomNav extends StatelessWidget {
             requiresAuth: false,
             badge: null,
           ),
-          (
-            view: AppView.post,
-            icon: '✏️',
-            label: 'Submit',
-            requiresAuth: false,
-            badge: null,
-          ),
+          // Admins do admin tasks only — paper submission is hidden for them.
+          if (!isAdmin)
+            (
+              view: AppView.post,
+              icon: '✏️',
+              label: 'Submit',
+              requiresAuth: false,
+              badge: null,
+            ),
           (
             view: AppView.profile,
             icon: '👤',
