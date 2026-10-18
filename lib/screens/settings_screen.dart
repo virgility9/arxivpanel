@@ -87,13 +87,21 @@ class SettingsScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        dark ? 'Dark Mode' : 'Light Mode',
-                        style: bodyStyle(
-                          p,
-                          size: 14,
-                          weight: FontWeight.w600,
-                          color: active ? a.accent : c.text,
+                      // Never wrap: on narrow screens "Light Mode" is a few
+                      // px wider than its slot and would drop to two lines
+                      // while "Dark Mode" stays on one.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          dark ? 'Dark Mode' : 'Light Mode',
+                          maxLines: 1,
+                          style: bodyStyle(
+                            p,
+                            size: 14,
+                            weight: FontWeight.w600,
+                            color: active ? a.accent : c.text,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -167,9 +175,8 @@ class SettingsScreen extends StatelessWidget {
                     boxShadow: active
                         ? [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
+                              color: pal.swatch.withValues(alpha: 0.33),
+                              blurRadius: 16,
                             ),
                           ]
                         : null,
