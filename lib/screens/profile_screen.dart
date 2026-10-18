@@ -368,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE06B6B),
+              foregroundColor: const Color(0xFFC75B52),
             ),
             child: const Text('Sign Out'),
           ),
@@ -392,7 +392,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE06B6B),
+              foregroundColor: const Color(0xFFC75B52),
             ),
             child: const Text('Delete'),
           ),
@@ -494,7 +494,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: Text(
                               'Sign Out',
                               style: TextStyle(
-                                color: Color(0xFFE06B6B),
+                                color: Color(0xFFC75B52),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -650,8 +650,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         border: Border.all(color: a.accent, width: 2.5),
         boxShadow: [
           BoxShadow(
-            color: a.accent.withValues(alpha: 0.25),
-            blurRadius: 24,
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -818,7 +819,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               p,
               value: views,
               label: 'Total Views',
-              color: const Color(0xFF7C6AF7),
+              color: const Color(0xFF6F7C94),
             ),
           ]),
           Container(height: 1, color: c.border),
@@ -827,13 +828,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               p,
               value: '$reactions',
               label: 'Reactions Received',
-              color: const Color(0xFFE06B6B),
+              color: const Color(0xFFC75B52),
             ),
             _statCell(
               p,
               value: readTime,
               label: 'Read Time',
-              color: const Color(0xFF4ADE80),
+              color: const Color(0xFF5E9E6E),
             ),
           ]),
         ],

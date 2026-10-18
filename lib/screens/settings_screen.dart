@@ -167,8 +167,9 @@ class SettingsScreen extends StatelessWidget {
                     boxShadow: active
                         ? [
                             BoxShadow(
-                              color: pal.swatch.withValues(alpha: 0.33),
-                              blurRadius: 16,
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
                             ),
                           ]
                         : null,

@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 enum AppMode { dark, light }
 
 /// Accent choices (mirrors `Accent` in ThemeContext.tsx).
-enum AppAccent { gold, violet, teal, coral, sage }
+enum AppAccent { terracotta, gold, violet, teal, coral, sage }
 
 /// Text size choices (mirrors `FontScale` in ThemeContext.tsx).
 enum AppFontScale { compact, normal, large }
@@ -62,51 +62,66 @@ class AccentPalette {
   final Color accentFg;
   final Color accent2;
 
-  Color get glow => accent.withValues(alpha: 0.15);
+  /// A quiet tint of the accent (selected rows, soft fills). Deliberately
+  /// low-alpha: the design uses tint + soft shadow, never a glow.
+  Color get glow => accent.withValues(alpha: 0.10);
 
+  // Every accent is a muted, earthy tone. The default (terracotta) is the one
+  // deliberate pop of personality against the neutral corporate palette; the
+  // others are kept (same names) so the Settings choices still exist.
+  static const terracotta = AccentPalette(
+    label: 'Terracotta',
+    swatch: Color(0xFFBF6244),
+    accent: Color(0xFFBF6244),
+    accentDim: Color(0xFFA64E33),
+    accentFg: Color(0xFFFFFFFF),
+    accent2: Color(0xFF6F7C94),
+  );
   static const gold = AccentPalette(
     label: 'Gold',
-    swatch: Color(0xFFE8B04B),
-    accent: Color(0xFFE8B04B),
-    accentDim: Color(0xFFB8862A),
-    accentFg: Color(0xFF0C0C12),
-    accent2: Color(0xFF7C6AF7),
+    swatch: Color(0xFFC49A3C),
+    accent: Color(0xFFC49A3C),
+    accentDim: Color(0xFFA37E27),
+    accentFg: Color(0xFF1A1710),
+    accent2: Color(0xFF6F7C94),
   );
   static const violet = AccentPalette(
     label: 'Violet',
-    swatch: Color(0xFF7C6AF7),
-    accent: Color(0xFF7C6AF7),
-    accentDim: Color(0xFF5A48D4),
+    swatch: Color(0xFF8574A6),
+    accent: Color(0xFF8574A6),
+    accentDim: Color(0xFF6A5A8A),
     accentFg: Color(0xFFFFFFFF),
-    accent2: Color(0xFFE8B04B),
+    accent2: Color(0xFF6F7C94),
   );
   static const teal = AccentPalette(
     label: 'Teal',
-    swatch: Color(0xFF2DD4BF),
-    accent: Color(0xFF2DD4BF),
-    accentDim: Color(0xFF0D9488),
-    accentFg: Color(0xFF0C0C12),
-    accent2: Color(0xFF7C6AF7),
+    swatch: Color(0xFF4F9A93),
+    accent: Color(0xFF4F9A93),
+    accentDim: Color(0xFF3B7C76),
+    accentFg: Color(0xFFFFFFFF),
+    accent2: Color(0xFF6F7C94),
   );
   static const coral = AccentPalette(
     label: 'Coral',
-    swatch: Color(0xFFF87171),
-    accent: Color(0xFFF87171),
-    accentDim: Color(0xFFEF4444),
+    swatch: Color(0xFFD07A6E),
+    accent: Color(0xFFD07A6E),
+    accentDim: Color(0xFFB45F54),
     accentFg: Color(0xFFFFFFFF),
-    accent2: Color(0xFF7C6AF7),
+    accent2: Color(0xFF6F7C94),
   );
   static const sage = AccentPalette(
     label: 'Sage',
-    swatch: Color(0xFF6DB98A),
-    accent: Color(0xFF6DB98A),
-    accentDim: Color(0xFF4A9168),
-    accentFg: Color(0xFF0C0C12),
-    accent2: Color(0xFF7C6AF7),
+    swatch: Color(0xFF7D8F5C),
+    accent: Color(0xFF7D8F5C),
+    accentDim: Color(0xFF64754A),
+    accentFg: Color(0xFFFFFFFF),
+    accent2: Color(0xFF6F7C94),
   );
 
   static AccentPalette of(AppAccent accent) {
     switch (accent) {
+      case AppAccent.terracotta:
+        return terracotta;
       case AppAccent.gold:
         return gold;
       case AppAccent.violet:
@@ -155,36 +170,66 @@ class AppColors {
 
   Color get navBg => bg.withValues(alpha: 0.96);
 
+  /// Soft, layered card shadow: a tight contact shadow plus a wide, faint
+  /// ambient one. Reads as paper resting on a desk, not a floating glow.
+  List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: shadow.withValues(alpha: shadow.a * 0.55),
+          blurRadius: 3,
+          offset: const Offset(0, 1),
+        ),
+        BoxShadow(
+          color: shadow.withValues(alpha: shadow.a * 0.35),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ];
+
+  /// Slightly stronger shadow for popovers, menus and toasts.
+  List<BoxShadow> get raisedShadow => [
+        BoxShadow(
+          color: shadow.withValues(alpha: shadow.a * 0.6),
+          blurRadius: 4,
+          offset: const Offset(0, 2),
+        ),
+        BoxShadow(
+          color: shadow,
+          blurRadius: 28,
+          offset: const Offset(0, 12),
+        ),
+      ];
+
+  // Warm charcoal instead of blue-black; paper-white instead of pure white.
   static const dark = AppColors(
-    bg: Color(0xFF0C0C12),
-    surface: Color(0xFF14141E),
-    surface2: Color(0xFF1C1C2A),
-    border: Color(0xFF2A2A3A),
-    borderFaint: Color(0xFF1C1C2A),
-    text: Color(0xFFE4DFD0),
-    textSub: Color(0xFFB0A898),
-    muted: Color(0xFF7A7690),
-    faint: Color(0xFF5A5668),
-    fainter: Color(0xFF3A3A50),
-    inputBg: Color(0xFF0C0C12),
-    shadow: Color(0x8C000000),
-    overlay: Color(0xCC000000),
+    bg: Color(0xFF16171A),
+    surface: Color(0xFF1E1F23),
+    surface2: Color(0xFF27292E),
+    border: Color(0xFF34363C),
+    borderFaint: Color(0xFF27292E),
+    text: Color(0xFFEAE6DE),
+    textSub: Color(0xFFBAB5AA),
+    muted: Color(0xFF93908A),
+    faint: Color(0xFF6F6D69),
+    fainter: Color(0xFF4A4B4F),
+    inputBg: Color(0xFF191A1D),
+    shadow: Color(0x66000000),
+    overlay: Color(0xCC0E0F11),
   );
 
   static const light = AppColors(
-    bg: Color(0xFFF4F0E6),
-    surface: Color(0xFFFFFFFF),
-    surface2: Color(0xFFEDE8DE),
-    border: Color(0xFFD8D0C4),
-    borderFaint: Color(0xFFEDE8DE),
-    text: Color(0xFF1A1614),
-    textSub: Color(0xFF3A3028),
-    muted: Color(0xFF8A7A68),
-    faint: Color(0xFFB0A090),
-    fainter: Color(0xFFD4CCC0),
-    inputBg: Color(0xFFF8F4EC),
-    shadow: Color(0x1F000000),
-    overlay: Color(0x99000000),
+    bg: Color(0xFFF3F1EC),
+    surface: Color(0xFFFCFBF8),
+    surface2: Color(0xFFEBE8E1),
+    border: Color(0xFFD9D5CB),
+    borderFaint: Color(0xFFE8E4DC),
+    text: Color(0xFF1F2124),
+    textSub: Color(0xFF454A50),
+    muted: Color(0xFF6F6B63),
+    faint: Color(0xFF9A958B),
+    fainter: Color(0xFFCFCABF),
+    inputBg: Color(0xFFF7F5F0),
+    shadow: Color(0x262B2118),
+    overlay: Color(0x99121316),
   );
 
   static AppColors of(AppMode mode) => mode == AppMode.dark ? dark : light;
@@ -210,9 +255,9 @@ class AppPalette {
   bool get isDark => mode == AppMode.dark;
 
   /// Status colors used by the admin panel.
-  Color get success => const Color(0xFF4ADE80);
-  Color get danger => const Color(0xFFE06B6B);
-  Color get info => const Color(0xFF7C6AF7);
+  Color get success => const Color(0xFF5E9E6E);
+  Color get danger => const Color(0xFFC75B52);
+  Color get info => const Color(0xFF6F7C94);
 }
 
 /// Builds a Material 3 [ThemeData] matching the design tokens.
@@ -230,7 +275,7 @@ ThemeData buildThemeData(AppPalette palette, {required double textScale}) {
     surface: c.surface,
     onSurface: c.text,
     surfaceContainerHighest: c.surface2,
-    error: const Color(0xFFE06B6B),
+    error: const Color(0xFFC75B52),
     onError: Colors.white,
     outline: c.border,
   );
@@ -255,7 +300,7 @@ ThemeData buildThemeData(AppPalette palette, {required double textScale}) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: c.border),
       ),
     ),
@@ -263,23 +308,23 @@ ThemeData buildThemeData(AppPalette palette, {required double textScale}) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: c.inputBg,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       hintStyle: TextStyle(color: c.faint, fontSize: 15 * textScale),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: c.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: a.accent),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE06B6B)),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFC75B52)),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE06B6B)),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFC75B52)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -288,7 +333,7 @@ ThemeData buildThemeData(AppPalette palette, {required double textScale}) {
     dialogTheme: DialogThemeData(
       backgroundColor: c.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: c.border),
       ),
     ),

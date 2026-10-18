@@ -464,7 +464,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                   p,
                   size: 10,
                   color: _abstract.text.length < 80
-                      ? const Color(0xFFE06B6B)
+                      ? const Color(0xFFC75B52)
                       : p.c.faint,
                 ),
               ),
@@ -563,7 +563,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                     const Icon(
                       Icons.picture_as_pdf_outlined,
                       size: 32,
-                      color: Color(0xFFE06B6B),
+                      color: Color(0xFFC75B52),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

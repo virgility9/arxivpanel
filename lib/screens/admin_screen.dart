@@ -56,15 +56,15 @@ String _todayLabel() {
 Color _statusColor(PaperStatus status) {
   switch (status) {
     case PaperStatus.approved:
-      return const Color(0xFF4ADE80);
+      return const Color(0xFF5E9E6E);
     case PaperStatus.rejected:
-      return const Color(0xFFE06B6B);
+      return const Color(0xFFC75B52);
     case PaperStatus.revision:
-      return const Color(0xFFE8B04B);
+      return const Color(0xFFC49A3C);
     case PaperStatus.pending:
-      return const Color(0xFF7C6AF7);
+      return const Color(0xFF6F7C94);
     case PaperStatus.archived:
-      return const Color(0xFF7A7690);
+      return const Color(0xFF93908A);
   }
 }
 
@@ -135,7 +135,7 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE06B6B),
+              foregroundColor: const Color(0xFFC75B52),
             ),
             child: Text(confirmLabel),
           ),
@@ -329,7 +329,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 height: 8,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFF4ADE80),
+                  color: Color(0xFF5E9E6E),
                 ),
               ),
             ],
@@ -660,7 +660,7 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: Icons.people,
-        iconColor: const Color(0xFF7C6AF7),
+        iconColor: const Color(0xFF6F7C94),
         label: 'Registered users',
         value: usersLabel,
         detail: 'Accounts in the database',
@@ -669,7 +669,7 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: Icons.visibility,
-        iconColor: const Color(0xFF60A5FA),
+        iconColor: const Color(0xFF6F8FB0),
         label: 'Total views',
         value: formatCount(_totalViews),
         detail: 'Reads across all papers',
@@ -1383,7 +1383,7 @@ class _AdminScreenState extends State<AdminScreen> {
               icon: const Icon(
                 Icons.delete_outline,
                 size: 18,
-                color: Color(0xFFE06B6B),
+                color: Color(0xFFC75B52),
               ),
               onPressed: () async {
                 final ok = await _confirmAction(

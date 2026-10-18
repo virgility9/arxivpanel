@@ -8,6 +8,9 @@
 /// `'monospace'` (mono labels), falling back to the default sans for body.
 library;
 
+import 'dart:math' as math;
+import 'dart:ui' show PointMode;
+
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -18,6 +21,23 @@ import 'app_logo_image.dart';
 // ---------------------------------------------------------------------------
 // Typography helpers
 // ---------------------------------------------------------------------------
+
+/// Font fallbacks. Flutter can't fetch web fonts at runtime, so each family
+/// lists the best serif / mono available on every platform in priority order.
+const List<String> kSerifFallback = [
+  'Georgia',
+  'Iowan Old Style',
+  'Cambria',
+  'Times New Roman',
+  'Noto Serif',
+];
+const List<String> kMonoFallback = [
+  'SF Mono',
+  'Menlo',
+  'Consolas',
+  'Roboto Mono',
+  'Courier New',
+];
 
 /// Approximates the Fraunces display serif.
 TextStyle displayStyle(
@@ -31,6 +51,7 @@ TextStyle displayStyle(
   final s = size * p.textScale;
   return TextStyle(
     fontFamily: 'serif',
+    fontFamilyFallback: kSerifFallback,
     fontSize: s,
     fontWeight: weight,
     color: color ?? p.c.text,
@@ -50,6 +71,7 @@ TextStyle monoStyle(
 }) {
   return TextStyle(
     fontFamily: 'monospace',
+    fontFamilyFallback: kMonoFallback,
     fontSize: size * p.textScale,
     fontWeight: weight,
     color: color ?? p.c.muted,
@@ -206,7 +228,7 @@ class NetImage extends StatelessWidget {
         return Container(
           width: width,
           height: height,
-          color: const Color(0xFF1C1C2A),
+          color: const Color(0xFF27292E),
           child: const Center(
             child: SizedBox(
               width: 20,
@@ -219,7 +241,7 @@ class NetImage extends StatelessWidget {
       errorBuilder: (context, _, _) => Container(
         width: width,
         height: height,
-        color: const Color(0xFF1C1C2A),
+        color: const Color(0xFF27292E),
         child: const Center(child: Text('📄', style: TextStyle(fontSize: 24))),
       ),
     );
@@ -247,7 +269,7 @@ class AvatarImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fallback = Container(
-      color: const Color(0xFF2A2A3A),
+      color: const Color(0xFF34363C),
       child: const Center(
         child: Icon(Icons.person_outline, size: 20, color: Colors.white70),
       ),
@@ -366,20 +388,36 @@ class GoldButton extends StatelessWidget {
       child: Container(
         constraints: BoxConstraints(minHeight: minHeight),
         decoration: BoxDecoration(
+          // Gentle vertical shading (not a glow) gives the button a pressed-
+          // paper feel; the soft shadow keeps it grounded.
           gradient: enabled
               ? LinearGradient(
                   colors: [a.accent, a.accentDim],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 )
               : null,
           color: enabled ? null : palette.c.surface2,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: enabled
+                ? Colors.white.withValues(alpha: 0.14)
+                : palette.c.border,
+          ),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: a.accentDim.withValues(alpha: 0.28),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             onTap: enabled ? onPressed : null,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: vPad),
@@ -405,7 +443,8 @@ class GoldButton extends StatelessWidget {
                     style: TextStyle(
                       color: enabled ? a.accentFg : palette.c.muted,
                       fontSize: labelSize,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
                     ),
                   ),
                 ],
@@ -444,7 +483,7 @@ class GhostButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: fg,
         side: BorderSide(color: color ?? c.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         minimumSize: Size(0, minHeight),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -507,7 +546,7 @@ class LabeledField extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             error!,
-            style: const TextStyle(color: Color(0xFFE06B6B), fontSize: 12),
+            style: const TextStyle(color: Color(0xFFC75B52), fontSize: 12),
           ),
         ],
       ],
@@ -532,11 +571,11 @@ class TagChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = palette.c;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: c.surface2,
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: c.borderFaint),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         '#$tag',
@@ -586,13 +625,23 @@ class SelectChip extends StatelessWidget {
             color: selected ? sel : c.surface,
             border: Border.all(color: selected ? sel : c.border),
             borderRadius: BorderRadius.circular(20),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: sel.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
           ),
           child: Text(
             label,
             style: TextStyle(
               color: selected ? palette.accent.accentFg : c.muted,
               fontSize: 12,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              letterSpacing: 0.1,
             ),
           ),
         ),
@@ -615,15 +664,15 @@ class StatusBadge extends StatelessWidget {
   Color get _color {
     switch (status) {
       case PaperStatus.approved:
-        return const Color(0xFF4ADE80);
+        return const Color(0xFF5E9E6E);
       case PaperStatus.rejected:
-        return const Color(0xFFE06B6B);
+        return const Color(0xFFC75B52);
       case PaperStatus.revision:
-        return const Color(0xFFE8B04B);
+        return const Color(0xFFC49A3C);
       case PaperStatus.pending:
-        return const Color(0xFF7C6AF7);
+        return const Color(0xFF6F7C94);
       case PaperStatus.archived:
-        return const Color(0xFF7A7690);
+        return const Color(0xFF93908A);
     }
   }
 
@@ -633,8 +682,8 @@ class StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        color: color.withValues(alpha: 0.10),
+        border: Border.all(color: color.withValues(alpha: 0.30)),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -723,11 +772,12 @@ class StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = palette.c;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: c.surface,
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.borderFaint),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: c.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -766,16 +816,67 @@ class ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFE06B6B).withValues(alpha: 0.1),
+        color: const Color(0xFFC75B52).withValues(alpha: 0.1),
         border: Border.all(
-          color: const Color(0xFFE06B6B).withValues(alpha: 0.2),
+          color: const Color(0xFFC75B52).withValues(alpha: 0.28),
         ),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         message,
-        style: const TextStyle(color: Color(0xFFE06B6B), fontSize: 12),
+        style: const TextStyle(color: Color(0xFFC75B52), fontSize: 12),
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Micro-texture
+// ---------------------------------------------------------------------------
+
+/// Very faint paper grain laid over the page background. Fixed seed, a single
+/// `drawPoints` call, wrapped in a [RepaintBoundary] by the caller — so it is
+/// cheap, never animates, and never intercepts touches.
+class GrainTexture extends StatelessWidget {
+  const GrainTexture({super.key, required this.palette});
+
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _GrainPainter(dark: palette.isDark),
+          size: Size.infinite,
+        ),
+      ),
+    );
+  }
+}
+
+class _GrainPainter extends CustomPainter {
+  _GrainPainter({required this.dark});
+
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final rng = math.Random(7);
+    final count = (size.width * size.height / 700).clamp(0, 3200).toInt();
+    final pts = <Offset>[
+      for (var i = 0; i < count; i++)
+        Offset(rng.nextDouble() * size.width, rng.nextDouble() * size.height),
+    ];
+    final paint = Paint()
+      ..color = (dark ? Colors.white : const Color(0xFF3A2E22))
+          .withValues(alpha: dark ? 0.035 : 0.05)
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.square;
+    canvas.drawPoints(PointMode.points, pts, paint);
+  }
+
+  @override
+  bool shouldRepaint(_GrainPainter old) => old.dark != dark;
 }

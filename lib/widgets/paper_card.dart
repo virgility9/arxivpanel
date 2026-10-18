@@ -102,8 +102,9 @@ class _PaperCardState extends State<PaperCard> {
     final reacted = user == null ? null : paper.reactionOf(user.id);
     return Material(
       color: c.surface,
-      elevation: 8,
-      borderRadius: BorderRadius.circular(10),
+      elevation: 6,
+      shadowColor: c.shadow,
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -318,10 +319,10 @@ class _PaperCardState extends State<PaperCard> {
 
   Widget _miniBadge(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFF0C0C12).withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(3),
+        color: const Color(0xFF16171A).withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(5),
       ),
       child: Text(
         text,
