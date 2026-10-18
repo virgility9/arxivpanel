@@ -5,8 +5,11 @@
 /// as user-friendly error strings (`null` means success).
 library;
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
 import 'constants.dart';
@@ -29,23 +32,70 @@ class AuthRepository {
   /// is missing at sign-in time and gets created a moment later — e.g. by
   /// the self-heal in [signIn] — the profile arrives automatically instead
   /// of the app being stuck thinking the user has no profile.
+  ///
+  /// The inner user-doc subscription is managed explicitly instead of via
+  /// `asyncExpand`: on account switch (sign out → sign in as someone else)
+  /// the old profile stream is cancelled and the new one attached
+  /// synchronously with the auth event, so a switch can never leave the UI
+  /// stuck on the previous state.
   Stream<AppUser?> watchAuthUser() {
     // Errors are intentionally NOT swallowed here: AppState resubscribes on
     // error. A previous `.handleError` terminated this stream silently on the
     // first transient failure, after which sign-ins never reached the UI
     // until a page refresh.
-    return _auth.authStateChanges().asyncExpand((user) {
-      if (user == null) return Stream<AppUser?>.value(null);
-      return _firestore
-          .collection('users')
-          .doc(user.uid)
-          .snapshots()
-          .map((doc) {
-            final data = doc.data();
-            if (data == null) return null;
-            return AppUser.fromJson(doc.id, data);
-          });
-    });
+    final controller = StreamController<AppUser?>.broadcast();
+    StreamSubscription<User?>? authSub;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? docSub;
+
+    void listenToDoc(String uid) {
+      unawaited(docSub?.cancel());
+      docSub = _firestore.collection('users').doc(uid).snapshots().listen(
+        (doc) {
+          final data = doc.data();
+          debugPrint(
+            '[AuthRepository] profile ${doc.id}: '
+            '${data == null ? 'missing' : 'loaded'}',
+          );
+          if (controller.isClosed) return;
+          controller.add(
+            data == null ? null : AppUser.fromJson(doc.id, data),
+          );
+        },
+        onError: (Object e, StackTrace s) {
+          debugPrint('[AuthRepository] profile stream error: $e');
+          if (!controller.isClosed) controller.addError(e, s);
+        },
+      );
+    }
+
+    authSub = _auth.authStateChanges().listen(
+      (fbUser) {
+        debugPrint(
+          '[AuthRepository] auth state: '
+          '${fbUser == null ? 'signed out' : fbUser.uid}',
+        );
+        unawaited(docSub?.cancel());
+        docSub = null;
+        if (fbUser == null) {
+          if (!controller.isClosed) controller.add(null);
+        } else {
+          listenToDoc(fbUser.uid);
+        }
+      },
+      onError: (Object e, StackTrace s) {
+        debugPrint('[AuthRepository] authStateChanges error: $e');
+        if (!controller.isClosed) controller.addError(e, s);
+      },
+    );
+
+    controller.onCancel = () async {
+      await docSub?.cancel();
+      docSub = null;
+      await authSub?.cancel();
+      authSub = null;
+    };
+
+    return controller.stream;
   }
 
   /// Signs in with email and password.

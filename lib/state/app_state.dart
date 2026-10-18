@@ -210,6 +210,7 @@ class AppState extends ChangeNotifier {
   int _userDataRetries = 0;
 
   void _onAuthUser(AppUser? user) {
+    debugPrint('[AppState] auth user: ${user?.id ?? 'signed out'}');
     final accountChanged = _user?.id != user?.id;
     _user = user;
     _cancelUserSubs();
