@@ -12,7 +12,7 @@ import 'app_theme.dart';
 class ThemeProvider extends ChangeNotifier {
   ThemeProvider({
     AppMode mode = AppMode.dark,
-    AppAccent accent = AppAccent.gold,
+    AppAccent accent = AppAccent.terracotta,
     AppFontScale fontScale = AppFontScale.normal,
   })  : _mode = mode,
         _accent = accent,

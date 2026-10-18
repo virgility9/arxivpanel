@@ -66,6 +66,8 @@ class AppShell extends StatelessWidget {
                 Expanded(child: _buildView(context)),
               ],
             ),
+            // Faint paper grain over the whole page (ignores touches).
+            Positioned.fill(child: GrainTexture(palette: palette)),
             // Toast stack
             Positioned(
               left: 16,
@@ -245,6 +247,13 @@ class _Navbar extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.navBg,
         border: Border(bottom: BorderSide(color: c.border)),
+        boxShadow: [
+          BoxShadow(
+            color: c.shadow.withValues(alpha: c.shadow.a * 0.35),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: SafeArea(
         bottom: false,
@@ -366,8 +375,10 @@ class _UserMenu extends StatelessWidget {
     return PopupMenuButton<String>(
       offset: const Offset(0, 44),
       color: c.surface,
+      elevation: 6,
+      shadowColor: c.shadow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: c.border),
       ),
       onSelected: (value) {
@@ -450,7 +461,7 @@ class _UserMenu extends StatelessWidget {
           value: 'logout',
           child: const Text(
             'Sign Out',
-            style: TextStyle(color: Color(0xFFE06B6B), fontSize: 13),
+            style: TextStyle(color: Color(0xFFC75B52), fontSize: 13),
           ),
         ),
       ],
@@ -576,6 +587,13 @@ class _BottomNav extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.navBg,
         border: Border(top: BorderSide(color: c.border)),
+        boxShadow: [
+          BoxShadow(
+            color: c.shadow.withValues(alpha: c.shadow.a * 0.35),
+            blurRadius: 14,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       child: SafeArea(
         child: Row(
@@ -691,14 +709,8 @@ class _ToastCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface2,
         border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: c.shadow,
-            blurRadius: 32,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: c.raisedShadow,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

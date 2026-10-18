@@ -348,7 +348,7 @@ class _SortChip extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: Container(
           constraints: const BoxConstraints(minHeight: 44),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -356,7 +356,7 @@ class _SortChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? c.surface2 : Colors.transparent,
             border: Border.all(color: selected ? a.accent : c.border),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             label,

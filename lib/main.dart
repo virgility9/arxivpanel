@@ -90,7 +90,8 @@ class FirebaseSetupPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const palette = AppPalette(mode: AppMode.dark, accent: AccentPalette.gold);
+    const palette =
+        AppPalette(mode: AppMode.dark, accent: AccentPalette.terracotta);
     final c = palette.c;
     return MaterialApp(
       debugShowCheckedModeBanner: false,

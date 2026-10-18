@@ -14,25 +14,25 @@ import '../theme/theme_provider.dart';
 import '../widgets/shared.dart';
 
 /// Hardcoded contest accent (matches `#7c6af7` in PollsView.tsx).
-const _violet = Color(0xFF7C6AF7);
+const _violet = Color(0xFF6F7C94);
 
 /// Medal colors for the top 3 ranks.
 const _medalColors = <Color>[
-  Color(0xFFE8B04B), // gold
+  Color(0xFFC49A3C), // gold
   Color(0xFFB0B8C1), // silver
   Color(0xFFCD7F32), // bronze
 ];
 
 /// Medal-tinted card backgrounds (React `MEDAL_BG` values).
 const _medalBgs = <Color>[
-  Color(0x1FE8B04B), // rgba(232,176,75,0.12)
+  Color(0x1FC49A3C), // ochre, 12%
   Color(0x14B0B8C1), // rgba(176,184,193,0.08)
   Color(0x1ACD7F32), // rgba(205,127,50,0.10)
 ];
 
 /// Medal-tinted card borders (React `MEDAL_BORDER` values).
 const _medalBorders = <Color>[
-  Color(0x66E8B04B), // rgba(232,176,75,0.4)
+  Color(0x66C49A3C), // ochre, 40%
   Color(0x40B0B8C1), // rgba(176,184,193,0.25)
   Color(0x4DCD7F32), // rgba(205,127,50,0.3)
 ];
@@ -487,8 +487,8 @@ class _PodiumCard extends StatelessWidget {
                   begin: wide ? Alignment.topCenter : Alignment.centerLeft,
                   end: wide ? Alignment.bottomCenter : Alignment.centerRight,
                   colors: wide
-                      ? const [Colors.transparent, Color(0xCC0C0C12)]
-                      : const [Colors.transparent, Color(0x800C0C12)],
+                      ? const [Colors.transparent, Color(0xCC16171A)]
+                      : const [Colors.transparent, Color(0x8016171A)],
                   stops: const [0.3, 1.0],
                 ),
               ),
