@@ -688,7 +688,9 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisCount: wide ? 3 : 2,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.55,
+      // Fixed cell height: the old childAspectRatio starved the detail text
+      // of vertical room on narrow phones (BOTTOM OVERFLOWED BY 47+ PIXELS).
+      mainAxisExtent: 150,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
@@ -704,42 +706,45 @@ class _AdminScreenState extends State<AdminScreen> {
     required String detail,
     VoidCallback? onTap,
   }) {
+    // Vertical layout: icon + label on the top row, then the big value and the
+    // detail text at full card width. The old Row squeezed the detail into a
+    // ~58px column on phones, wrapping it to 3-4 lines and overflowing the
+    // fixed-height card.
     final body = Padding(
       padding: const EdgeInsets.all(14),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 20, color: iconColor),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
                   label.toUpperCase(),
                   style: monoStyle(p, size: 9, letterSpacing: 0.1),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: displayStyle(p, size: 24, weight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                Text(detail, style: bodyStyle(p, size: 11, color: p.c.muted)),
-              ],
-            ),
+              ),
+              if (onTap != null)
+                Icon(Icons.chevron_right, size: 16, color: p.c.muted),
+            ],
           ),
-          if (onTap != null)
-            Icon(Icons.chevron_right, size: 16, color: p.c.muted),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: displayStyle(p, size: 24, weight: FontWeight.w700),
+          ),
+          const SizedBox(height: 2),
+          Text(detail, style: bodyStyle(p, size: 11, color: p.c.muted)),
         ],
       ),
     );
