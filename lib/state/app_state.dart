@@ -38,8 +38,30 @@ class AppState extends ChangeNotifier {
       _usersLoaded = true;
       notifyListeners();
     });
-    _authSub = _authRepo!.watchAuthUser().listen(_onAuthUser);
+    _subscribeAuth();
   }
+
+  /// Subscribes to the auth stream, resubscribing on error. If this stream
+  /// dies, sign-in/out events never reach the UI (sign-out still appears to
+  /// work because [logout] clears state manually) until a page refresh.
+  void _subscribeAuth() {
+    _authSub = _authRepo!.watchAuthUser().listen(
+          _onAuthUser,
+          onError: _onAuthError,
+        );
+  }
+
+  void _onAuthError(Object e, StackTrace s) {
+    debugPrint('[AppState] auth stream error, resubscribing: $e');
+    _authSub?.cancel();
+    _authSub = null;
+    // Brief delay to avoid hot-looping on persistent failures.
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!_disposed && _authRepo != null) _subscribeAuth();
+    });
+  }
+
+  bool _disposed = false;
 
   bool _firebaseReady = false;
 
@@ -561,6 +583,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _papersSub?.cancel();
     _usersSub?.cancel();
     _authSub?.cancel();

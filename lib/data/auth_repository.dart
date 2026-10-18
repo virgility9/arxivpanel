@@ -7,7 +7,6 @@ library;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
 import 'constants.dart';
@@ -31,6 +30,10 @@ class AuthRepository {
   /// the self-heal in [signIn] — the profile arrives automatically instead
   /// of the app being stuck thinking the user has no profile.
   Stream<AppUser?> watchAuthUser() {
+    // Errors are intentionally NOT swallowed here: AppState resubscribes on
+    // error. A previous `.handleError` terminated this stream silently on the
+    // first transient failure, after which sign-ins never reached the UI
+    // until a page refresh.
     return _auth.authStateChanges().asyncExpand((user) {
       if (user == null) return Stream<AppUser?>.value(null);
       return _firestore
@@ -42,8 +45,6 @@ class AuthRepository {
             if (data == null) return null;
             return AppUser.fromJson(doc.id, data);
           });
-    }).handleError((Object e, StackTrace s) {
-      debugPrint('[AuthRepository] watchAuthUser error: $e');
     });
   }
 
