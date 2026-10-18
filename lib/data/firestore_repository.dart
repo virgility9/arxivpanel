@@ -44,8 +44,17 @@ ReadEntry _readEntryFromJson(Map<String, dynamic> json) {
 /// when combined with filters).
 class _PaperFeed {
   _PaperFeed(this._firestore, Query<Map<String, dynamic>> query) {
-    _papersSub =
-        query.snapshots().listen(_onPapers, onError: _logError('papers'));
+    _papersSub = query.snapshots().listen(
+      _onPapers,
+      // Log locally AND forward to the broadcast stream: AppState falls back
+      // to the public feed when the admin query is denied (e.g. the app
+      // believes the user is an admin but the rules don't). Swallowing here
+      // used to leave the UI on "Loading the archive…" forever.
+      onError: (Object e, StackTrace s) {
+        _logError('papers')(e, s);
+        if (!_controller.isClosed) _controller.addError(e, s);
+      },
+    );
   }
 
   final FirebaseFirestore _firestore;

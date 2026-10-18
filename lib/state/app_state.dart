@@ -13,6 +13,7 @@ library;
 
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/auth_repository.dart';
@@ -84,6 +85,13 @@ class AppState extends ChangeNotifier {
   /// (an unfiltered query would be denied for them — rules are not filters).
   bool _papersAdmin = false;
 
+  /// True after the admin papers query was denied by the rules — i.e. the app
+  /// believes the user is an admin but Firestore doesn't (missing
+  /// `admins/{uid}` doc). While set, we stay on the public approved-only feed
+  /// instead of retrying a query that can never succeed. Reset whenever the
+  /// signed-in account changes, so a later console fix is picked up.
+  bool _papersAdminDenied = false;
+
   /// (Re)subscribes to the papers feed matching the current admin status.
   /// Called once at startup and again whenever the auth user (and thus
   /// `isAdmin`) resolves or changes. `_papersLoaded` is intentionally left
@@ -91,7 +99,7 @@ class AppState extends ChangeNotifier {
   /// the new one emits, instead of flashing a loading spinner.
   void _subscribePapers() {
     if (_repo == null) return;
-    final admin = _user?.isAdmin == true;
+    final admin = _user?.isAdmin == true && !_papersAdminDenied;
     if (_papersSub != null && _papersAdmin == admin) return;
     _papersSub?.cancel();
     // Fire-and-forget: teardown is idempotent and never throws.
@@ -99,12 +107,37 @@ class AppState extends ChangeNotifier {
     _papersAdmin = admin;
     final feed = _repo!.watchPapers(admin: admin);
     _papersDispose = feed.dispose;
-    _papersSub = feed.stream.listen((papers) {
-      _papers = papers;
-      _papersLoaded = true;
-      notifyListeners();
-    });
+    _papersSub = feed.stream.listen(
+      (papers) {
+        _papers = papers;
+        _papersLoaded = true;
+        notifyListeners();
+      },
+      onError: _onPapersError,
+    );
   }
+
+  void _onPapersError(Object e) {
+    // Half-admin state: the admin query was denied, so fall back to the
+    // public feed — the library keeps working instead of spinning on
+    // "Loading the archive…" forever. Admin-only actions still surface
+    // their own failures via toasts.
+    if (_papersAdmin && !_papersAdminDenied && _isPermissionDenied(e)) {
+      _papersAdminDenied = true;
+      debugPrint(
+        '[AppState] admin papers query denied; falling back to public feed',
+      );
+      _papersSub?.cancel();
+      _papersSub = null;
+      _subscribePapers();
+      return;
+    }
+    debugPrint('[AppState] papers stream error: $e');
+  }
+
+  bool _isPermissionDenied(Object e) =>
+      e is FirebaseException && e.code == 'permission-denied';
+
   StreamSubscription<List<AppUser>>? _usersSub;
   StreamSubscription<AppUser?>? _authSub;
   StreamSubscription<Set<String>>? _bookmarksSub;
@@ -177,9 +210,13 @@ class AppState extends ChangeNotifier {
   int _userDataRetries = 0;
 
   void _onAuthUser(AppUser? user) {
+    final accountChanged = _user?.id != user?.id;
     _user = user;
     _cancelUserSubs();
     _userDataRetries = 0;
+    // Re-probe admin query access for a new account: a console fix made
+    // after a fallback should take effect on next sign-in.
+    if (accountChanged) _papersAdminDenied = false;
     // The papers feed depends on isAdmin — re-subscribe if it changed.
     _subscribePapers();
     if (user != null) {
