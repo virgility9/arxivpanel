@@ -355,7 +355,42 @@ class AppLogo extends StatelessWidget {
 // Buttons
 // ---------------------------------------------------------------------------
 
-/// Gold gradient primary button (mirrors `goldBtn` / `goldBtnStyle`).
+/// One size scale for every button in the app, so a Gold button and a Ghost
+/// button given the same height are pixel-identical in height, radius and
+/// label size, and never look "too big" next to each other.
+///
+///   xs 32 — mobile top bar          sm 36 — dense rows, desktop top bar
+///   md 44 — default                 lg 48 — full-width calls to action
+///
+/// Any requested `minHeight` is snapped to the nearest step of this scale.
+class _ButtonSpec {
+  const _ButtonSpec({
+    required this.height,
+    required this.labelSize,
+    required this.hPad,
+    required this.radius,
+  });
+
+  final double height;
+  final double labelSize;
+  final double hPad;
+  final double radius;
+
+  static const xs = _ButtonSpec(height: 32, labelSize: 12.5, hPad: 12, radius: 8);
+  static const sm = _ButtonSpec(height: 36, labelSize: 13, hPad: 14, radius: 9);
+  static const md = _ButtonSpec(height: 44, labelSize: 14, hPad: 18, radius: 10);
+  static const lg = _ButtonSpec(height: 48, labelSize: 15, hPad: 22, radius: 10);
+
+  static _ButtonSpec forHeight(double minHeight) {
+    if (minHeight <= 32) return xs;
+    if (minHeight <= 36) return sm;
+    if (minHeight <= 44) return md;
+    return lg;
+  }
+}
+
+/// Primary (accent) button. Name kept from the original gold-only design;
+/// it takes the active accent color. Mirrors `goldBtn` / `goldBtnStyle`.
 class GoldButton extends StatelessWidget {
   const GoldButton({
     super.key,
@@ -364,7 +399,7 @@ class GoldButton extends StatelessWidget {
     required this.onPressed,
     this.loading = false,
     this.icon,
-    this.minHeight = 48,
+    this.minHeight = 44,
   });
 
   final AppPalette palette;
@@ -378,15 +413,12 @@ class GoldButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = palette.accent;
     final enabled = onPressed != null && !loading;
-    // Compact buttons (e.g. the 32px header buttons) need tighter padding
-    // and smaller text, otherwise the label gets vertically clipped.
-    final compact = minHeight <= 36;
-    final vPad = compact ? 6.0 : 12.0;
-    final labelSize = compact ? 13.0 : 15.0;
+    final spec = _ButtonSpec.forHeight(minHeight);
+    final radius = BorderRadius.circular(spec.radius);
     return Opacity(
       opacity: enabled ? 1 : 0.6,
       child: Container(
-        constraints: BoxConstraints(minHeight: minHeight),
+        constraints: BoxConstraints(minHeight: spec.height),
         decoration: BoxDecoration(
           // Gentle vertical shading (not a glow) gives the button a pressed-
           // paper feel; the soft shadow keeps it grounded.
@@ -398,7 +430,7 @@ class GoldButton extends StatelessWidget {
                 )
               : null,
           color: enabled ? null : palette.c.surface2,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: radius,
           border: Border.all(
             color: enabled
                 ? Colors.white.withValues(alpha: 0.14)
@@ -407,9 +439,9 @@ class GoldButton extends StatelessWidget {
           boxShadow: enabled
               ? [
                   BoxShadow(
-                    color: a.accentDim.withValues(alpha: 0.28),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: a.accentDim.withValues(alpha: 0.24),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
                 ]
               : null,
@@ -417,10 +449,12 @@ class GoldButton extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: radius,
             onTap: enabled ? onPressed : null,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: vPad),
+              // Vertical padding is 0: the minHeight above sets the height and
+              // the Row centers the label, so text is never clipped or lopsided.
+              padding: EdgeInsets.symmetric(horizontal: spec.hPad),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -435,14 +469,15 @@ class GoldButton extends StatelessWidget {
                       ),
                     )
                   else if (icon != null) ...[
-                    Text(icon!, style: const TextStyle(fontSize: 16)),
+                    Text(icon!, style: TextStyle(fontSize: spec.labelSize + 2)),
                     const SizedBox(width: 8),
                   ],
                   Text(
                     loading ? 'Please wait…' : label,
+                    maxLines: 1,
                     style: TextStyle(
                       color: enabled ? a.accentFg : palette.c.muted,
-                      fontSize: labelSize,
+                      fontSize: spec.labelSize,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.1,
                     ),
@@ -457,7 +492,8 @@ class GoldButton extends StatelessWidget {
   }
 }
 
-/// Outlined ghost button (mirrors `outlineBtn` / `ghostBtnStyle`).
+/// Outlined secondary button (mirrors `outlineBtn` / `ghostBtnStyle`). Uses
+/// the same size scale as [GoldButton] so the two line up exactly.
 class GhostButton extends StatelessWidget {
   const GhostButton({
     super.key,
@@ -465,7 +501,7 @@ class GhostButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.color,
-    this.minHeight = 40,
+    this.minHeight = 44,
   });
 
   final AppPalette palette;
@@ -478,17 +514,28 @@ class GhostButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = palette.c;
     final fg = color ?? c.text;
+    final spec = _ButtonSpec.forHeight(minHeight);
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         foregroundColor: fg,
         side: BorderSide(color: color ?? c.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        minimumSize: Size(0, minHeight),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(spec.radius),
+        ),
+        minimumSize: Size(0, spec.height),
+        // Without this, Flutter pads the *layout* size of the button up to
+        // 48px on touch devices, so a 36px ghost button next to a 36px solid
+        // one ends up taller and misaligned.
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: EdgeInsets.symmetric(horizontal: spec.hPad),
+        textStyle: TextStyle(
+          fontSize: spec.labelSize,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        ),
       ),
-      child: Text(label),
+      child: Text(label, maxLines: 1),
     );
   }
 }

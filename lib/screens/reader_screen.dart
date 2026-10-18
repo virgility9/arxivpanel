@@ -1085,7 +1085,7 @@ class _CommentComposerState extends State<_CommentComposer> {
                         _ctrl.clear();
                         setState(() {});
                       },
-                minHeight: 40,
+                minHeight: 44,
               ),
             ],
           ),

@@ -327,8 +327,38 @@ ThemeData buildThemeData(AppPalette palette, {required double textScale}) {
         borderSide: const BorderSide(color: Color(0xFFC75B52)),
       ),
     ),
+    // Plain text / outlined buttons follow the same scale as GoldButton and
+    // GhostButton (see _ButtonSpec in widgets/shared.dart): 44px high, 10px
+    // radius, and shrink-wrapped so Flutter doesn't silently grow them to a
+    // 48px layout box on touch devices.
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: a.accent),
+      style: TextButton.styleFrom(
+        foregroundColor: a.accent,
+        minimumSize: const Size(0, 44),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: TextStyle(
+          fontSize: 14 * textScale,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: c.text,
+        side: BorderSide(color: c.border),
+        minimumSize: const Size(0, 44),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: TextStyle(
+          fontSize: 14 * textScale,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        ),
+      ),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: c.surface,

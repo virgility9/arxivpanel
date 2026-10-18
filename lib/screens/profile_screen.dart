@@ -209,10 +209,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     side: BorderSide(color: c.border),
                                     shape: RoundedRectangleBorder(
                                       borderRadius:
-                                          BorderRadius.circular(6),
+                                          BorderRadius.circular(10),
                                     ),
                                     minimumSize:
-                                        const Size.fromHeight(40),
+                                        const Size.fromHeight(44),
                                   ),
                                 ),
                               ),
@@ -331,7 +331,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               GoldButton(
                 palette: p,
                 label: 'Save Changes',
-                minHeight: 40,
+                minHeight: 44,
                 loading: saving,
                 onPressed: saving ? null : save,
               ),
@@ -614,7 +614,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           palette: p,
           label: 'Edit Profile',
           color: a.accent,
-          minHeight: 40,
+          minHeight: 44,
           onPressed: () => _openEditDialog(user),
         ),
       ],
@@ -767,7 +767,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               palette: p,
               label: 'Sign In to Continue',
               onPressed: widget.onAuthPrompt,
-              minHeight: 52,
+              minHeight: 48,
             ),
           ),
         ],

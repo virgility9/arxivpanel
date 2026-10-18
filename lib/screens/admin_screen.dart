@@ -871,6 +871,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     GhostButton(
                       palette: p,
                       label: 'Review',
+                      minHeight: 36,
                       onPressed: () => _openDetail(paper),
                     ),
                     const SizedBox(width: 8),
@@ -1644,7 +1645,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                     GoldButton(
                                       palette: p,
                                       label: 'Send revision request',
-                                      minHeight: 40,
+                                      minHeight: 44,
                                       onPressed: submitReview,
                                     ),
                                 ],
@@ -1694,7 +1695,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                     GoldButton(
                                       palette: p,
                                       label: 'Approve',
-                                      minHeight: 40,
+                                      minHeight: 44,
                                       onPressed: () async {
                                         final ok = await widget.appState
                                             .approvePaper(cur.id);

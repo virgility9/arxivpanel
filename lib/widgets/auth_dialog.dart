@@ -326,7 +326,7 @@ class _AuthDialogState extends State<AuthDialog> {
                     ],
                     const SizedBox(height: 18),
                     SizedBox(
-                      height: 52,
+                      height: 48,
                       child: GoldButton(
                         palette: palette,
                         label: isLogin ? 'Sign In' : 'Create Account',
