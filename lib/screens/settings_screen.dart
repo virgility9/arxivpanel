@@ -29,7 +29,12 @@ class SettingsScreen extends StatelessWidget {
       ),
       child: Text(
         title.toUpperCase(),
-        style: monoStyle(p, size: 9, weight: FontWeight.w600, letterSpacing: 0.15),
+        style: monoStyle(
+          p,
+          size: 9,
+          weight: FontWeight.w600,
+          letterSpacing: 0.15,
+        ),
       ),
     );
   }
@@ -40,7 +45,12 @@ class SettingsScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 14),
       child: Text(
         title,
-        style: bodyStyle(p, size: 14, weight: FontWeight.w500, color: p.c.textSub),
+        style: bodyStyle(
+          p,
+          size: 14,
+          weight: FontWeight.w500,
+          color: p.c.textSub,
+        ),
       ),
     );
   }
@@ -62,7 +72,10 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             decoration: BoxDecoration(
               color: active ? c.surface : Colors.transparent,
-              border: Border.all(color: active ? a.accent : c.border, width: 1.5),
+              border: Border.all(
+                color: active ? a.accent : c.border,
+                width: 1.5,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -105,10 +118,6 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        dark ? 'Easy on the eyes at night' : 'Bright & crisp for daytime',
-                        style: monoStyle(p, size: 10),
-                      ),
                     ],
                   ),
                 ),
@@ -225,7 +234,12 @@ class SettingsScreen extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       'PREFERENCES',
-                      style: monoStyle(p, size: 9, letterSpacing: 0.15, color: a.accent),
+                      style: monoStyle(
+                        p,
+                        size: 9,
+                        letterSpacing: 0.15,
+                        color: a.accent,
+                      ),
                     ),
                   ),
                   Padding(
@@ -288,7 +302,10 @@ class SettingsScreen extends StatelessWidget {
                       // About
                       _section(p, 'About'),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 20,
+                        ),
                         decoration: BoxDecoration(
                           color: c.surface,
                           border: Border.all(color: c.border),
@@ -305,7 +322,11 @@ class SettingsScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     'Research Library · v1.0',
-                                    style: monoStyle(p, size: 10, letterSpacing: 0.04),
+                                    style: monoStyle(
+                                      p,
+                                      size: 10,
+                                      letterSpacing: 0.04,
+                                    ),
                                   ),
                                 ],
                               ),

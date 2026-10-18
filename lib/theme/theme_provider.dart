@@ -31,7 +31,6 @@ class ThemeProvider extends ChangeNotifier {
   AppPalette get palette => AppPalette(
         mode: _mode,
         accent: AccentPalette.of(_accent),
-        textScale: _fontScale.scale,
       );
 
   /// Material 3 theme built from the resolved palette.
