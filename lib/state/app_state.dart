@@ -147,25 +147,64 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------------------ auth
 
+  /// Bounded retries for the per-user streams. A transient failure (e.g. an
+  /// auth-token race at startup) used to kill bookmarks/history silently for
+  /// the rest of the session; now we retry a few times, then surface a toast
+  /// instead of dying quietly.
+  static const _maxUserDataRetries = 3;
+  int _userDataRetries = 0;
+
   void _onAuthUser(AppUser? user) {
     _user = user;
     _cancelUserSubs();
+    _userDataRetries = 0;
     // The papers feed depends on isAdmin — re-subscribe if it changed.
     _subscribePapers();
     if (user != null) {
-      _bookmarksSub = _repo!.watchBookmarks(user.id).listen((bookmarks) {
-        _bookmarks = bookmarks;
-        notifyListeners();
-      });
-      _historySub = _repo!.watchHistory(user.id).listen((history) {
-        _readingHistory = history;
-        notifyListeners();
-      });
+      _subscribeUserData(user);
     } else {
       _bookmarks = <String>{};
       _readingHistory = <ReadEntry>[];
     }
     notifyListeners();
+  }
+
+  void _subscribeUserData(AppUser user) {
+    _bookmarksSub = _repo!.watchBookmarks(user.id).listen(
+      (bookmarks) {
+        _bookmarks = bookmarks;
+        _userDataRetries = 0;
+        notifyListeners();
+      },
+      onError: (Object e, StackTrace s) =>
+          _retryUserData(user, 'bookmarks', e),
+    );
+    _historySub = _repo!.watchHistory(user.id).listen(
+      (history) {
+        _readingHistory = history;
+        _userDataRetries = 0;
+        notifyListeners();
+      },
+      onError: (Object e, StackTrace s) => _retryUserData(user, 'history', e),
+    );
+  }
+
+  void _retryUserData(AppUser user, String what, Object e) {
+    // Signed out or switched accounts while waiting — nothing to retry.
+    if (_user?.id != user.id) return;
+    debugPrint('[AppState] $what snapshot error, retrying: $e');
+    if (_userDataRetries >= _maxUserDataRetries) {
+      showToast(
+        'Could not load your saved data. Restart the app to try again.',
+        '⚠️',
+      );
+      return;
+    }
+    _userDataRetries++;
+    _cancelUserSubs();
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_user?.id == user.id) _subscribeUserData(user);
+    });
   }
 
   void _cancelUserSubs() {

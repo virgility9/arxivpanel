@@ -417,16 +417,17 @@ class FirestoreRepository {
   // ------------------------------------------------------------------
 
   /// Streams the set of bookmarked paper IDs for a user.
+  ///
+  /// Errors are NOT swallowed here: AppState retries transient failures
+  /// (a single swallowed error used to kill this stream silently for the
+  /// rest of the session).
   Stream<Set<String>> watchBookmarks(String uid) {
     return _firestore
         .collection('users')
         .doc(uid)
         .collection('bookmarks')
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => doc.id).toSet())
-        .handleError((Object e, StackTrace s) {
-          debugPrint('[FirestoreRepository] bookmarks snapshot error: $e');
-        });
+        .map((snap) => snap.docs.map((doc) => doc.id).toSet());
   }
 
   /// Adds or removes a bookmark document at `users/{uid}/bookmarks/{paperId}`.
@@ -514,6 +515,10 @@ class FirestoreRepository {
   // ------------------------------------------------------------------
 
   /// Streams up to 50 history entries for a user, newest first.
+  ///
+  /// Errors are NOT swallowed here: AppState retries transient failures
+  /// (a single swallowed error used to kill this stream silently for the
+  /// rest of the session).
   Stream<List<ReadEntry>> watchHistory(String uid) {
     return _firestore
         .collection('users')
@@ -526,10 +531,7 @@ class FirestoreRepository {
           (snap) => [
             for (final doc in snap.docs) _readEntryFromJson(doc.data()),
           ],
-        )
-        .handleError((Object e, StackTrace s) {
-          debugPrint('[FirestoreRepository] history snapshot error: $e');
-        });
+        );
   }
 
   /// Appends a reading-history entry for a user.
