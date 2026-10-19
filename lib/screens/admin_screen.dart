@@ -1484,19 +1484,50 @@ class _AdminScreenState extends State<AdminScreen> {
               if (deleted && ctx.mounted) Navigator.of(ctx).pop();
             }
 
-            Widget metaCell(String label, String value) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionLabel(palette: p, text: label),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: bodyStyle(p, size: 13, weight: FontWeight.w600),
-                  ),
-                ],
+            /// Label/value row for the details card.
+            Widget detailRow(String label, String value) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 11,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 108,
+                      child: Text(
+                        label.toUpperCase(),
+                        style: monoStyle(
+                          p,
+                          size: 10,
+                          color: c.faint,
+                        ).copyWith(
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.08,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        value,
+                        style: bodyStyle(
+                          p,
+                          size: 13,
+                          weight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.right,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               );
             }
+
+            Widget detailDivider() =>
+                Divider(height: 1, thickness: 1, color: c.border);
 
             return Dialog(
               insetPadding: const EdgeInsets.all(24),
@@ -1513,11 +1544,38 @@ class _AdminScreenState extends State<AdminScreen> {
                             borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(16),
                             ),
-                            child: NetImage(
-                              url: cur.coverImage,
-                              width: double.infinity,
-                              height: 160,
-                            ),
+                            child: cur.coverImage.isEmpty
+                                ? Container(
+                                    width: double.infinity,
+                                    height: 120,
+                                    color: c.surface2,
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons
+                                              .picture_as_pdf_outlined,
+                                          size: 32,
+                                          color: c.faint,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'No cover attached',
+                                          style: monoStyle(
+                                            p,
+                                            size: 10,
+                                            color: c.faint,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : NetImage(
+                                    url: cur.coverImage,
+                                    width: double.infinity,
+                                    height: 160,
+                                  ),
                           ),
                           Positioned(
                             top: 8,
@@ -1572,24 +1630,41 @@ class _AdminScreenState extends State<AdminScreen> {
                               ),
                             ),
                             const SizedBox(height: 20),
-                            GridView.count(
-                              crossAxisCount: 2,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              childAspectRatio: 3.4,
-                              children: [
-                                metaCell('Subject', cur.field),
-                                metaCell('Academic year', cur.year),
-                                metaCell('Length', '${cur.pages} pages'),
-                                metaCell('Submitted', timeAgo(cur.submittedAt)),
-                              ],
+                            Container(
+                              decoration: BoxDecoration(
+                                color: c.surface,
+                                border: Border.all(color: c.border),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                children: [
+                                  detailRow('Subject', cur.field),
+                                  detailDivider(),
+                                  detailRow('Academic year', cur.year),
+                                  detailDivider(),
+                                  detailRow(
+                                      'Length', '${cur.pages} pages'),
+                                  detailDivider(),
+                                  detailRow('Submitted',
+                                      timeAgo(cur.submittedAt)),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 20),
                             SectionLabel(palette: p, text: 'Abstract'),
                             const SizedBox(height: 8),
-                            Text(
-                              cur.abstract,
-                              style: bodyStyle(p, size: 14, height: 1.6),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: c.surface,
+                                border: Border.all(color: c.border),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                cur.abstract,
+                                style: bodyStyle(p, size: 14, height: 1.6),
+                              ),
                             ),
                             if (cur.tags.isNotEmpty) ...[
                               const SizedBox(height: 12),
@@ -1691,9 +1766,60 @@ class _AdminScreenState extends State<AdminScreen> {
                                 ],
                               ),
                             ] else ...[
+                              const SizedBox(height: 4),
+                              // Primary action: full-width approve.
+                              if (cur.status == PaperStatus.pending) ...[
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: GoldButton(
+                                    palette: p,
+                                    label: 'Approve',
+                                    minHeight: 48,
+                                    onPressed: () async {
+                                      final ok = await widget.appState
+                                          .approvePaper(cur.id);
+                                      if (ok && ctx.mounted) {
+                                        Navigator.of(ctx).pop();
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: GhostButton(
+                                        palette: p,
+                                        label: 'Request revisions',
+                                        onPressed: () => setD(() {
+                                          reviewAction = 'revision';
+                                          reason = '';
+                                          formError = null;
+                                        }),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: GhostButton(
+                                        palette: p,
+                                        label: 'Reject',
+                                        color: p.danger,
+                                        onPressed: () => setD(() {
+                                          reviewAction = 'reject';
+                                          reason = '';
+                                          formError = null;
+                                        }),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                              // Tertiary actions: subtle centered row.
                               Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
+                                alignment: WrapAlignment.center,
+                                spacing: 4,
+                                runSpacing: 4,
                                 children: [
                                   if (cur.pdfUrl != null)
                                     TextButton.icon(
@@ -1712,44 +1838,9 @@ class _AdminScreenState extends State<AdminScreen> {
                                         }
                                       },
                                     ),
-                                  if (cur.status == PaperStatus.pending) ...[
-                                    GhostButton(
-                                      palette: p,
-                                      label: 'Request revisions',
-                                      onPressed: () => setD(() {
-                                        reviewAction = 'revision';
-                                        reason = '';
-                                        formError = null;
-                                      }),
-                                    ),
-                                    GhostButton(
-                                      palette: p,
-                                      label: 'Reject',
-                                      color: p.danger,
-                                      onPressed: () => setD(() {
-                                        reviewAction = 'reject';
-                                        reason = '';
-                                        formError = null;
-                                      }),
-                                    ),
-                                    GoldButton(
-                                      palette: p,
-                                      label: 'Approve',
-                                      minHeight: 40,
-                                      onPressed: () async {
-                                        final ok = await widget.appState
-                                            .approvePaper(cur.id);
-                                        if (ok && ctx.mounted) {
-                                          Navigator.of(ctx).pop();
-                                        }
-                                      },
-                                    ),
-                                  ],
                                   if (cur.status != PaperStatus.archived &&
                                       cur.status != PaperStatus.pending)
-                                    GhostButton(
-                                      palette: p,
-                                      label: 'Archive',
+                                    TextButton(
                                       onPressed: () async {
                                         final ok = await widget.appState
                                             .archivePaper(cur.id);
@@ -1757,12 +1848,25 @@ class _AdminScreenState extends State<AdminScreen> {
                                           Navigator.of(ctx).pop();
                                         }
                                       },
+                                      child: Text(
+                                        'Archive',
+                                        style: bodyStyle(
+                                          p,
+                                          size: 13,
+                                          color: c.muted,
+                                        ),
+                                      ),
                                     ),
-                                  GhostButton(
-                                    palette: p,
-                                    label: 'Delete',
-                                    color: p.danger,
+                                  TextButton(
                                     onPressed: deleteCurrent,
+                                    child: Text(
+                                      'Delete',
+                                      style: bodyStyle(
+                                        p,
+                                        size: 13,
+                                        color: p.danger,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
