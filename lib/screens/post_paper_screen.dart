@@ -100,7 +100,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     final pages = count == null
         ? ''
         : ' · $count ${count == 1 ? 'page' : 'pages'} detected';
-    return '${_pdfSizeLabel}$pages';
+    return '$_pdfSizeLabel$pages';
   }
 
   Future<void> _handleSubmit() async {
