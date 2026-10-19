@@ -142,65 +142,40 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           style: bodyStyle(p, size: 14, color: c.muted),
                         ),
                         const SizedBox(height: 20),
-                        // Search
-                        TextField(
-                          controller: _searchController,
-                          onChanged: (v) => setState(() => _search = v),
-                          decoration: InputDecoration(
-                            hintText: 'Search titles, authors, tags…',
-                            prefixIcon: Icon(Icons.search, color: c.faint, size: 20),
-                            prefixIconConstraints: const BoxConstraints(minWidth: 44),
-                            suffixIcon: _search.isEmpty
-                                ? null
-                                : IconButton(
-                                    tooltip: 'Clear search',
-                                    icon: Icon(Icons.clear, color: c.faint, size: 18),
-                                    constraints: const BoxConstraints(
-                                        minWidth: 44, minHeight: 44),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _search = '');
-                                    },
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        // Field chips
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              for (final f in AppConstants.fields)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 6),
-                                  child: SelectChip(
-                                    palette: p,
-                                    label: f,
-                                    selected: _field == f,
-                                    onTap: () => setState(() => _field = f),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        // Sort chips (right aligned) — a Wrap so they flow
-                        // onto multiple lines instead of overflowing on
-                        // narrow screens.
-                        Wrap(
-                          alignment: WrapAlignment.end,
-                          spacing: 6,
-                          runSpacing: 6,
+                        // Search + filter button. All filtering/sorting now
+                        // lives in the bottom sheet — no horizontal swipe
+                        // rows that can break on narrow screens.
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            for (final s in _sortOptions)
-                              _SortChip(
-                                palette: p,
-                                label:
-                                    s[0].toUpperCase() + s.substring(1),
-                                selected: _sort == s,
-                                onTap: () =>
-                                    setState(() => _sort = s),
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (v) => setState(() => _search = v),
+                                decoration: InputDecoration(
+                                  hintText: 'Search titles, authors, tags…',
+                                  prefixIcon: Icon(Icons.search,
+                                      color: c.faint, size: 20),
+                                  prefixIconConstraints:
+                                      const BoxConstraints(minWidth: 44),
+                                  suffixIcon: _search.isEmpty
+                                      ? null
+                                      : IconButton(
+                                          tooltip: 'Clear search',
+                                          icon: Icon(Icons.clear,
+                                              color: c.faint, size: 18),
+                                          constraints: const BoxConstraints(
+                                              minWidth: 44, minHeight: 44),
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            setState(() => _search = '');
+                                          },
+                                        ),
+                                ),
                               ),
+                            ),
+                            const SizedBox(width: 10),
+                            _filterButton(p),
                           ],
                         ),
                       ],
@@ -298,6 +273,256 @@ class _LibraryScreenState extends State<LibraryScreen> {
       },
     );
   }
+
+  /// Whether any filter differs from the defaults.
+  bool get _hasActiveFilters => _field != 'All Fields' || _sort != 'popular';
+
+  /// Tune-icon button beside the search field. Shows a gold dot while any
+  /// filter is active; opens the filter bottom sheet on tap.
+  Widget _filterButton(AppPalette p) {
+    final c = p.c;
+    final a = p.accent;
+    final active = _hasActiveFilters;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => _openFilterSheet(p),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: c.surface,
+                border: Border.all(color: active ? a.accent : c.border),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.tune,
+                color: active ? a.accent : c.muted,
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+        if (active)
+          Positioned(
+            top: -3,
+            right: -3,
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                color: a.accent,
+                shape: BoxShape.circle,
+                border: Border.all(color: c.surface, width: 2.5),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Modern filter UI: a bottom sheet with the field chips in a Wrap (no
+  /// horizontal swiping needed) and sort options as radio rows.
+  void _openFilterSheet(AppPalette p) {
+    final c = p.c;
+    final a = p.accent;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          final resultCount =
+              _filtered(widget.appState.papers).length;
+          return Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border(top: BorderSide(color: c.border)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: c.border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(
+                        'Filters',
+                        style: displayStyle(p, size: 18).copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() {
+                            _field = 'All Fields';
+                            _sort = 'popular';
+                          });
+                          setState(() {
+                            _field = 'All Fields';
+                            _sort = 'popular';
+                          });
+                        },
+                        child: Text(
+                          'Reset',
+                          style: bodyStyle(
+                            p,
+                            size: 13,
+                            color: a.accent,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'FIELD',
+                    style: monoStyle(
+                      p,
+                      size: 10,
+                      color: c.faint,
+                    ).copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.12,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final f in AppConstants.fields)
+                        SelectChip(
+                          palette: p,
+                          label: f,
+                          selected: _field == f,
+                          onTap: () {
+                            setSheetState(() => _field = f);
+                            setState(() => _field = f);
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'SORT BY',
+                    style: monoStyle(
+                      p,
+                      size: 10,
+                      color: c.faint,
+                    ).copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.12,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  for (final s in _sortOptions) ...[
+                    _sortOptionRow(p, s, setSheetState),
+                    const SizedBox(height: 6),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(sheetCtx).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: a.accent,
+                        foregroundColor: a.accentFg,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Show $resultCount result${resultCount == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Full-width radio-style sort option row for the filter sheet.
+  Widget _sortOptionRow(
+      AppPalette p, String s, StateSetter setSheetState) {
+    final c = p.c;
+    final a = p.accent;
+    final selected = _sort == s;
+    final label = s[0].toUpperCase() + s.substring(1);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setSheetState(() => _sort = s);
+          setState(() => _sort = s);
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: selected
+                ? a.accent.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? a.accent : c.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: bodyStyle(
+                  p,
+                  size: 14,
+                  weight:
+                      selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: selected ? a.accent : c.faint,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Two-line serif hero title: "The Scholars'" then italic accent "Reading Room".
@@ -322,54 +547,6 @@ class _TitleBlock extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Sort option chip: mono font, selected gets surface2 bg + accent
-/// border/text. Uses [InkWell] for ripple + semantics, and a 44px minimum
-/// tap height.
-class _SortChip extends StatelessWidget {
-  const _SortChip({
-    required this.palette,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final AppPalette palette;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = palette.c;
-    final a = palette.accent;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? c.surface2 : Colors.transparent,
-            border: Border.all(color: selected ? a.accent : c.border),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            label,
-            style: monoStyle(
-              palette,
-              size: 11,
-              color: selected ? a.accent : c.muted,
-            ).copyWith(fontWeight: selected ? FontWeight.w600 : FontWeight.w400),
-          ),
-        ),
       ),
     );
   }
