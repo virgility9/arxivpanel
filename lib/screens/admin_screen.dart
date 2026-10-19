@@ -1714,7 +1714,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                 ),
                               ),
                             ],
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 24),
                             if (reviewAction != null) ...[
                               SectionLabel(
                                 palette: p,
@@ -1739,34 +1739,38 @@ class _AdminScreenState extends State<AdminScreen> {
                                 const SizedBox(height: 8),
                                 ErrorBanner(message: formError!),
                               ],
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               Row(
                                 children: [
-                                  GhostButton(
-                                    palette: p,
-                                    label: 'Cancel',
-                                    onPressed: () =>
-                                        setD(() => reviewAction = null),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  if (reviewAction == 'reject')
-                                    GhostButton(
+                                  Expanded(
+                                    child: GhostButton(
                                       palette: p,
-                                      label: 'Confirm rejection',
-                                      color: p.danger,
-                                      onPressed: submitReview,
-                                    )
-                                  else
-                                    GoldButton(
-                                      palette: p,
-                                      label: 'Send revision request',
-                                      minHeight: 40,
-                                      onPressed: submitReview,
+                                      label: 'Cancel',
+                                      minHeight: 44,
+                                      onPressed: () =>
+                                          setD(() => reviewAction = null),
                                     ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: reviewAction == 'reject'
+                                        ? GhostButton(
+                                            palette: p,
+                                            label: 'Confirm rejection',
+                                            color: p.danger,
+                                            minHeight: 44,
+                                            onPressed: submitReview,
+                                          )
+                                        : GoldButton(
+                                            palette: p,
+                                            label: 'Send revision request',
+                                            minHeight: 44,
+                                            onPressed: submitReview,
+                                          ),
+                                  ),
                                 ],
                               ),
                             ] else ...[
-                              const SizedBox(height: 4),
                               // Primary action: full-width approve.
                               if (cur.status == PaperStatus.pending) ...[
                                 SizedBox(
@@ -1791,6 +1795,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                       child: GhostButton(
                                         palette: p,
                                         label: 'Request revisions',
+                                        minHeight: 44,
                                         onPressed: () => setD(() {
                                           reviewAction = 'revision';
                                           reason = '';
@@ -1804,6 +1809,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                         palette: p,
                                         label: 'Reject',
                                         color: p.danger,
+                                        minHeight: 44,
                                         onPressed: () => setD(() {
                                           reviewAction = 'reject';
                                           reason = '';
@@ -1813,59 +1819,57 @@ class _AdminScreenState extends State<AdminScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
                               ],
-                              // Tertiary actions: subtle centered row.
-                              Wrap(
-                                alignment: WrapAlignment.center,
-                                spacing: 4,
-                                runSpacing: 4,
+                              // Tertiary actions row
+                              const SizedBox(height: 16),
+                              Divider(height: 1, thickness: 1, color: c.border),
+                              const SizedBox(height: 12),
+                              Row(
                                 children: [
-                                  if (cur.pdfUrl != null)
-                                    TextButton.icon(
-                                      icon: const Icon(
-                                        Icons.download,
-                                        size: 17,
-                                      ),
-                                      label: const Text('Read PDF'),
-                                      onPressed: () async {
-                                        final url = Uri.parse(cur.pdfUrl!);
-                                        if (!await launchUrl(url)) {
-                                          widget.appState.showToast(
-                                            'Could not open the PDF link',
-                                            '⚠️',
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  if (cur.status != PaperStatus.archived &&
-                                      cur.status != PaperStatus.pending)
-                                    TextButton(
-                                      onPressed: () async {
-                                        final ok = await widget.appState
-                                            .archivePaper(cur.id);
-                                        if (ok && ctx.mounted) {
-                                          Navigator.of(ctx).pop();
-                                        }
-                                      },
-                                      child: Text(
-                                        'Archive',
-                                        style: bodyStyle(
-                                          p,
-                                          size: 13,
-                                          color: c.muted,
-                                        ),
-                                      ),
-                                    ),
-                                  TextButton(
-                                    onPressed: deleteCurrent,
-                                    child: Text(
-                                      'Delete',
-                                      style: bodyStyle(
+                                  if (cur.pdfUrl != null) ...[
+                                    Expanded(
+                                      child: _tertiaryAction(
                                         p,
-                                        size: 13,
-                                        color: p.danger,
+                                        icon: Icons.open_in_new_rounded,
+                                        label: 'Read PDF',
+                                        color: c.textSub,
+                                        onPressed: () async {
+                                          final url = Uri.parse(cur.pdfUrl!);
+                                          if (!await launchUrl(url)) {
+                                            widget.appState.showToast(
+                                              'Could not open the PDF link',
+                                              '⚠️',
+                                            );
+                                          }
+                                        },
                                       ),
+                                    ),
+                                  ],
+                                  if (cur.status != PaperStatus.archived &&
+                                      cur.status != PaperStatus.pending) ...[
+                                    Expanded(
+                                      child: _tertiaryAction(
+                                        p,
+                                        icon: Icons.archive_outlined,
+                                        label: 'Archive',
+                                        color: c.muted,
+                                        onPressed: () async {
+                                          final ok = await widget.appState
+                                              .archivePaper(cur.id);
+                                          if (ok && ctx.mounted) {
+                                            Navigator.of(ctx).pop();
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                  Expanded(
+                                    child: _tertiaryAction(
+                                      p,
+                                      icon: Icons.delete_outline_rounded,
+                                      label: 'Delete',
+                                      color: p.danger,
+                                      onPressed: deleteCurrent,
                                     ),
                                   ),
                                 ],
@@ -1882,6 +1886,38 @@ class _AdminScreenState extends State<AdminScreen> {
           },
         );
       },
+    );
+  }
+
+  /// Compact icon + label button for tertiary actions (Read PDF, Archive, Delete).
+  Widget _tertiaryAction(
+    AppPalette p, {
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: bodyStyle(p, size: 13, weight: FontWeight.w500, color: color),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
