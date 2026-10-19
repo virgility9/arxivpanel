@@ -56,15 +56,15 @@ String _todayLabel() {
 Color _statusColor(PaperStatus status) {
   switch (status) {
     case PaperStatus.approved:
-      return const Color(0xFF5E9E6E);
+      return const Color(0xFF4ADE80);
     case PaperStatus.rejected:
-      return const Color(0xFFC75B52);
+      return const Color(0xFFE06B6B);
     case PaperStatus.revision:
-      return const Color(0xFFC49A3C);
+      return const Color(0xFFE8B04B);
     case PaperStatus.pending:
-      return const Color(0xFF6F7C94);
+      return const Color(0xFF7C6AF7);
     case PaperStatus.archived:
-      return const Color(0xFF93908A);
+      return const Color(0xFF7A7690);
   }
 }
 
@@ -135,7 +135,7 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFC75B52),
+              foregroundColor: const Color(0xFFE06B6B),
             ),
             child: Text(confirmLabel),
           ),
@@ -329,7 +329,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 height: 8,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFF5E9E6E),
+                  color: Color(0xFF4ADE80),
                 ),
               ),
             ],
@@ -660,7 +660,7 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: Icons.people,
-        iconColor: const Color(0xFF6F7C94),
+        iconColor: const Color(0xFF7C6AF7),
         label: 'Registered users',
         value: usersLabel,
         detail: 'Accounts in the database',
@@ -669,7 +669,7 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: Icons.visibility,
-        iconColor: const Color(0xFF6F8FB0),
+        iconColor: const Color(0xFF60A5FA),
         label: 'Total views',
         value: formatCount(_totalViews),
         detail: 'Reads across all papers',
@@ -1117,6 +1117,44 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _buildPaperRow(AppPalette p, Paper paper) {
+    final cover = NetImage(
+      url: paper.coverImage,
+      width: 48,
+      height: 64,
+      borderRadius: BorderRadius.circular(6),
+    );
+    final titleCol = Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            paper.title,
+            style: displayStyle(p, size: 14, weight: FontWeight.w600),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${paper.author} · ${paper.institution}',
+            style: monoStyle(p, size: 11),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${paper.field} · Class of ${paper.year}',
+            style: monoStyle(p, size: 10, color: p.c.faint),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+    final viewButton = IconButton(
+      tooltip: 'View ${paper.title}',
+      icon: Icon(Icons.visibility_outlined, size: 18, color: p.c.muted),
+      onPressed: () => _openDetail(paper),
+    );
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -1125,64 +1163,67 @@ class _AdminScreenState extends State<AdminScreen> {
         border: Border.all(color: p.c.border),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          NetImage(
-            url: paper.coverImage,
-            width: 48,
-            height: 64,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      // On narrow screens the date column + status badge + view button
+      // don't fit beside the title — stack the meta row below instead.
+      child: LayoutBuilder(
+        builder: (ctx, constraints) {
+          if (constraints.maxWidth < 420) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  paper.title,
-                  style: displayStyle(p, size: 14, weight: FontWeight.w600),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    cover,
+                    const SizedBox(width: 12),
+                    titleCol,
+                    viewButton,
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${paper.author} · ${paper.institution}',
-                  style: monoStyle(p, size: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${paper.field} · Class of ${paper.year}',
-                  style: monoStyle(p, size: 10, color: p.c.faint),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Text(
+                      _shortDate(paper.submittedAt),
+                      style: monoStyle(p, size: 11, color: p.c.textSub),
+                    ),
+                    Text(
+                      ' · ${paper.pages} pages',
+                      style: monoStyle(p, size: 10),
+                    ),
+                    const Spacer(),
+                    StatusBadge(palette: p, status: paper.status),
+                  ],
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                _shortDate(paper.submittedAt),
-                style: monoStyle(p, size: 11, color: p.c.textSub),
+              cover,
+              const SizedBox(width: 12),
+              titleCol,
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _shortDate(paper.submittedAt),
+                    style: monoStyle(p, size: 11, color: p.c.textSub),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('${paper.pages} pages',
+                      style: monoStyle(p, size: 10)),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text('${paper.pages} pages', style: monoStyle(p, size: 10)),
+              const SizedBox(width: 12),
+              StatusBadge(palette: p, status: paper.status),
+              viewButton,
             ],
-          ),
-          const SizedBox(width: 12),
-          StatusBadge(palette: p, status: paper.status),
-          IconButton(
-            tooltip: 'View ${paper.title}',
-            icon: Icon(Icons.visibility_outlined, size: 18, color: p.c.muted),
-            onPressed: () => _openDetail(paper),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -1383,7 +1424,7 @@ class _AdminScreenState extends State<AdminScreen> {
               icon: const Icon(
                 Icons.delete_outline,
                 size: 18,
-                color: Color(0xFFC75B52),
+                color: Color(0xFFE06B6B),
               ),
               onPressed: () async {
                 final ok = await _confirmAction(
