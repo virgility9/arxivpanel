@@ -184,19 +184,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        // Sort row (right aligned)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
+                        // Sort chips (right aligned) — a Wrap so they flow
+                        // onto multiple lines instead of overflowing on
+                        // narrow screens.
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 6,
+                          runSpacing: 6,
                           children: [
                             for (final s in _sortOptions)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 6),
-                                child: _SortChip(
-                                  palette: p,
-                                  label: s[0].toUpperCase() + s.substring(1),
-                                  selected: _sort == s,
-                                  onTap: () => setState(() => _sort = s),
-                                ),
+                              _SortChip(
+                                palette: p,
+                                label:
+                                    s[0].toUpperCase() + s.substring(1),
+                                selected: _sort == s,
+                                onTap: () =>
+                                    setState(() => _sort = s),
                               ),
                           ],
                         ),
@@ -348,7 +351,7 @@ class _SortChip extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         child: Container(
           constraints: const BoxConstraints(minHeight: 44),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -356,7 +359,7 @@ class _SortChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? c.surface2 : Colors.transparent,
             border: Border.all(color: selected ? a.accent : c.border),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
             label,
