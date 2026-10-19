@@ -327,7 +327,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   /// Modern filter UI: a bottom sheet with the field chips in a Wrap (no
-  /// horizontal swiping needed) and sort options as radio rows.
+  /// horizontal swiping needed) and sort options as radio rows. The middle
+  /// scrolls on short screens while the apply button stays pinned.
   void _openFilterSheet(AppPalette p) {
     final c = p.c;
     final a = p.accent;
@@ -337,22 +338,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => StatefulBuilder(
         builder: (sheetCtx, setSheetState) {
-          final resultCount =
-              _filtered(widget.appState.papers).length;
+          final resultCount = _filtered(widget.appState.papers).length;
+          final maxSheetHeight =
+              MediaQuery.of(sheetCtx).size.height * 0.85;
           return Container(
+            constraints: BoxConstraints(maxHeight: maxSheetHeight),
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(20)),
               border: Border(top: BorderSide(color: c.border)),
             ),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Center(
                     child: Container(
                       width: 40,
                       height: 4,
@@ -362,8 +365,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Row(
                     children: [
                       Text(
                         'Filters',
@@ -395,75 +400,91 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'FIELD',
-                    style: monoStyle(
-                      p,
-                      size: 10,
-                      color: c.faint,
-                    ).copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.12,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final f in AppConstants.fields)
-                        SelectChip(
-                          palette: p,
-                          label: f,
-                          selected: _field == f,
-                          onTap: () {
-                            setSheetState(() => _field = f);
-                            setState(() => _field = f);
-                          },
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'FIELD',
+                          style: monoStyle(
+                            p,
+                            size: 10,
+                            color: c.faint,
+                          ).copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.12,
+                          ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'SORT BY',
-                    style: monoStyle(
-                      p,
-                      size: 10,
-                      color: c.faint,
-                    ).copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.12,
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final f in AppConstants.fields)
+                              SelectChip(
+                                palette: p,
+                                label: f,
+                                selected: _field == f,
+                                onTap: () {
+                                  setSheetState(() => _field = f);
+                                  setState(() => _field = f);
+                                },
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'SORT BY',
+                          style: monoStyle(
+                            p,
+                            size: 10,
+                            color: c.faint,
+                          ).copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.12,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        for (final s in _sortOptions) ...[
+                          _sortOptionRow(p, s, setSheetState),
+                          const SizedBox(height: 6),
+                        ],
+                        const SizedBox(height: 8),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  for (final s in _sortOptions) ...[
-                    _sortOptionRow(p, s, setSheetState),
-                    const SizedBox(height: 6),
-                  ],
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(sheetCtx).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: a.accent,
-                        foregroundColor: a.accentFg,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: SafeArea(
+                    top: false,
+                    child: SizedBox(
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(sheetCtx).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: a.accent,
+                          foregroundColor: a.accentFg,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Show $resultCount result${resultCount == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      child: Text(
-                        'Show $resultCount result${resultCount == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
           );
         },
