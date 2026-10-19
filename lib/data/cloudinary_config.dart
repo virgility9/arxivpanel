@@ -15,7 +15,7 @@ library;
 class CloudinaryConfig {
   CloudinaryConfig._();
 
-  static const cloudName = 'dqewyf6q';
+  static const cloudName = 'vo35jey5';
   static const uploadPreset = 'dqewyf6q';
 
   static bool get isConfigured =>
