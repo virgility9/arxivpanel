@@ -2,9 +2,10 @@
 ///
 /// Auth-gated form: unauthenticated users get a sign-in prompt, a successful
 /// submit shows a confirmation, otherwise a full submission form with title,
-/// abstract, field/pages, institution, tags, a PDF file picker (uploaded to
-/// Cloudinary on submit) and a submitter card. The cover is always the first
-/// page of the attached PDF — there is no manual cover picker.
+/// abstract, field, institution, tags, a PDF file picker (uploaded to
+/// Cloudinary on submit; its page count is detected automatically from the
+/// file) and a submitter card. The cover is always the first page of the
+/// attached PDF — there is no manual cover picker.
 library;
 
 import 'dart:js_interop';
@@ -19,6 +20,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../utils/file_pick.dart';
+import '../utils/pdf_pages.dart';
 import '../widgets/pdf_view.dart';
 import '../widgets/shared.dart';
 
@@ -41,7 +43,6 @@ class PostPaperScreen extends StatefulWidget {
 class _PostPaperScreenState extends State<PostPaperScreen> {
   late final TextEditingController _title;
   late final TextEditingController _abstract;
-  late final TextEditingController _pages;
   late final TextEditingController _institution;
   late final TextEditingController _tags;
 
@@ -53,6 +54,9 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   /// Picked PDF (device storage), uploaded to Cloudinary on submit.
   Uint8List? _pdfBytes;
   String? _pdfName;
+
+  /// Page count detected from [_pdfBytes] at pick time (`null` = no PDF).
+  int? _pdfPageCount;
 
   /// Web-only blob URL for the picked PDF, plus a first-page preview widget
   /// built once per picked file. The widget is cached because every
@@ -66,7 +70,6 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     super.initState();
     _title = TextEditingController();
     _abstract = TextEditingController();
-    _pages = TextEditingController();
     _institution = TextEditingController();
     _tags = TextEditingController();
   }
@@ -75,7 +78,6 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   void dispose() {
     _title.dispose();
     _abstract.dispose();
-    _pages.dispose();
     _institution.dispose();
     _tags.dispose();
     _revokePreviewUrl();
@@ -92,21 +94,25 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     return '${(kb / 1024).toStringAsFixed(1)} MB';
   }
 
+  /// "2.4 MB · 12 pages" line under the picked PDF's name.
+  String get _pdfMetaLabel {
+    final count = _pdfPageCount;
+    final pages = count == null
+        ? ''
+        : ' · $count ${count == 1 ? 'page' : 'pages'} detected';
+    return '${_pdfSizeLabel}$pages';
+  }
+
   Future<void> _handleSubmit() async {
     final errs = <String, String>{};
     final title = _title.text.trim();
     final abstract = _abstract.text.trim();
     final institution = _institution.text.trim();
-    final pagesStr = _pages.text.trim();
-    final pages = int.tryParse(pagesStr);
     if (title.isEmpty) errs['title'] = 'Title is required';
     if (abstract.isEmpty || abstract.length < 80) {
       errs['abstract'] = 'Abstract must be at least 80 characters';
     }
     if (institution.isEmpty) errs['institution'] = 'Institution is required';
-    if (pagesStr.isEmpty || pages == null || pages < 1) {
-      errs['pages'] = 'Valid page count required';
-    }
     setState(() => _errors = errs);
     if (errs.isNotEmpty) return;
 
@@ -127,7 +133,8 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           .toList(),
       coverImage: '', // replaced by the PDF's first page after upload below
       publishedAt: DateTime.now().toIso8601String().split('T').first,
-      pages: pages!,
+      // Detected from the picked PDF above (0 when no PDF was attached).
+      pages: _pdfPageCount ?? 0,
       views: 0,
       reactions: const {},
       comments: const [],
@@ -182,6 +189,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
         _revokePreviewUrl();
         _pdfBytes = picked.bytes;
         _pdfName = picked.name;
+        _pdfPageCount = countPdfPages(picked.bytes);
         if (kIsWeb) {
           final blob = web.Blob(
             [Uint8List.fromList(picked.bytes).buffer.toJS].toJS,
@@ -254,11 +262,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                 ? _buildSignInPrompt(p)
                 : _submitted
                 ? _buildSuccess(p)
-                : _buildForm(
-                    p,
-                    user,
-                    MediaQuery.of(context).size.width < 560,
-                  ),
+                : _buildForm(p, user),
           ),
         ),
       ),
@@ -393,19 +397,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     );
   }
 
-  Widget _pagesField(AppPalette p) {
-    return LabeledField(
-      palette: p,
-      label: 'Pages',
-      error: _errors['pages'],
-      child: TextField(
-        controller: _pages,
-        keyboardType: TextInputType.number,
-        decoration: const InputDecoration(hintText: '42'),
-      ),
-    );
-  }
-  Widget _buildForm(AppPalette p, AppUser user, bool narrow) {
+  Widget _buildForm(AppPalette p, AppUser user) {
     final fields = AppConstants.fields.where((f) => f != 'All Fields').toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -464,7 +456,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                   p,
                   size: 10,
                   color: _abstract.text.length < 80
-                      ? const Color(0xFFC75B52)
+                      ? const Color(0xFFE06B6B)
                       : p.c.faint,
                 ),
               ),
@@ -472,26 +464,9 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           ),
         ),
         const SizedBox(height: 18),
-        // Field + Pages — side by side on wide screens, stacked on narrow
-        // screens so the dropdowns never get cramped.
-        if (narrow)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _fieldField(p, fields),
-              const SizedBox(height: 18),
-              _pagesField(p),
-            ],
-          )
-        else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _fieldField(p, fields)),
-              const SizedBox(width: 14),
-              Expanded(child: _pagesField(p)),
-            ],
-          ),
+        // Field — full width now that the manual page count is gone (the
+        // count is detected automatically from the picked PDF).
+        _fieldField(p, fields),
         const SizedBox(height: 18),
         // Institution
         LabeledField(
@@ -563,7 +538,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                     const Icon(
                       Icons.picture_as_pdf_outlined,
                       size: 32,
-                      color: Color(0xFFC75B52),
+                      color: Color(0xFFE06B6B),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -582,7 +557,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _pdfSizeLabel,
+                            _pdfMetaLabel,
                             style:
                                 bodyStyle(p, size: 11, color: p.c.muted),
                           ),
@@ -608,6 +583,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                                 _revokePreviewUrl();
                                 _pdfBytes = null;
                                 _pdfName = null;
+                                _pdfPageCount = null;
                               }),
                       icon: Icon(
                         Icons.close,
