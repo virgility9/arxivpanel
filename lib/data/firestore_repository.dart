@@ -518,22 +518,33 @@ class FirestoreRepository {
 
   /// Deletes a user document. Only admins may do this per `firestore.rules`.
   ///
-  /// The user's `bookmarks` and `history` subcollections are removed in the
-  /// same batch; papers they authored are kept (author info is denormalized
-  /// onto the paper documents).
+  /// Papers they authored are kept (author info is denormalized onto the
+  /// paper documents); the `bookmarks` and `history` subcollections are
+  /// cleaned up best-effort afterwards.
   Future<void> deleteUser(String uid) async {
     final docRef = _firestore.collection('users').doc(uid);
+    // Snapshot the subcollections first: the bookmarks/history rules are
+    // owner-only (no admin branch), so the old all-in-one batch was
+    // rejected whenever the user had any bookmarks or history entries —
+    // the same failure mode as deletePaper.
     final bookmarks = await docRef.collection('bookmarks').get();
     final history = await docRef.collection('history').get();
-    final batch = _firestore.batch();
-    for (final doc in bookmarks.docs) {
-      batch.delete(doc.reference);
+    await docRef.delete();
+    Future<void> cleanup(QuerySnapshot<Map<String, dynamic>> snap) async {
+      if (snap.docs.isEmpty) return;
+      try {
+        final batch = _firestore.batch();
+        for (final doc in snap.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      } catch (e) {
+        debugPrint('deleteUser cleanup failed for $uid: $e');
+      }
     }
-    for (final doc in history.docs) {
-      batch.delete(doc.reference);
-    }
-    batch.delete(docRef);
-    await batch.commit();
+
+    await cleanup(bookmarks);
+    await cleanup(history);
   }
 
   // ------------------------------------------------------------------

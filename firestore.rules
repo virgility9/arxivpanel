@@ -108,11 +108,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /bookmarks/{paperId} {
-        allow read, write: if signedIn() && uid == request.auth.uid;
+        allow read, write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
       }
 
       match /history/{entryId} {
-        allow read, write: if signedIn() && uid == request.auth.uid;
+        allow read, write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
       }
     }
 
