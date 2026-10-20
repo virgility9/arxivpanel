@@ -84,8 +84,10 @@ service cloud.firestore {
         allow read: if paperVisible(
           get(/databases/$(database)/documents/papers/$(paperId)).data);
 
-        // Users can only write their own reaction doc.
-        allow write: if signedIn() && uid == request.auth.uid;
+        // Users can only write their own reaction doc; admins can clean
+        // up reactions when deleting a paper.
+        allow write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
       }
     }
 

@@ -349,17 +349,34 @@ class FirestoreRepository {
   /// `reactions` subcollections in a single batch.
   Future<void> deletePaper(String paperId) async {
     final docRef = _firestore.collection('papers').doc(paperId);
+    // Snapshot the subcollections first: once the paper doc is gone, the
+    // rules can no longer evaluate paperVisible() for these reads.
     final comments = await docRef.collection('comments').get();
     final reactions = await docRef.collection('reactions').get();
-    final batch = _firestore.batch();
-    for (final doc in comments.docs) {
-      batch.delete(doc.reference);
+    // Delete the paper document on its own. The old all-in-one batch
+    // failed atomically whenever the paper had reactions from other
+    // users — the reactions rule only lets each user write their own
+    // reaction doc (no admin branch) — so the delete was rejected and
+    // the paper stayed in the library and the Contest rankings.
+    await docRef.delete();
+    // Best-effort subcollection cleanup, one batch per subcollection so
+    // a denied group can't block the other. Orphaned docs under a
+    // deleted paper are never read by the app.
+    Future<void> cleanup(QuerySnapshot<Map<String, dynamic>> snap) async {
+      if (snap.docs.isEmpty) return;
+      try {
+        final batch = _firestore.batch();
+        for (final doc in snap.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      } catch (e) {
+        debugPrint('deletePaper cleanup failed for $paperId: $e');
+      }
     }
-    for (final doc in reactions.docs) {
-      batch.delete(doc.reference);
-    }
-    batch.delete(docRef);
-    await batch.commit();
+
+    await cleanup(comments);
+    await cleanup(reactions);
   }
 
   // ------------------------------------------------------------------
