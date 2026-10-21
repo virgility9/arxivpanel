@@ -112,9 +112,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 padding: EdgeInsets.fromLTRB(
                   isNarrow ? 16 : 24,
-                  isNarrow ? 32 : 48,
+                  isNarrow ? 20 : 48,
                   isNarrow ? 16 : 24,
-                  isNarrow ? 24 : 36,
+                  isNarrow ? 16 : 36,
                 ),
                 child: Center(
                   child: ConstrainedBox(
@@ -131,17 +131,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             letterSpacing: 0.15,
                           ).copyWith(fontWeight: FontWeight.w600),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         _TitleBlock(
                           palette: p,
                           isNarrow: isNarrow,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           '${papers.length} papers · $disciplines disciplines',
-                          style: bodyStyle(p, size: 14, color: c.muted),
+                          style: bodyStyle(
+                              p, size: isNarrow ? 12 : 14, color: c.muted),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: isNarrow ? 12 : 20),
                         // Search + filter button. All filtering/sorting now
                         // lives in the bottom sheet — no horizontal swipe
                         // rows that can break on narrow screens.
@@ -557,7 +558,7 @@ class _TitleBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     return RichText(
       text: TextSpan(
-        style: displayStyle(palette, size: isNarrow ? 34 : 52, weight: FontWeight.w700, height: 1.1),
+        style: displayStyle(palette, size: isNarrow ? 24 : 52, weight: FontWeight.w700, height: 1.1),
         children: [
           const TextSpan(text: 'The Scholars\'\n'),
           TextSpan(
