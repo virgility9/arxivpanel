@@ -315,39 +315,16 @@ class AvatarImage extends StatelessWidget {
 // Brand
 // ---------------------------------------------------------------------------
 
-/// The gold-book logo + "ArxivLibrary" wordmark.
+/// The gold-book image logo, used as the whole app logo (no wordmark).
 class AppLogo extends StatelessWidget {
-  const AppLogo({super.key, required this.palette, this.fontSize = 20});
+  const AppLogo({super.key, required this.palette, this.size = 36});
 
   final AppPalette palette;
-  final double fontSize;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    final a = palette.accent;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const AppLogoImage(size: 28),
-        const SizedBox(width: 8),
-        RichText(
-          text: TextSpan(
-            style: displayStyle(
-              palette,
-              size: fontSize,
-              weight: FontWeight.w600,
-            ),
-            children: [
-              const TextSpan(text: 'Arxiv'),
-              TextSpan(
-                text: 'Library',
-                style: TextStyle(color: a.accent),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return AppLogoImage(size: size);
   }
 }
 

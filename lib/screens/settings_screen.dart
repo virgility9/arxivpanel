@@ -313,7 +313,7 @@ class SettingsScreen extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            AppLogo(palette: p, fontSize: 17),
+                            AppLogo(palette: p, size: 32),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(

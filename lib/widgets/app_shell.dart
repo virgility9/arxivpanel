@@ -264,7 +264,7 @@ class _Navbar extends StatelessWidget {
             children: [
               GestureDetector(
                 onTap: () => onNavigate(AppView.library),
-                child: AppLogo(palette: palette, fontSize: isNarrow ? 17 : 20),
+                child: AppLogo(palette: palette, size: isNarrow ? 32 : 36),
               ),
               if (!isNarrow) ...[
                 const SizedBox(width: 12),
