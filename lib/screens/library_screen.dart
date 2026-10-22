@@ -98,7 +98,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
       builder: (context, _) {
         final papers = widget.appState.approvedPapers;
         final filtered = _filtered(papers);
-        final disciplines = papers.map((e) => e.field).toSet().length;
         final isNarrow = MediaQuery.of(context).size.width < 700;
 
         return SingleChildScrollView(
@@ -112,73 +111,47 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 padding: EdgeInsets.fromLTRB(
                   isNarrow ? 16 : 24,
-                  isNarrow ? 20 : 48,
                   isNarrow ? 16 : 24,
-                  isNarrow ? 16 : 36,
+                  isNarrow ? 16 : 24,
+                  isNarrow ? 16 : 24,
                 ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1280),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    // Search + filter button. All filtering/sorting now
+                    // lives in the bottom sheet — no horizontal swipe
+                    // rows that can break on narrow screens.
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          'RESEARCH ARCHIVE — VOL. 2026',
-                          style: monoStyle(
-                            p,
-                            size: 10,
-                            color: a.accent,
-                            letterSpacing: 0.15,
-                          ).copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 6),
-                        _TitleBlock(
-                          palette: p,
-                          isNarrow: isNarrow,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${papers.length} papers · $disciplines disciplines',
-                          style: bodyStyle(
-                              p, size: isNarrow ? 12 : 14, color: c.muted),
-                        ),
-                        SizedBox(height: isNarrow ? 12 : 20),
-                        // Search + filter button. All filtering/sorting now
-                        // lives in the bottom sheet — no horizontal swipe
-                        // rows that can break on narrow screens.
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _searchController,
-                                onChanged: (v) => setState(() => _search = v),
-                                decoration: InputDecoration(
-                                  hintText: 'Search titles, authors, tags…',
-                                  prefixIcon: Icon(Icons.search,
-                                      color: c.faint, size: 20),
-                                  prefixIconConstraints:
-                                      const BoxConstraints(minWidth: 44),
-                                  suffixIcon: _search.isEmpty
-                                      ? null
-                                      : IconButton(
-                                          tooltip: 'Clear search',
-                                          icon: Icon(Icons.clear,
-                                              color: c.faint, size: 18),
-                                          constraints: const BoxConstraints(
-                                              minWidth: 44, minHeight: 44),
-                                          onPressed: () {
-                                            _searchController.clear();
-                                            setState(() => _search = '');
-                                          },
-                                        ),
-                                ),
-                              ),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (v) => setState(() => _search = v),
+                            decoration: InputDecoration(
+                              hintText: 'Search titles, authors, tags…',
+                              prefixIcon: Icon(Icons.search,
+                                  color: c.faint, size: 20),
+                              prefixIconConstraints:
+                                  const BoxConstraints(minWidth: 44),
+                              suffixIcon: _search.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      icon: Icon(Icons.clear,
+                                          color: c.faint, size: 18),
+                                      constraints: const BoxConstraints(
+                                          minWidth: 44, minHeight: 44),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _search = '');
+                                      },
+                                    ),
                             ),
-                            const SizedBox(width: 10),
-                            _filterButton(p),
-                          ],
+                          ),
                         ),
+                        const SizedBox(width: 10),
+                        _filterButton(p),
                       ],
                     ),
                   ),
@@ -542,33 +515,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Two-line serif hero title: "The Scholars'" then italic accent "Reading Room".
-class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.palette, required this.isNarrow});
-
-  final AppPalette palette;
-  final bool isNarrow;
-
-  @override
-  Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        style: displayStyle(palette, size: isNarrow ? 24 : 52, weight: FontWeight.w700, height: 1.1),
-        children: [
-          const TextSpan(text: 'The Scholars\'\n'),
-          TextSpan(
-            text: 'Reading Room',
-            style: TextStyle(
-              fontStyle: FontStyle.italic,
-              color: palette.accent.accent,
-            ),
-          ),
-        ],
       ),
     );
   }
