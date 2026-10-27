@@ -160,15 +160,26 @@ class _PaperCardState extends State<PaperCard> {
 
     return Container(
       color: c.surface,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Cover strip
-            GestureDetector(
-              onTap: () => widget.appState.openPaper(paper),
-              child: SizedBox(
-                width: isNarrow ? 100 : 120,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Clamp the cover strip to the width actually available. The
+          // card has been seen laid out at a degenerate 1px width (the
+          // list-level full-width fix did not reach it), where the fixed
+          // 100px cover stuck out by 99px. At every normal width this is
+          // exactly the old 100/120.
+          final maxW = constraints.maxWidth;
+          final full = isNarrow ? 100.0 : 120.0;
+          final coverW =
+              maxW.isFinite ? full.clamp(0.0, maxW).toDouble() : full;
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Cover strip
+                GestureDetector(
+                  onTap: () => widget.appState.openPaper(paper),
+                  child: SizedBox(
+                    width: coverW,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -313,6 +324,8 @@ class _PaperCardState extends State<PaperCard> {
             ),
           ],
         ),
+      );
+        },
       ),
     );
   }
