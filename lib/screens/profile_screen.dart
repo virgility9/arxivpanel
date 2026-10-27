@@ -368,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFC75B52),
+              foregroundColor: p.danger,
             ),
             child: const Text('Sign Out'),
           ),
@@ -379,6 +379,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _confirmDelete(Paper paper) async {
+    final p = widget.theme.palette;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -392,7 +393,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFC75B52),
+              foregroundColor: p.danger,
             ),
             child: const Text('Delete'),
           ),
@@ -486,15 +487,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         InkWell(
                           onTap: _confirmSignOut,
                           borderRadius: BorderRadius.circular(6),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
                               vertical: 8,
                               horizontal: 4,
                             ),
                             child: Text(
                               'Sign Out',
                               style: TextStyle(
-                                color: Color(0xFFC75B52),
+                                color: p.danger,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -819,7 +820,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               p,
               value: views,
               label: 'Total Views',
-              color: const Color(0xFF6F7C94),
+              color: p.info,
             ),
           ]),
           Container(height: 1, color: c.border),
@@ -828,13 +829,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               p,
               value: '$reactions',
               label: 'Reactions Received',
-              color: const Color(0xFFC75B52),
+              color: p.danger,
             ),
             _statCell(
               p,
               value: readTime,
               label: 'Read Time',
-              color: const Color(0xFF5E9E6E),
+              color: p.success,
             ),
           ]),
         ],

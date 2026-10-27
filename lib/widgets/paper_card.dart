@@ -334,7 +334,7 @@ class _PaperCardState extends State<PaperCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFF16171A).withValues(alpha: 0.82),
+        color: widget.theme.palette.c.bg.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(

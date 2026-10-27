@@ -53,21 +53,6 @@ String _todayLabel() {
   return '${_weekdayNames[now.weekday - 1]}, ${_monthNames[now.month - 1]} ${now.day}';
 }
 
-Color _statusColor(PaperStatus status) {
-  switch (status) {
-    case PaperStatus.approved:
-      return const Color(0xFF4ADE80);
-    case PaperStatus.rejected:
-      return const Color(0xFFE06B6B);
-    case PaperStatus.revision:
-      return const Color(0xFFE8B04B);
-    case PaperStatus.pending:
-      return const Color(0xFF7C6AF7);
-    case PaperStatus.archived:
-      return const Color(0xFF7A7690);
-  }
-}
-
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key, required this.appState, required this.theme});
 
@@ -135,7 +120,7 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE06B6B),
+              foregroundColor: widget.theme.palette.danger,
             ),
             child: Text(confirmLabel),
           ),
@@ -327,9 +312,9 @@ class _AdminScreenState extends State<AdminScreen> {
               Container(
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFF4ADE80),
+                  color: p.success,
                 ),
               ),
             ],
@@ -660,7 +645,7 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: Icons.people,
-        iconColor: const Color(0xFF7C6AF7),
+        iconColor: p.accent.accent,
         label: 'Registered users',
         value: usersLabel,
         detail: 'Accounts in the database',
@@ -669,7 +654,7 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: Icons.visibility,
-        iconColor: const Color(0xFF60A5FA),
+        iconColor: p.info,
         label: 'Total views',
         value: formatCount(_totalViews),
         detail: 'Reads across all papers',
@@ -934,7 +919,7 @@ class _AdminScreenState extends State<AdminScreen> {
             )
           else
             ...rows.map((paper) {
-              final color = _statusColor(paper.status);
+              final color = p.statusColor(paper.status);
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Row(
@@ -1421,10 +1406,10 @@ class _AdminScreenState extends State<AdminScreen> {
           else
             IconButton(
               tooltip: 'Delete ${u.username}',
-              icon: const Icon(
+              icon: Icon(
                 Icons.delete_outline,
                 size: 18,
-                color: Color(0xFFE06B6B),
+                color: p.danger,
               ),
               onPressed: () async {
                 final ok = await _confirmAction(

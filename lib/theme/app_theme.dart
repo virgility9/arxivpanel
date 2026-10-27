@@ -1,11 +1,13 @@
-/// Design tokens ported from `src/index.css` and `src/context/ThemeContext.tsx`.
-///
-/// The React app drives its look with CSS variables (`--bg`, `--surface`,
-/// `--accent`, …). This file is the Dart equivalent: resolved color palettes
-/// for each mode + accent combination, plus a Material 3 [ThemeData] builder.
+/// Design tokens ported from `src/index.css` and `src/context/ThemeContext.tsx`,
+/// revamped according to the 60/30/10 design rule:
+/// - 60% Dominant canvas / background base (mood, breathing room, spaciousness)
+/// - 30% Secondary structure (surfaces, card containers, side rail, borders, typography)
+/// - 10% Accent layer (purposeful focal points: CTAs, active highlights, badges, status)
 library;
 
 import 'package:flutter/material.dart';
+
+import '../models/models.dart';
 
 /// Light / dark color mode (mirrors `Mode` in ThemeContext.tsx).
 enum AppMode { dark, light }
@@ -45,6 +47,7 @@ extension AppFontScaleX on AppFontScale {
 }
 
 /// One accent palette (mirrors `ACCENT_PALETTES`).
+/// Forms the 10% accent layer in the 60/30/10 rule.
 class AccentPalette {
   const AccentPalette({
     required this.label,
@@ -66,56 +69,55 @@ class AccentPalette {
   /// low-alpha: the design uses tint + soft shadow, never a glow.
   Color get glow => accent.withValues(alpha: 0.10);
 
-  // Every accent is a muted, earthy tone. The default (terracotta) is the one
-  // deliberate pop of personality against the neutral corporate palette; the
-  // others are kept (same names) so the Settings choices still exist.
+  // 10% ACCENT PRESETS: Carefully tuned for high clarity and contrast
+  // against both the 60% canvas and 30% structural surfaces.
   static const terracotta = AccentPalette(
     label: 'Terracotta',
-    swatch: Color(0xFFBF6244),
-    accent: Color(0xFFBF6244),
-    accentDim: Color(0xFFA64E33),
+    swatch: Color(0xFFE05638),
+    accent: Color(0xFFE05638),
+    accentDim: Color(0xFFC04024),
     accentFg: Color(0xFFFFFFFF),
-    accent2: Color(0xFF6F7C94),
+    accent2: Color(0xFF6B7A92),
   );
   static const gold = AccentPalette(
     label: 'Gold',
-    swatch: Color(0xFFC49A3C),
-    accent: Color(0xFFC49A3C),
-    accentDim: Color(0xFFA37E27),
-    accentFg: Color(0xFF1A1710),
-    accent2: Color(0xFF6F7C94),
+    swatch: Color(0xFFD99B26),
+    accent: Color(0xFFD99B26),
+    accentDim: Color(0xFFB57D16),
+    accentFg: Color(0xFF181307),
+    accent2: Color(0xFF6B7A92),
   );
   static const violet = AccentPalette(
     label: 'Violet',
-    swatch: Color(0xFF8574A6),
-    accent: Color(0xFF8574A6),
-    accentDim: Color(0xFF6A5A8A),
+    swatch: Color(0xFF8B6CE0),
+    accent: Color(0xFF8B6CE0),
+    accentDim: Color(0xFF6F50C2),
     accentFg: Color(0xFFFFFFFF),
-    accent2: Color(0xFF6F7C94),
+    accent2: Color(0xFF6B7A92),
   );
   static const teal = AccentPalette(
     label: 'Teal',
-    swatch: Color(0xFF4F9A93),
-    accent: Color(0xFF4F9A93),
-    accentDim: Color(0xFF3B7C76),
+    swatch: Color(0xFF2BAE9E),
+    accent: Color(0xFF2BAE9E),
+    accentDim: Color(0xFF1E8C7E),
     accentFg: Color(0xFFFFFFFF),
-    accent2: Color(0xFF6F7C94),
+    accent2: Color(0xFF6B7A92),
   );
   static const coral = AccentPalette(
     label: 'Coral',
-    swatch: Color(0xFFD07A6E),
-    accent: Color(0xFFD07A6E),
-    accentDim: Color(0xFFB45F54),
+    swatch: Color(0xFFF06A58),
+    accent: Color(0xFFF06A58),
+    accentDim: Color(0xFFD14C3A),
     accentFg: Color(0xFFFFFFFF),
-    accent2: Color(0xFF6F7C94),
+    accent2: Color(0xFF6B7A92),
   );
   static const sage = AccentPalette(
     label: 'Sage',
-    swatch: Color(0xFF7D8F5C),
-    accent: Color(0xFF7D8F5C),
-    accentDim: Color(0xFF64754A),
+    swatch: Color(0xFF76A85B),
+    accent: Color(0xFF76A85B),
+    accentDim: Color(0xFF5A8941),
     accentFg: Color(0xFFFFFFFF),
-    accent2: Color(0xFF6F7C94),
+    accent2: Color(0xFF6B7A92),
   );
 
   static AccentPalette of(AppAccent accent) {
@@ -137,6 +139,7 @@ class AccentPalette {
 }
 
 /// Resolved color set for a mode (mirrors the `MODES` record).
+/// Enforces the 60% dominant canvas and 30% secondary structure layers.
 class AppColors {
   const AppColors({
     required this.bg,
@@ -154,17 +157,39 @@ class AppColors {
     required this.overlay,
   });
 
+  /// 60% DOMINANT: Base canvas / background
   final Color bg;
+
+  /// 30% SECONDARY: Elevated card & panel surface
   final Color surface;
+
+  /// 30% SECONDARY: Nested container & chip surface
   final Color surface2;
+
+  /// 30% SECONDARY: Clear structural border
   final Color border;
+
+  /// 30% SECONDARY: Subtle interior divider
   final Color borderFaint;
+
+  /// 30% SECONDARY: Primary readable text
   final Color text;
+
+  /// 30% SECONDARY: Secondary body text
   final Color textSub;
+
+  /// 30% SECONDARY: Metadata, dates, counts
   final Color muted;
+
+  /// 30% SECONDARY: Tertiary hints
   final Color faint;
+
+  /// 30% SECONDARY: Inactive markers
   final Color fainter;
+
+  /// 30% SECONDARY: Recessed input fill
   final Color inputBg;
+
   final Color shadow;
   final Color overlay;
 
@@ -199,37 +224,42 @@ class AppColors {
         ),
       ];
 
-  // Warm charcoal instead of blue-black; paper-white instead of pure white.
+  // ── DARK PALETTE ──
+  // 60% Canvas: Deep obsidian slate (0xFF111317)
+  // 30% Structure: Elevated surfaces (0xFF191C23 / 0xFF222630), crisp borders & typography
   static const dark = AppColors(
-    bg: Color(0xFF16171A),
-    surface: Color(0xFF1E1F23),
-    surface2: Color(0xFF27292E),
-    border: Color(0xFF34363C),
-    borderFaint: Color(0xFF27292E),
-    text: Color(0xFFEAE6DE),
-    textSub: Color(0xFFBAB5AA),
-    muted: Color(0xFF93908A),
-    faint: Color(0xFF6F6D69),
-    fainter: Color(0xFF4A4B4F),
-    inputBg: Color(0xFF191A1D),
+    bg: Color(0xFF111317),
+    surface: Color(0xFF191C23),
+    surface2: Color(0xFF222630),
+    border: Color(0xFF2E3442),
+    borderFaint: Color(0xFF232833),
+    text: Color(0xFFF1F3F7),
+    textSub: Color(0xFFB5BAC6),
+    muted: Color(0xFF838B9C),
+    faint: Color(0xFF565D6D),
+    fainter: Color(0xFF383F4D),
+    inputBg: Color(0xFF151820),
     shadow: Color(0x66000000),
-    overlay: Color(0xCC0E0F11),
+    overlay: Color(0xCC0D0E12),
   );
 
+  // ── LIGHT PALETTE ──
+  // 60% Canvas: Warm ivory parchment (0xFFF7F6F2)
+  // 30% Structure: Crisp white cards (0xFFFFFFFF / 0xFFECEAE3), refined borders & ink typography
   static const light = AppColors(
-    bg: Color(0xFFF3F1EC),
-    surface: Color(0xFFFCFBF8),
-    surface2: Color(0xFFEBE8E1),
-    border: Color(0xFFD9D5CB),
-    borderFaint: Color(0xFFE8E4DC),
-    text: Color(0xFF1F2124),
-    textSub: Color(0xFF454A50),
-    muted: Color(0xFF6F6B63),
-    faint: Color(0xFF9A958B),
-    fainter: Color(0xFFCFCABF),
-    inputBg: Color(0xFFF7F5F0),
-    shadow: Color(0x262B2118),
-    overlay: Color(0x99121316),
+    bg: Color(0xFFF7F6F2),
+    surface: Color(0xFFFFFFFF),
+    surface2: Color(0xFFECEAE3),
+    border: Color(0xFFDAD6CC),
+    borderFaint: Color(0xFFE8E5DD),
+    text: Color(0xFF14171C),
+    textSub: Color(0xFF3F4452),
+    muted: Color(0xFF6B7280),
+    faint: Color(0xFF9CA3AF),
+    fainter: Color(0xFFD1D5DB),
+    inputBg: Color(0xFFFAF9F6),
+    shadow: Color(0x1F2B2118),
+    overlay: Color(0x99101216),
   );
 
   static AppColors of(AppMode mode) => mode == AppMode.dark ? dark : light;
@@ -254,10 +284,27 @@ class AppPalette {
   AppColors get c => AppColors.of(mode);
   bool get isDark => mode == AppMode.dark;
 
-  /// Status colors used by the admin panel.
-  Color get success => const Color(0xFF5E9E6E);
-  Color get danger => const Color(0xFFC75B52);
-  Color get info => const Color(0xFF6F7C94);
+  // ── 10% ACCENT: SEMANTIC FEEDBACK COLORS ──
+  Color get success => isDark ? const Color(0xFF34D399) : const Color(0xFF16A34A);
+  Color get danger => isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+  Color get warning => isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+  Color get info => isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+
+  /// Unified status color mapped directly to the 60/30/10 palette.
+  Color statusColor(PaperStatus status) {
+    switch (status) {
+      case PaperStatus.approved:
+        return success;
+      case PaperStatus.rejected:
+        return danger;
+      case PaperStatus.revision:
+        return warning;
+      case PaperStatus.pending:
+        return accent.accent;
+      case PaperStatus.archived:
+        return c.muted;
+    }
+  }
 }
 
 /// Builds a Material 3 [ThemeData] matching the design tokens.
@@ -275,7 +322,7 @@ ThemeData buildThemeData(AppPalette palette, {required double textScale}) {
     surface: c.surface,
     onSurface: c.text,
     surfaceContainerHighest: c.surface2,
-    error: const Color(0xFFC75B52),
+    error: palette.danger,
     onError: Colors.white,
     outline: c.border,
   );
@@ -320,11 +367,11 @@ ThemeData buildThemeData(AppPalette palette, {required double textScale}) {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFC75B52)),
+        borderSide: BorderSide(color: palette.danger),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFC75B52)),
+        borderSide: BorderSide(color: palette.danger),
       ),
     ),
     textButtonTheme: TextButtonThemeData(

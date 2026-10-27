@@ -486,9 +486,10 @@ class _PodiumCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: wide ? Alignment.topCenter : Alignment.centerLeft,
                   end: wide ? Alignment.bottomCenter : Alignment.centerRight,
-                  colors: wide
-                      ? const [Colors.transparent, Color(0xCC16171A)]
-                      : const [Colors.transparent, Color(0x8016171A)],
+                  colors: [
+                    Colors.transparent,
+                    palette.c.bg.withValues(alpha: wide ? 0.80 : 0.50),
+                  ],
                   stops: const [0.3, 1.0],
                 ),
               ),

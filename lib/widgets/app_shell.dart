@@ -459,9 +459,9 @@ class _UserMenu extends StatelessWidget {
         const PopupMenuDivider(),
         PopupMenuItem(
           value: 'logout',
-          child: const Text(
+          child: Text(
             'Sign Out',
-            style: TextStyle(color: Color(0xFFC75B52), fontSize: 13),
+            style: TextStyle(color: palette.danger, fontSize: 13),
           ),
         ),
       ],

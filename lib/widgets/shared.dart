@@ -225,10 +225,11 @@ class NetImage extends StatelessWidget {
       // Loading placeholder so images don't pop in from blank.
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
+        final surfaceColor = Theme.of(context).colorScheme.surfaceContainerHighest;
         return Container(
           width: width,
           height: height,
-          color: const Color(0xFF27292E),
+          color: surfaceColor,
           child: const Center(
             child: SizedBox(
               width: 20,
@@ -238,12 +239,15 @@ class NetImage extends StatelessWidget {
           ),
         );
       },
-      errorBuilder: (context, _, _) => Container(
-        width: width,
-        height: height,
-        color: const Color(0xFF27292E),
-        child: const Center(child: Text('📄', style: TextStyle(fontSize: 24))),
-      ),
+      errorBuilder: (context, _, _) {
+        final surfaceColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+        return Container(
+          width: width,
+          height: height,
+          color: surfaceColor,
+          child: const Center(child: Text('📄', style: TextStyle(fontSize: 24))),
+        );
+      },
     );
     if (borderRadius != null) {
       return ClipRRect(borderRadius: borderRadius!, child: img);
@@ -268,10 +272,15 @@ class AvatarImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceColor = Theme.of(context).colorScheme.surfaceContainerHighest;
     final fallback = Container(
-      color: const Color(0xFF34363C),
-      child: const Center(
-        child: Icon(Icons.person_outline, size: 20, color: Colors.white70),
+      color: surfaceColor,
+      child: Center(
+        child: Icon(
+          Icons.person_outline,
+          size: 20,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
       ),
     );
     // Custom avatars are stored as inline data URLs (no Storage needed);
@@ -537,7 +546,7 @@ class LabeledField extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             error!,
-            style: const TextStyle(color: Color(0xFFC75B52), fontSize: 12),
+            style: TextStyle(color: palette.danger, fontSize: 12),
           ),
         ],
       ],
@@ -652,24 +661,9 @@ class StatusBadge extends StatelessWidget {
   final AppPalette palette;
   final PaperStatus status;
 
-  Color get _color {
-    switch (status) {
-      case PaperStatus.approved:
-        return const Color(0xFF5E9E6E);
-      case PaperStatus.rejected:
-        return const Color(0xFFC75B52);
-      case PaperStatus.revision:
-        return const Color(0xFFC49A3C);
-      case PaperStatus.pending:
-        return const Color(0xFF6F7C94);
-      case PaperStatus.archived:
-        return const Color(0xFF93908A);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final color = _color;
+    final color = palette.statusColor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -804,18 +798,19 @@ class ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final errColor = Theme.of(context).colorScheme.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFC75B52).withValues(alpha: 0.1),
+        color: errColor.withValues(alpha: 0.1),
         border: Border.all(
-          color: const Color(0xFFC75B52).withValues(alpha: 0.28),
+          color: errColor.withValues(alpha: 0.28),
         ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         message,
-        style: const TextStyle(color: Color(0xFFC75B52), fontSize: 12),
+        style: TextStyle(color: errColor, fontSize: 12),
       ),
     );
   }
