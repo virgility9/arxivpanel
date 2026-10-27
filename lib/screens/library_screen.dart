@@ -195,20 +195,32 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             sub: 'Try a different search or field filter',
                           )
                         : isNarrow
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (var i = 0; i < filtered.length; i++) ...[
-                                    PaperCard(
-                                      key: ValueKey(filtered[i].id),
-                                      paper: filtered[i],
-                                      appState: widget.appState,
-                                      theme: widget.theme,
-                                      onAuthPrompt: widget.onAuthPrompt,
-                                    ),
-                                    Container(height: 1, color: c.border),
+                            // SizedBox forces the list to the full available
+                            // width: without it the Column sizes itself from
+                            // the cards' intrinsic width, and IntrinsicHeight
+                            // + Expanded inside PaperCard can collapse that
+                            // to a degenerate width (seen: the card Row laid
+                            // out at 1px, so the 100px cover stuck out 99px).
+                            ? SizedBox(
+                                width: double.infinity,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (var i = 0;
+                                        i < filtered.length;
+                                        i++) ...[
+                                      PaperCard(
+                                        key: ValueKey(filtered[i].id),
+                                        paper: filtered[i],
+                                        appState: widget.appState,
+                                        theme: widget.theme,
+                                        onAuthPrompt: widget.onAuthPrompt,
+                                      ),
+                                      Container(height: 1, color: c.border),
+                                    ],
                                   ],
-                                ],
+                                ),
                               )
                             : LayoutBuilder(
                                 builder: (context, listConstraints) {
