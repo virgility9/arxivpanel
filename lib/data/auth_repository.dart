@@ -49,23 +49,27 @@ class AuthRepository {
 
     void listenToDoc(String uid) {
       unawaited(docSub?.cancel());
-      docSub = _firestore.collection('users').doc(uid).snapshots().listen(
-        (doc) {
-          final data = doc.data();
-          debugPrint(
-            '[AuthRepository] profile ${doc.id}: '
-            '${data == null ? 'missing' : 'loaded'}',
+      docSub = _firestore
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .listen(
+            (doc) {
+              final data = doc.data();
+              debugPrint(
+                '[AuthRepository] profile ${doc.id}: '
+                '${data == null ? 'missing' : 'loaded'}',
+              );
+              if (controller.isClosed) return;
+              controller.add(
+                data == null ? null : AppUser.fromJson(doc.id, data),
+              );
+            },
+            onError: (Object e, StackTrace s) {
+              debugPrint('[AuthRepository] profile stream error: $e');
+              if (!controller.isClosed) controller.addError(e, s);
+            },
           );
-          if (controller.isClosed) return;
-          controller.add(
-            data == null ? null : AppUser.fromJson(doc.id, data),
-          );
-        },
-        onError: (Object e, StackTrace s) {
-          debugPrint('[AuthRepository] profile stream error: $e');
-          if (!controller.isClosed) controller.addError(e, s);
-        },
-      );
     }
 
     authSub = _auth.authStateChanges().listen(
@@ -240,7 +244,7 @@ class AuthRepository {
       case 'invalid-email':
         return 'That email address is not valid.';
       case 'operation-not-allowed':
-        return 'Email/password sign-up is not enabled. In the Firebase console, go to Authentication → Sign-in method and enable Email/Password.';
+        return 'Email/password sign-up is not enabled. Please contact support.';
       case 'network-request-failed':
         return 'Network error. Check your connection and try again.';
       default:
