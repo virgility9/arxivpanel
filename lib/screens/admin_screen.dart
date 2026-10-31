@@ -447,9 +447,13 @@ class _AdminScreenState extends State<AdminScreen> {
 
   // ----------------------------------------------------------------- content
 
+  /// Phone widths get tighter panel padding (16 instead of 24) so cards
+  /// don't eat the screen; tablets and desktop keep the roomy 24.
+  bool get _isPhone => MediaQuery.of(context).size.width < 700;
+
   Widget _buildContent(AppPalette p, bool wide) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(_isPhone ? 16 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -603,7 +607,7 @@ class _AdminScreenState extends State<AdminScreen> {
     return _card(
       p,
       Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(_isPhone ? 16 : 24),
         child: wide
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -911,7 +915,7 @@ class _AdminScreenState extends State<AdminScreen> {
     return _card(
       p,
       Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(_isPhone ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -985,7 +989,7 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _buildReviewQueue(AppPalette p) {
     final queue = _pendingQueue.take(4).toList();
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(_isPhone ? 16 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1100,7 +1104,7 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _buildActivity(AppPalette p) {
     final rows = _recentlyUploaded.take(4).toList();
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(_isPhone ? 16 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
