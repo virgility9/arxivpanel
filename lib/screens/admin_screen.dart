@@ -18,6 +18,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/shared.dart';
 
 const _statusOptions = <MapEntry<String, String>>[
@@ -638,6 +639,7 @@ class _AdminScreenState extends State<AdminScreen> {
     final cards = [
       _statCard(
         p,
+        icon: AppIcon.papers,
         label: 'Total papers',
         value: formatCount(_allPapers.length),
         trend: _papersThisWeek((_) => true),
@@ -645,6 +647,7 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       _statCard(
         p,
+        icon: AppIcon.pending,
         label: 'Pending review',
         value: formatCount(pending),
         trend: _papersThisWeek((x) => x.status == PaperStatus.pending),
@@ -652,6 +655,7 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       _statCard(
         p,
+        icon: AppIcon.published,
         label: 'Published papers',
         value: formatCount(approved),
         trend: _papersThisWeek((x) => x.status == PaperStatus.approved),
@@ -659,6 +663,7 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       _statCard(
         p,
+        icon: AppIcon.users,
         label: 'Registered users',
         value: usersLabel,
         trend: _newUsersThisWeek(),
@@ -666,11 +671,13 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       _statCard(
         p,
+        icon: AppIcon.views,
         label: 'Total views',
         value: formatCount(_totalViews),
       ),
       _statCard(
         p,
+        icon: AppIcon.rejected,
         label: 'Rejected papers',
         value: formatCount(rejected),
         trend: _papersThisWeek((x) => x.status == PaperStatus.rejected),
@@ -682,9 +689,10 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
       // Fixed cell height: the screenshot-style card (34px number + label)
-      // measures ~99px tall, so 120 leaves comfortable headroom on narrow
-      // phones. Do not shrink this without re-measuring.
-      mainAxisExtent: 120,
+      // measures ~99px tall with a one-line label and ~115px when the label
+      // wraps to two lines on narrow phones, so 124 leaves headroom either
+      // way. Do not shrink this without re-measuring.
+      mainAxisExtent: 124,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
@@ -693,6 +701,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _statCard(
     AppPalette p, {
+    AppIcon? icon,
     required String label,
     required String value,
     int? trend,
@@ -703,7 +712,8 @@ class _AdminScreenState extends State<AdminScreen> {
     // number — the reference design has one, but virgil asked for it
     // removed. The number sits in a scale-down FittedBox so a long count
     // (e.g. "123,456" views) shrinks instead of wrapping and overflowing
-    // the fixed-height cell.
+    // the fixed-height cell. The small line icon beside the label comes
+    // from virgil's imported PNG set.
     final body = Padding(
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -733,7 +743,21 @@ class _AdminScreenState extends State<AdminScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(label, style: bodyStyle(p, size: 13, color: p.c.muted)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (icon != null) ...[
+                AppIconImage(icon, size: 14, color: p.c.muted),
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: Text(
+                  label,
+                  style: bodyStyle(p, size: 13, color: p.c.muted),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

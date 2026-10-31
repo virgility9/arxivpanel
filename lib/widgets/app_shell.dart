@@ -18,6 +18,7 @@ import '../screens/reader_screen.dart';
 import '../screens/settings_screen.dart';
 import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
+import 'app_icons.dart';
 import 'auth_dialog.dart';
 import 'shared.dart';
 
@@ -188,7 +189,7 @@ class _Navbar extends StatelessWidget {
     final view = appState.view;
     final pendingCount = appState.pendingPapers.length;
 
-    Widget navLink(String label, AppView v, {int? badge}) {
+    Widget navLink(String label, AppView v, {AppIcon? icon, int? badge}) {
       final active =
           view == v || (v == AppView.library && view == AppView.reader);
       return InkWell(
@@ -207,6 +208,14 @@ class _Navbar extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (icon != null) ...[
+                AppIconImage(
+                  icon,
+                  size: 16,
+                  color: active ? a.accent : c.muted,
+                ),
+                const SizedBox(width: 6),
+              ],
               Text(
                 label,
                 style: TextStyle(
@@ -268,11 +277,16 @@ class _Navbar extends StatelessWidget {
               ),
               if (!isNarrow) ...[
                 const SizedBox(width: 12),
-                navLink('Library', AppView.library),
-                navLink('Contest', AppView.polls),
+                navLink('Library', AppView.library, icon: AppIcon.library),
+                navLink('Contest', AppView.polls, icon: AppIcon.contest),
                 navLink('Submit', AppView.post),
                 if (user?.isAdmin == true)
-                  navLink('Admin', AppView.admin, badge: pendingCount),
+                  navLink(
+                    'Admin',
+                    AppView.admin,
+                    icon: AppIcon.admin,
+                    badge: pendingCount,
+                  ),
                 const Spacer(),
                 if (user != null)
                   _UserMenu(
@@ -459,9 +473,9 @@ class _UserMenu extends StatelessWidget {
         const PopupMenuDivider(),
         PopupMenuItem(
           value: 'logout',
-          child: Text(
+          child: const Text(
             'Sign Out',
-            style: TextStyle(color: palette.danger, fontSize: 13),
+            style: TextStyle(color: Color(0xFFC75B52), fontSize: 13),
           ),
         ),
       ],
@@ -523,7 +537,7 @@ class _BottomNav extends StatelessWidget {
         <
           ({
             AppView view,
-            String icon,
+            AppIcon? icon,
             String label,
             bool requiresAuth,
             int? badge,
@@ -531,37 +545,38 @@ class _BottomNav extends StatelessWidget {
         >[
           (
             view: AppView.library,
-            icon: '📚',
+            icon: AppIcon.library,
             label: 'Library',
             requiresAuth: false,
             badge: null,
           ),
           (
             view: AppView.polls,
-            icon: '🏆',
+            icon: AppIcon.contest,
             label: 'Contest',
             requiresAuth: false,
             badge: null,
           ),
           // Admins do admin tasks only — paper submission is hidden for them.
+          // Submit has no icon in virgil's set, so it keeps its emoji.
           if (!isAdmin)
             (
               view: AppView.post,
-              icon: '✏️',
+              icon: null,
               label: 'Submit',
               requiresAuth: false,
               badge: null,
             ),
           (
             view: AppView.profile,
-            icon: '👤',
+            icon: AppIcon.profile,
             label: 'Profile',
             requiresAuth: true,
             badge: null,
           ),
           (
             view: AppView.settings,
-            icon: '⚙️',
+            icon: AppIcon.settings,
             label: 'Settings',
             requiresAuth: false,
             badge: null,
@@ -569,7 +584,7 @@ class _BottomNav extends StatelessWidget {
           if (isAdmin)
             (
               view: AppView.admin,
-              icon: '🛡️',
+              icon: AppIcon.admin,
               label: 'Admin',
               requiresAuth: false,
               badge: appState.pendingPapers.isEmpty
@@ -613,15 +628,24 @@ class _BottomNav extends StatelessWidget {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            Text(
-                              item.icon,
-                              style: TextStyle(
-                                fontSize: 20,
+                            if (item.icon != null)
+                              AppIconImage(
+                                item.icon!,
+                                size: 20,
                                 color: active
-                                    ? null
+                                    ? a.accent
                                     : c.muted.withValues(alpha: 0.7),
+                              )
+                            else
+                              Text(
+                                '✏️',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: active
+                                      ? null
+                                      : c.muted.withValues(alpha: 0.7),
+                                ),
                               ),
-                            ),
                             if (item.badge != null)
                               Positioned(
                                 top: -6,
