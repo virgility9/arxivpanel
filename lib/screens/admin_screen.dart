@@ -65,6 +65,7 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   int _section = 0; // 0 = dashboard, 1 = papers, 2 = users
+  int _statsRange = 7; // days shown in the Library Statistics chart: 7, 30, 90
   final _searchController = TextEditingController();
   final _userSearchController = TextEditingController();
   String _search = '';
@@ -531,6 +532,8 @@ class _AdminScreenState extends State<AdminScreen> {
         const SizedBox(height: 24),
         _buildStatsGrid(p, wide),
         const SizedBox(height: 24),
+        _buildStatisticsPanel(p, wide),
+        const SizedBox(height: 24),
         _buildDashboardPanels(p, wide),
       ],
     );
@@ -569,9 +572,17 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          'Welcome back, Administrator.',
-          style: displayStyle(p, size: 24, weight: FontWeight.w700),
+        RichText(
+          text: TextSpan(
+            style: displayStyle(p, size: 24, weight: FontWeight.w700),
+            children: [
+              const TextSpan(text: 'Welcome back, '),
+              TextSpan(
+                text: 'Administrator!',
+                style: TextStyle(color: p.accent.accent),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -627,55 +638,42 @@ class _AdminScreenState extends State<AdminScreen> {
     final cards = [
       _statCard(
         p,
-        icon: Icons.description,
-        iconColor: p.c.muted,
         label: 'Total papers',
         value: formatCount(_allPapers.length),
-        detail: 'Across all categories',
+        trend: _papersThisWeek((_) => true),
         onTap: () => _openPapers(),
       ),
       _statCard(
         p,
-        icon: Icons.schedule,
-        iconColor: p.accent.accent,
         label: 'Pending review',
         value: formatCount(pending),
-        detail: 'Requires your attention',
+        trend: _papersThisWeek((x) => x.status == PaperStatus.pending),
         onTap: () => _openPapers('pending'),
       ),
       _statCard(
         p,
-        icon: Icons.check,
-        iconColor: p.success,
-        label: 'Approved papers',
+        label: 'Published papers',
         value: formatCount(approved),
-        detail: 'Published in the library',
+        trend: _papersThisWeek((x) => x.status == PaperStatus.approved),
         onTap: () => _openPapers('approved'),
       ),
       _statCard(
         p,
-        icon: Icons.people,
-        iconColor: p.accent.accent,
         label: 'Registered users',
         value: usersLabel,
-        detail: 'Accounts in the database',
+        trend: _newUsersThisWeek(),
         onTap: _openUsers,
       ),
       _statCard(
         p,
-        icon: Icons.visibility,
-        iconColor: p.info,
         label: 'Total views',
         value: formatCount(_totalViews),
-        detail: 'Reads across all papers',
       ),
       _statCard(
         p,
-        icon: Icons.close,
-        iconColor: p.danger,
         label: 'Rejected papers',
         value: formatCount(rejected),
-        detail: 'Did not meet guidelines',
+        trend: _papersThisWeek((x) => x.status == PaperStatus.rejected),
         onTap: () => _openPapers('rejected'),
       ),
     ];
@@ -683,13 +681,10 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisCount: wide ? 3 : 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      // Fixed cell height with room for two-line detail text on narrow
-      // phones (the old childAspectRatio starved it: BOTTOM OVERFLOWED
-      // BY 47+ PIXELS). 168 is measured, not guessed: the redesigned card
-      // content is 130px tall on a narrow phone, and the cell loses 32px
-      // to padding plus 2px to the card border, so 160 left only 126px
-      // (overflowed by 4px). Do not shrink this without re-measuring.
-      mainAxisExtent: 168,
+      // Fixed cell height: the screenshot-style card (34px number + label)
+      // measures ~99px tall, so 120 leaves comfortable headroom on narrow
+      // phones. Do not shrink this without re-measuring.
+      mainAxisExtent: 120,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
@@ -698,52 +693,47 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _statCard(
     AppPalette p, {
-    required IconData icon,
-    required Color iconColor,
     required String label,
     required String value,
-    required String detail,
+    int? trend,
     VoidCallback? onTap,
   }) {
-    // Vertical layout: icon + label on the top row, then the big value and the
-    // detail text at full card width. The old Row squeezed the detail into a
-    // ~58px column on phones, wrapping it to 3-4 lines and overflowing the
-    // fixed-height card.
+    // Screenshot-style card: big number, label beneath it, and a "+N this
+    // week" badge at the top right. Deliberately no sparkline under the
+    // number — the reference design has one, but virgil asked for it
+    // removed. The number sits in a scale-down FittedBox so a long count
+    // (e.g. "123,456" views) shrinks instead of wrapping and overflowing
+    // the fixed-height cell.
     final body = Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, size: 20, color: iconColor),
-              ),
-              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  label.toUpperCase(),
-                  style: monoStyle(p, size: 10, letterSpacing: 0.12),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: displayStyle(p, size: 34, weight: FontWeight.w700),
+                  ),
                 ),
               ),
-              if (onTap != null)
+              if (trend != null && trend > 0) ...[
+                const SizedBox(width: 8),
+                _trendBadge(p, trend),
+              ],
+              if (onTap != null) ...[
+                const SizedBox(width: 6),
                 Icon(Icons.chevron_right, size: 16, color: p.c.muted),
+              ],
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: displayStyle(p, size: 28, weight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(detail, style: bodyStyle(p, size: 12, color: p.c.muted)),
+          const SizedBox(height: 6),
+          Text(label, style: bodyStyle(p, size: 13, color: p.c.muted)),
         ],
       ),
     );
@@ -755,6 +745,197 @@ class _AdminScreenState extends State<AdminScreen> {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: card,
+      ),
+    );
+  }
+
+  Widget _trendBadge(AppPalette p, int count) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: p.success.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.trending_up, size: 12, color: p.success),
+          const SizedBox(width: 3),
+          Text('+$count', style: monoStyle(p, size: 11, color: p.success)),
+        ],
+      ),
+    );
+  }
+
+  /// Papers matching [test] submitted in the last 7 days — the "+N" on the
+  /// stat cards. Uses submittedAt (the only date papers carry); a paper
+  /// approved this week but submitted earlier does not count.
+  int _papersThisWeek(bool Function(Paper) test) {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    return _allPapers
+        .where((paper) => test(paper) && paper.submittedAt.isAfter(cutoff))
+        .length;
+  }
+
+  /// Users whose joinedAt (stored as "YYYY-MM-DD") falls in the last 7 days.
+  int _newUsersThisWeek() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    return widget.appState.users.where((user) {
+      final joined = DateTime.tryParse(user.joinedAt);
+      return joined != null && joined.isAfter(cutoff);
+    }).length;
+  }
+
+  /// Daily buckets for the Library Statistics chart: papers submitted and
+  /// users joined on each of the last [range] days, oldest first.
+  ({List<int> papers, List<int> users, List<DateTime> days}) _statsSeries(
+    int range,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final days =
+        List<DateTime>.generate(range, (i) => today.subtract(Duration(days: range - 1 - i)));
+    final paperCounts = List<int>.filled(range, 0);
+    final userCounts = List<int>.filled(range, 0);
+    for (final paper in _allPapers) {
+      final d = DateTime(
+        paper.submittedAt.year,
+        paper.submittedAt.month,
+        paper.submittedAt.day,
+      );
+      final idx = d.difference(days.first).inDays;
+      if (idx >= 0 && idx < range) paperCounts[idx]++;
+    }
+    for (final user in widget.appState.users) {
+      final parsed = DateTime.tryParse(user.joinedAt);
+      if (parsed == null) continue;
+      final d = DateTime(parsed.year, parsed.month, parsed.day);
+      final idx = d.difference(days.first).inDays;
+      if (idx >= 0 && idx < range) userCounts[idx]++;
+    }
+    return (papers: paperCounts, users: userCounts, days: days);
+  }
+
+  Widget _rangeChip(AppPalette p, String label, int days) {
+    final selected = _statsRange == days;
+    return GestureDetector(
+      onTap: () => setState(() => _statsRange = days),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? p.accent.accent : Colors.transparent,
+          border: Border.all(
+            color: selected ? p.accent.accent : p.c.border,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: monoStyle(
+            p,
+            size: 11,
+            color: selected ? p.accent.accentFg : p.c.muted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _legendDot(AppPalette p, Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: bodyStyle(p, size: 12, color: p.c.muted)),
+      ],
+    );
+  }
+
+  Widget _buildStatisticsPanel(AppPalette p, bool wide) {
+    final series = _statsSeries(_statsRange);
+    final totalPapers = series.papers.fold<int>(0, (a, b) => a + b);
+    final totalUsers = series.users.fold<int>(0, (a, b) => a + b);
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Library Statistics',
+          style: displayStyle(p, size: 17, weight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Papers and users over time',
+          style: bodyStyle(p, size: 12, color: p.c.muted),
+        ),
+      ],
+    );
+    final chips = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _rangeChip(p, '7D', 7),
+        const SizedBox(width: 8),
+        _rangeChip(p, '30D', 30),
+        const SizedBox(width: 8),
+        _rangeChip(p, '90D', 90),
+      ],
+    );
+    return _card(
+      p,
+      Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            wide
+                ? Row(
+                    children: [Expanded(child: header), chips],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [header, const SizedBox(height: 12), chips],
+                  ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 180,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _StatsChartPainter(
+                  paperCounts: series.papers,
+                  userCounts: series.users,
+                  days: series.days,
+                  paperColor: p.accent.accent,
+                  // Warm orange for the Users line, matching the reference
+                  // design (no palette color is orange).
+                  userColor: const Color(0xFFE8913A),
+                  gridColor: p.c.border,
+                  labelColor: p.c.muted,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _legendDot(p, p.accent.accent, 'Papers'),
+                const SizedBox(width: 16),
+                _legendDot(p, const Color(0xFFE8913A), 'Users'),
+              ],
+            ),
+            if (totalPapers == 0 && totalUsers == 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'No submissions in this range yet.',
+                  style: bodyStyle(p, size: 12, color: p.c.muted),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1924,5 +2105,136 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Line chart for the Library Statistics panel: papers vs users per day.
+/// No chart package is used on purpose — a new pub dependency would need a
+/// network fetch on virgil's flaky connection, so this is plain CustomPaint.
+class _StatsChartPainter extends CustomPainter {
+  _StatsChartPainter({
+    required this.paperCounts,
+    required this.userCounts,
+    required this.days,
+    required this.paperColor,
+    required this.userColor,
+    required this.gridColor,
+    required this.labelColor,
+  });
+
+  final List<int> paperCounts;
+  final List<int> userCounts;
+  final List<DateTime> days;
+  final Color paperColor;
+  final Color userColor;
+  final Color gridColor;
+  final Color labelColor;
+
+  static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const left = 30.0;
+    const bottom = 24.0;
+    const top = 8.0;
+    const right = 8.0;
+    final plotW = size.width - left - right;
+    final plotH = size.height - top - bottom;
+    if (plotW <= 0 || plotH <= 0 || days.isEmpty) return;
+
+    var maxV = 0;
+    for (final v in paperCounts) {
+      if (v > maxV) maxV = v;
+    }
+    for (final v in userCounts) {
+      if (v > maxV) maxV = v;
+    }
+    // Headroom above the highest point, and always an even ceiling so the
+    // mid gridline label stays a whole number.
+    var yMax = maxV + 2;
+    if (yMax.isOdd) yMax++;
+    if (yMax < 4) yMax = 4;
+
+    double x(int i) {
+      if (days.length == 1) return left + plotW / 2;
+      return left + plotW * i / (days.length - 1);
+    }
+
+    double y(int v) => top + plotH * (1 - v / yMax);
+
+    final gridPaint = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1;
+    final labelStyle = TextStyle(color: labelColor, fontSize: 10);
+    void drawLabel(String text, double dx, double dy) {
+      final tp = TextPainter(
+        text: TextSpan(text: text, style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(dx, dy));
+    }
+
+    // Horizontal gridlines + y labels at 0, half, max.
+    for (final f in [0.0, 0.5, 1.0]) {
+      final gy = top + plotH * (1 - f);
+      canvas.drawLine(Offset(left, gy), Offset(left + plotW, gy), gridPaint);
+      drawLabel('${(yMax * f).round()}', 0, gy - 6);
+    }
+
+    void drawSeries(List<int> values, Color color) {
+      if (values.isEmpty) return;
+      final path = Path();
+      for (var i = 0; i < values.length; i++) {
+        final px = x(i);
+        final py = y(values[i]);
+        if (i == 0) {
+          path.moveTo(px, py);
+        } else {
+          path.lineTo(px, py);
+        }
+      }
+      final linePaint = Paint()
+        ..color = color
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+      canvas.drawPath(path, linePaint);
+      // Dots on each point, only when sparse enough to read.
+      if (values.length <= 31) {
+        final dotPaint = Paint()..color = color;
+        for (var i = 0; i < values.length; i++) {
+          canvas.drawCircle(Offset(x(i), y(values[i])), 3, dotPaint);
+        }
+      }
+    }
+
+    drawSeries(paperCounts, paperColor);
+    drawSeries(userCounts, userColor);
+
+    // X labels: every day for a week, weekly ticks for longer ranges.
+    final step = days.length <= 7 ? 1 : 7;
+    for (var i = 0; i < days.length; i++) {
+      if (i % step != 0 && i != days.length - 1) continue;
+      final d = days[i];
+      final text =
+          days.length <= 7 ? _weekdays[d.weekday - 1] : '${d.month}/${d.day}';
+      final tp = TextPainter(
+        text: TextSpan(text: text, style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(x(i) - tp.width / 2, top + plotH + 8));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _StatsChartPainter old) {
+    // New lists are built on every panel build, so identity comparison
+    // already repaints exactly when the data or range changes.
+    return old.paperCounts != paperCounts ||
+        old.userCounts != userCounts ||
+        old.days != days ||
+        old.paperColor != paperColor ||
+        old.userColor != userColor;
   }
 }
