@@ -2,7 +2,9 @@
 /// base64 so no asset declaration or pub fetch is needed (same pattern as
 /// the app logo). The PNGs are alpha masks: [AppIconImage] tints them
 /// with [ColorFiltered], so a tab icon can be gold when selected and
-/// muted when not. Submit has no icon in the set and keeps its emoji.
+/// muted when not. The submit icon was recreated from virgil's upload
+/// (2026-10-31): the upload had a dark background baked in, so the icon
+/// shape was extracted as an alpha mask from its brightness.
 library;
 
 import 'dart:convert';
@@ -12,6 +14,7 @@ import 'package:flutter/material.dart';
 enum AppIcon {
   library,
   contest,
+  submit,
   profile,
   settings,
   admin,
@@ -134,6 +137,53 @@ const _iconBase64 = <AppIcon, String>{
       'tTU7l/Wq7HtuqKU5JDrBNmRZlu7zB3x7du/8dOO6NXWMMaAcApAzZUsUxg0cMjx476xHqoMFxZVSGvl9mSED0DQnNDUeqX3qydkj'
       'tm5a35TrAr68xAFl5RXa1GtuurV//0HThHAEFChiOTydUwDEgKFlmc07dmyZ/95b8149UJfZC5hPoUg41rgQ+UkNYQxsy0o5rlO6'
       'xcpJO8f7ZhB5XjMj/h92le8C6jYVJAAAAABJRU5ErkJggg==',
+  AppIcon.submit:
+      'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAND0lEQVR42u1daVQURx6vqu45uW8YBRQERDGgiEJUsvjc1Y0milEx'
+      'HqiJmmOTvBzv7fGS3f2yX/blvU2+JPvycph4RBRBBOUSkUMx0SQaT1CCiAS5mYGZYaaPqv1AN+kdBxwERgb6914/Zpju6qr/r/5H'
+      '/au6GgAZMmTIkCFDhgwZMmRMNVCuWnEPTy8UERnjHayb7gEh4kzGPt4V2wFdsdLzEhYGbnhx1xfBuumrIYTIoO+5cjIva1tlWdEN'
+      'WQPGGUnJy8I2Z+7NCwgKSYMQQgAAUKs1wXPi5meajH0FjQ132mUCxgmJi5ZM37Bl11EfX/8kQggLACAAAAwhRAgh5YyIqOUsw1S5'
+      'EgkuQ0D8gkXBr7z117taN/dwoecTyc8YQohUKrV/ZHTss2aTqfTe3foOmYAxQkJicsjWXa+eVCiUXoiiVBhjBmNsFQQvbQNRKpU+'
+      '8xIWvtbT3Zl1/15Dl0zAKLEgKUWXnrHjK/+AoFSMsRUipACEcABCAAFAouAhhEAkg+d5U/Tsuc9hgr9ruFPbIhMwCpv/0mvvXPH0'
+      '8o6DEEJEUSrB9BAIIRI/AwAIQkgpXocQUipVKr+Y2HlbrJb+4ob6ulaZgBFi4eKloRnb9+Rr3dxnAgCAGPEIznfQ5AzG0wjR0usJ'
+      'IRxFUerI6NjnzWZT8b2GiekTJiQBCYnJIWvSN38cEBScRjBmEEIKQahY6PkYQkjDASDxGPTIPG9BCCl5njcjCOmZkdFpLMOcn4jR'
+      'ETURzc6OPW+e8/b1mw8hpEXhS3u8jcChoCC/DSoHPmIIIUVRlAYhRIfNiFyq1mjv3K69fk8mYBiz8+KOV4rcPTxjIISUtFfbEvCQ'
+      'CZISAACW/B9BiGitm3t4ZHTsRqvVUtLS3NTKcZxMgG3PX5+xY7+vn/9iPGB2aNHsDPwhLEKIJhhbyW/h5yABZCBCooUoyCwJUTFC'
+      'SCH6hBkRUcutlv5zE8UxTwgCEhIXB2fufqPC29cvUdKh4eCHAVAAAMDxnJGmaTeO44xS88RzXB/HsX00TbshhJTCb9jWZCFEqULD'
+      'I5ZSNP1z/e2bzVOegAVJT0/bufft77Vu7jMxxoxgeh5KErIM011WdGIDxnyPX0BQso1vABBC1NXRfv77msq/zIiISocQUoQQzvY8'
+      'nufMbm7uM2Pj4nf39uqPPenoCD3Jm8fFJwas3bj1M41WGyoIS2kTSmJCCOZ53lxTfeaNnKyvC1mWNUojH/FAFKXu7ze3FhccO5F7'
+      '5Jul/WbzfdvyOI4zKhRKb0IIBwAA6ZsyT6UuXxk7JQlISEwO2bLz1WMhutDVgg3nCCHigQkhHM9xRgghOne29OVTeUePCvadsVce'
+      '5nkLIQSzLEuqzhT/kJO1b2W/2XxfHBMAAABN0+6CttAAAKDVuoU/t37Lt79/dt3CKUXAopTU8JdeffuSkF5gAAAAUZRaFAwAABOM'
+      'OY5j+y5Ul+859PV/s/Q9XbwgvEeaTYuln1SVl9wqKsje1NdrqIUQ0iIJtvDy9knYuOWlS0ueWRE9JQiIX7AoeN2m7fvVGu00e78L'
+      'AywaAABqqs68te+zj7+wMUu8EBnZu/b/2lNckPPd8aMH1vUa9Ncl5NrF5sy91StWPT9/UhOQkJgcsmHLrm/8/AOXYp63iHkbe+dW'
+      'lBVuzTrwea4jgpamImz997mK0rr8nEObTMa+X0RzZI9AlUoduOKPaz/9w+r0pElJQFLKsrCXX3/3SmCQbjnG2IIoSm3vPEIIV322'
+      'JHMo4T8OqspLbpWcyt1mMvbdGa7Nvn4ByWs3bC1dkroialIRMPepBf7pmzIPqFTqQAAAoChKCwAAov2XOtIzJQUbD3z5yYGR3kMw'
+      'MdBeCCuao7xjB9N7DfqrUrI5jjNK/QPGmMnI3FO5fOVz8ZOGgDXpm//lHxCUKiTTBm0xQkhJCMEiEeWlJzcX5Wfnj1c9KsuKbhTk'
+      'Ht5q7Out/U3gvIUfiKA4MRSmKEqzas36L0PDIzQuT0BsXLzvjIio7YQQzp7tBgBglmX0VeXF244e+vJEX68Bj2d9qsqLbxYX5GRy'
+      'AyEurVAovZGkU1CIUlOIUnt6es8NnzkrzOUJ8PDw8hBNjnSANTjCZRl9dXnJ3oNffXpotPcSBmWPPO90Ud6PJ3MPr7RaLG0SjUQQ'
+      'QhoKaWxMCKdSqVxfA+423G7p6zXchBDSPM+bBZNjGbT5xQVbTx7PygdORmF+dk1e9oFVvYaeq8IYBIkkIopScyxjePDr/fsuT0BH'
+      'Wyt76ULV38XvjNXaQVGUlhCCq86W7Dx+dH+p2WwiT2IQdKak4ErhiexMlmG6xQ4hBgk/Xbrwz8a79d3jXQfaGQ3NOvB5rslkTEte'
+      'kvYPtUYT0t7WUnGhuvzfZcX5l0dTrmSG7LFRXnryZ4Zhnk5Zlvamj6//PJZhDLdrrx8uyM06YjYZyaQgAAAACnIPV9RUnzmnVmlo'
+      'k6mP1fd0848rdnv+ZDREnKsorbt6+eJbCqUSMVYrHu9A4IkQAAAAXR3tHABgMObWaLWw32wes142VIrCEfQa9BhIZtImdTJOxFgK'
+      '31WBJluDCCEyATImNQEQDmfriYupgEtqwFARD8GYkzVAhkyAK4F25co/ZIocycTJGiBDJkAmQIZMgEyADJkAmQAZMgEyASMefFEO'
+      'D8xkAmQ8CiNORYToQlUUTUGDvodx5tzpREeILlTF8xxub3vAjgsBMXPm+axel/F+9Oy4NxnG2mU2mZrKivJeG+3KBlfHgqQU3YpV'
+      'a9+fFTPndczzlvb21orjR/a/fPmHCw5tkeCQCQoM1ile2Lzzo9lznnoPIaRUKpQ+vn7+i1evyzjypB5sGMYPOC0hFxUz12v95p37'
+      'I6Jm7wZg4CGT4JBpqzK278mdM2++35gRkJS8LDkoeNpy6SpijuOMGo029Kn5SelqjXbCZCGdOSOWkLg4NSAw+BmWZfQWS/8DhrF2'
+      'AgCAp6dX7KKU1HVjZoK8vH10Gq02dJA1ilKLzPn5B8UrlUpo6XfOCgee5yxD9iaEFAgh272Exg1hMyLTIIS0uOx+UKgKhaePr3/0'
+      'mGnAcOEdhAA5Mw3f3dlxZ4iej/U93XU8z0+IOWECHNNENEZq77SG/XSp5mxfr+Gm8DT8IBjG2nn18qUcZywndPo4QLJtAPewBiCn'
+      'Puxdf/tW75GDX6zuNfTcEOvEMNbOs6WndlafLamdMIJ14GlOh32AZNsAmud5s7CLiVI0T85eCXKxprKxuenustDwiBCappXNTY2/'
+      '3rtbb5q0A7Fhe7mTfYCIluYma0tzU+OUygURQjg48CQJkngb7KL7v7peKoJgzEGElLZREZTl7xwNsCf8Ac2QBekcAuyNB6CcUXUa'
+      'AUOMOPAonouQCXDM+WJeFtUTJADjYbo4BAihqWmFEGV/oxGnagBF0WpaoZiSDFAUrXriPoCmaa2CnpoE2O5HN24EdHd1NA71VIqH'
+      'h1dM2MxZuqkm/NDwCE1gsO53Q/3e1dVxa8wIaG97cF+cbLCFSq0OWrXmhQ+9ffyoqUTA+ozMD7Rat3Db/1utlnYAANB3dzm0Q69D'
+      'QuNYtj8uPjHFw9Nrtr3fPb285wQG69jO9tYf9T1d7GQW/MD07I5tCxcv/Y+wd6nS1izxPN9/ujDv/fbWlkcmCB1KRXS0t7KNDXcK'
+      'dNPD1g61PUBcfOLfdNPClv/afO90Z3vrTZPJ2C2GR0NNE0IIIREgfhfPH2puV1qWI/O/Iz1/qPqqVGr3wGBdXNiMiDXe3r4Jgv9z'
+      't+MXlC3N9040NtzpdGhw6yjzsXHxvn9694M6AABQKlX+9nyCKy6MGmtwHGc8tO/TxPOVZbfHzAQBAEBne1u/p6f3L7Ni5uzCPG+x'
+      't0INwsmfluM4zggIwbbvKxDx48Xzf87LPljocCg7kps31NfVTg+biQKDdWnC5kgQAMALsreTpBvYeHsYc4KB5C0Y0sPeNZLz+cFE'
+      'yDDXjqJ820O8Hw/BYFJyYI98nreIZNTduvZxfs63Hxr0Pey4EMCyLLhx7XJlVMzcEF8//4U8z5sRQippg20aRobSjEdtrDEEaURq'
+      'OsVOYPtWJcm15DHLt2eqpRuBD8oNIkRzHGdsb3tQfiL74Dv1dTcNIxrMjVQFGcZKmhp/OePh6an3DwhKEgYjcAhhk8doLLDt3cMI'
+      'VNpLwUgIcLB8u/WVajvLMvraGz9/lHN433t1N6/1jHg0/Th2sNfQw9XduvZde9uD455ePlpfv4AkMvBaKWLjG3ih4tiOwIY0D3YO'
+      'aVnjcT6W1AfaqRsUXyghFX5rS3NhWdGJ3eWnT2Y3NTaYH0eWo3aaao0WLkhKiZy/MCUjWDctVaXSBLi7e0TSCoXnZHK+wuqLbo5l'
+      '+x60NJ++WFP5SUVZ4fXRljumUYuvXwDt7uGhUKk1SpqmKYLHaa4MQuiMxUgQQSi2geM53tJvZox9fay4kbgMGTJkyJAhQ4YMGTJk'
+      'yHBB/A/dshe5KkDAnwAAAABJRU5ErkJggg==',
   AppIcon.profile:
       'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAbxElEQVR42u1deXiV1Zl/z/Itd80eEgiEhIDs+44ItoAiVYGqTNUq'
       'Uqt0ZtrRp/PodJxRW3WcsYs6nSoqFa3WuoOigiBIBAJhkSVAAAmQkLAlZLnrt5xl/rj3hnDvTQKVBBAOTx7+yJfvnvP+3u2820Vw'
