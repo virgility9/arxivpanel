@@ -528,19 +528,25 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildWelcome(p, wide),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         _buildStatsGrid(p, wide),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         _buildDashboardPanels(p, wide),
       ],
     );
   }
 
-  Widget _card(AppPalette p, Widget child, {double radius = 14}) {
+  Widget _card(
+    AppPalette p,
+    Widget child, {
+    double radius = 16,
+    Color? color,
+    Color? borderColor,
+  }) {
     return Container(
       decoration: BoxDecoration(
-        color: p.c.surface,
-        border: Border.all(color: p.c.border),
+        color: color ?? p.c.surface,
+        border: Border.all(color: borderColor ?? p.c.border),
         borderRadius: BorderRadius.circular(radius),
       ),
       child: child,
@@ -600,6 +606,10 @@ class _AdminScreenState extends State<AdminScreen> {
                 children: [inner, const SizedBox(height: 18), button],
               ),
       ),
+      // Hero layer: a gold-tinted panel so the welcome reads as the top
+      // layer of the dashboard, above the flat stat and list cards.
+      color: p.accent.accent.withValues(alpha: 0.07),
+      borderColor: p.accent.accent.withValues(alpha: 0.25),
     );
   }
 
@@ -671,11 +681,12 @@ class _AdminScreenState extends State<AdminScreen> {
     ];
     return GridView.count(
       crossAxisCount: wide ? 3 : 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      // Fixed cell height: the old childAspectRatio starved the detail text
-      // of vertical room on narrow phones (BOTTOM OVERFLOWED BY 47+ PIXELS).
-      mainAxisExtent: 150,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      // Fixed cell height with room for two-line detail text on narrow
+      // phones (the old childAspectRatio starved it: BOTTOM OVERFLOWED
+      // BY 47+ PIXELS).
+      mainAxisExtent: 160,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
@@ -696,7 +707,7 @@ class _AdminScreenState extends State<AdminScreen> {
     // ~58px column on phones, wrapping it to 3-4 lines and overflowing the
     // fixed-height card.
     final body = Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -704,41 +715,41 @@ class _AdminScreenState extends State<AdminScreen> {
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: iconColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, size: 18, color: iconColor),
+                child: Icon(icon, size: 20, color: iconColor),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   label.toUpperCase(),
-                  style: monoStyle(p, size: 9, letterSpacing: 0.1),
+                  style: monoStyle(p, size: 10, letterSpacing: 0.12),
                 ),
               ),
               if (onTap != null)
                 Icon(Icons.chevron_right, size: 16, color: p.c.muted),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
             value,
-            style: displayStyle(p, size: 24, weight: FontWeight.w700),
+            style: displayStyle(p, size: 28, weight: FontWeight.w700),
           ),
-          const SizedBox(height: 2),
-          Text(detail, style: bodyStyle(p, size: 11, color: p.c.muted)),
+          const SizedBox(height: 4),
+          Text(detail, style: bodyStyle(p, size: 12, color: p.c.muted)),
         ],
       ),
     );
-    final card = _card(p, body, radius: 12);
+    final card = _card(p, body);
     if (onTap == null) return card;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: card,
       ),
@@ -750,15 +761,15 @@ class _AdminScreenState extends State<AdminScreen> {
     final activity = _card(p, _buildActivity(p));
     if (wide) {
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(flex: 2, child: queue),
-          const SizedBox(width: 20),
+          const SizedBox(width: 24),
           Expanded(child: activity),
         ],
       );
     }
-    return Column(children: [queue, const SizedBox(height: 20), activity]);
+    return Column(children: [queue, const SizedBox(height: 24), activity]);
   }
 
   /// The moderator's work queue: pending papers with one-tap approve.
@@ -766,7 +777,7 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _buildReviewQueue(AppPalette p) {
     final queue = _pendingQueue.take(4).toList();
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -794,7 +805,7 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (queue.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -817,8 +828,11 @@ class _AdminScreenState extends State<AdminScreen> {
             )
           else
             ...queue.map(
-              (paper) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+              (paper) => Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: p.c.border)),
+                ),
                 child: Row(
                   children: [
                     NetImage(
@@ -878,7 +892,7 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _buildActivity(AppPalette p) {
     final rows = _recentlyUploaded.take(4).toList();
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -911,7 +925,7 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (rows.isEmpty)
             Text(
               'No submissions yet.',
@@ -920,8 +934,11 @@ class _AdminScreenState extends State<AdminScreen> {
           else
             ...rows.map((paper) {
               final color = p.statusColor(paper.status);
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: p.c.border)),
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
