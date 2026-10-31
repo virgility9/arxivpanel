@@ -56,11 +56,10 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // -- Color mode card (dark / light) -----------------------------------------
-  Widget _modeCard(AppPalette p, AppMode mode) {
+  Widget _modeCard(AppPalette p, AppMode mode, bool narrow) {
     final c = p.c;
     final a = p.accent;
     final active = theme.mode == mode;
-    final narrow = MediaQuery.of(context).size.width < 700;
     final dark = mode == AppMode.dark;
     return Expanded(
       child: Material(
@@ -154,11 +153,15 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // -- Accent color option -----------------------------------------------------
-  Widget _accentOption(AppPalette p, AppAccent option, double width) {
+  Widget _accentOption(
+    AppPalette p,
+    AppAccent option,
+    double width,
+    bool narrow,
+  ) {
     final c = p.c;
     final pal = AccentPalette.of(option);
     final active = theme.accent == option;
-    final narrow = MediaQuery.of(context).size.width < 700;
     return SizedBox(
       width: width,
       child: Material(
@@ -295,9 +298,9 @@ class SettingsScreen extends StatelessWidget {
                       // out), so switching modes never resizes them.
                       Row(
                         children: [
-                          _modeCard(p, AppMode.dark),
+                          _modeCard(p, AppMode.dark, narrow),
                           const SizedBox(width: 10),
-                          _modeCard(p, AppMode.light),
+                          _modeCard(p, AppMode.light, narrow),
                         ],
                       ),
                       const SizedBox(height: 32),
@@ -320,7 +323,8 @@ class SettingsScreen extends StatelessWidget {
                             spacing: 10,
                             runSpacing: 10,
                             children: AppAccent.values
-                                .map((option) => _accentOption(p, option, w))
+                                .map((option) =>
+                                    _accentOption(p, option, w, narrow))
                                 .toList(),
                           );
                         },
