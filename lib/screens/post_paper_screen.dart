@@ -250,6 +250,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   Widget build(BuildContext context) {
     final p = widget.theme.palette;
     final user = widget.appState.user;
+    final narrow = MediaQuery.of(context).size.width < 700;
 
     // NOTE: no nested Scaffold — AppShell already provides one.
     return SingleChildScrollView(
@@ -257,7 +258,12 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+            padding: EdgeInsets.fromLTRB(
+              narrow ? 16 : 24,
+              narrow ? 20 : 24,
+              narrow ? 16 : 24,
+              120,
+            ),
             child: user == null
                 ? _buildSignInPrompt(p)
                 : _submitted
@@ -273,13 +279,14 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
 
   Widget _buildSignInPrompt(AppPalette p) {
     final c = p.c;
+    final narrow = MediaQuery.of(context).size.width < 700;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 96),
+      padding: EdgeInsets.symmetric(vertical: narrow ? 64 : 96),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('📄', style: TextStyle(fontSize: 56)),
-          const SizedBox(height: 20),
+          Text('📄', style: TextStyle(fontSize: narrow ? 44 : 56)),
+          SizedBox(height: narrow ? 16 : 20),
           Text(
             'Submit Your Research',
             style: displayStyle(p, size: 26, weight: FontWeight.w600),
@@ -291,14 +298,14 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
             style: bodyStyle(p, size: 15, color: c.muted),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: narrow ? 20 : 24),
           SizedBox(
             width: double.infinity,
             child: GoldButton(
               palette: p,
               label: 'Sign In to Continue',
               onPressed: widget.onAuthPrompt,
-              minHeight: 52,
+              minHeight: narrow ? 48 : 52,
             ),
           ),
         ],
@@ -311,13 +318,14 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   Widget _buildSuccess(AppPalette p) {
     final c = p.c;
     final a = p.accent;
+    final narrow = MediaQuery.of(context).size.width < 700;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 96),
+      padding: EdgeInsets.symmetric(vertical: narrow ? 64 : 96),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('📬', style: TextStyle(fontSize: 64)),
-          const SizedBox(height: 20),
+          Text('📬', style: TextStyle(fontSize: narrow ? 48 : 64)),
+          SizedBox(height: narrow ? 16 : 20),
           Text(
             'Paper Submitted!',
             style: displayStyle(p, size: 28, weight: FontWeight.w600),
@@ -368,7 +376,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
               palette: p,
               label: 'Back to Library',
               onPressed: () => widget.appState.navigate(AppView.library),
-              minHeight: 52,
+              minHeight: narrow ? 48 : 52,
             ),
           ),
         ],
@@ -617,7 +625,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
             label: 'Submit for Review',
             loading: _loading,
             onPressed: _loading ? null : _handleSubmit,
-            minHeight: 54,
+            minHeight: MediaQuery.of(context).size.width < 700 ? 48 : 54,
           ),
         ),
       ],

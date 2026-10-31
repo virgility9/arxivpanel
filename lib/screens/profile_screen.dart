@@ -591,16 +591,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     AccentPalette a,
     AppUser user,
   ) {
+    final narrow = MediaQuery.of(context).size.width < 700;
     return Column(
       children: [
-        const SizedBox(height: 16),
-        _profileAvatar(p, a, user, 88),
-        const SizedBox(height: 12),
+        SizedBox(height: narrow ? 12 : 16),
+        _profileAvatar(p, a, user, narrow ? 72 : 88),
+        SizedBox(height: narrow ? 10 : 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             user.username,
-            style: displayStyle(p, size: 22, weight: FontWeight.w700),
+            style: displayStyle(
+              p,
+              size: narrow ? 20 : 22,
+              weight: FontWeight.w700,
+            ),
             textAlign: TextAlign.center,
           ),
         ),
@@ -610,7 +615,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: monoStyle(p, size: 11, color: c.muted),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: narrow ? 12 : 16),
         GhostButton(
           palette: p,
           label: 'Edit Profile',
@@ -743,13 +748,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// normally guards this, but a blank screen is never acceptable).
   Widget _buildSignInPrompt(AppPalette p) {
     final c = p.c;
+    final narrow = MediaQuery.of(context).size.width < 700;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 96, horizontal: 24),
+      padding: EdgeInsets.symmetric(
+        vertical: narrow ? 64 : 96,
+        horizontal: 24,
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('👤', style: TextStyle(fontSize: 56)),
-          const SizedBox(height: 20),
+          Text('👤', style: TextStyle(fontSize: narrow ? 44 : 56)),
+          SizedBox(height: narrow ? 16 : 20),
           Text(
             'Your Scholar Profile',
             style: displayStyle(p, size: 26, weight: FontWeight.w600),
@@ -761,14 +770,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: bodyStyle(p, size: 15, color: c.muted),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: narrow ? 20 : 24),
           SizedBox(
             width: double.infinity,
             child: GoldButton(
               palette: p,
               label: 'Sign In to Continue',
               onPressed: widget.onAuthPrompt,
-              minHeight: 52,
+              minHeight: narrow ? 48 : 52,
             ),
           ),
         ],
