@@ -4,7 +4,7 @@
 /// (abstract / comments / PDF placeholder), and related papers.
 ///
 /// The PDF tab embeds the paper's PDF in an iframe on web; on other
-/// platforms it shows a card with the URL and a copy-link button. The scroll
+/// platforms it shows a card with the URL and a download button. The scroll
 /// progress bar from the web app was intentionally skipped (a web-only
 /// affordance).
 library;
@@ -18,6 +18,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/file_download.dart';
 import '../widgets/pdf_view.dart';
 import '../widgets/shared.dart';
 
@@ -970,6 +971,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   // ---------------------------------------------------------------------- pdf
 
+  /// Download URL for a paper PDF: inserts Cloudinary's `fl_attachment`
+  /// flag (with the paper title as the filename) right after `/upload/`,
+  /// so the browser saves the file instead of opening it in a viewer tab.
+  /// Non-Cloudinary URLs pass through unchanged (the browser then decides
+  /// based on the response headers).
+  String _downloadUrl(String url, String title) {
+    const marker = '/upload/';
+    final at = url.indexOf(marker);
+    if (at < 0) return url;
+    final cut = at + marker.length;
+    return '${url.substring(0, cut)}fl_attachment:${_safeFileName(title)}/${url.substring(cut)}';
+  }
+
+  /// Paper title made safe for a download filename (capped at 80 chars).
+  String _safeFileName(String title) {
+    final safe = title.trim().replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
+    final base = safe.isEmpty ? 'paper' : safe;
+    final capped = base.length > 80 ? base.substring(0, 80) : base;
+    return '$capped.pdf';
+  }
+
   Widget _buildPdfTab(AppPalette p, Paper paper) {
     final c = p.c;
     final url = paper.pdfUrl ?? '';
@@ -1003,7 +1025,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
             )
           else ...[
             Text(
-              'The embedded PDF viewer is only available on web. Copy the link to open it in your browser.',
+              'The embedded PDF viewer is only available on web. Download the paper to read it on your device.',
               style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
             ),
             const SizedBox(height: 12),
@@ -1012,10 +1034,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
           const SizedBox(height: 16),
           GoldButton(
             palette: p,
-            label: 'Copy Link',
+            label: 'Download paper',
+            icon: '⬇️',
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: url));
-              widget.appState.showToast('Link copied', '🔗');
+              if (url.isEmpty) {
+                widget.appState
+                    .showToast('No PDF attached to this paper', '📄');
+                return;
+              }
+              downloadFile(
+                _downloadUrl(url, paper.title),
+                _safeFileName(paper.title),
+              );
+              widget.appState.showToast('Download started', '⬇️');
             },
           ),
         ],
