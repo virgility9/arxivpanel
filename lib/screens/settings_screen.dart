@@ -287,7 +287,16 @@ class SettingsScreen extends StatelessWidget {
                       _groupTitle(p, 'Accent Color'),
                       LayoutBuilder(
                         builder: (context, constraints) {
-                          final w = (constraints.maxWidth - 20) / 3;
+                          // Clamp: on web, a hot restart can build one frame
+                          // before the browser reports a size, so maxWidth
+                          // arrives as 0 and (0 - 20) / 3 = -6.7, which makes
+                          // SizedBox throw "negative minimum width". At 0 the
+                          // chips are invisible for that one frame, then the
+                          // real-width frame lays them out normally.
+                          final w =
+                              ((constraints.maxWidth - 20) / 3)
+                                  .clamp(0.0, double.infinity)
+                                  .toDouble();
                           return Wrap(
                             spacing: 10,
                             runSpacing: 10,

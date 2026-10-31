@@ -666,8 +666,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final cols = narrow ? 2 : 3;
+                  // Same zero-width-frame guard as the settings accent
+                  // chips: clamp, never negative, or SizedBox throws.
                   final boxW =
-                      (constraints.maxWidth - (cols - 1) * 12) / cols;
+                      ((constraints.maxWidth - (cols - 1) * 12) / cols)
+                          .clamp(0.0, double.infinity)
+                          .toDouble();
                   return Wrap(
                     spacing: 12,
                     runSpacing: 12,

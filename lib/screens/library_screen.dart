@@ -228,8 +228,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   // childAspectRatio grid: cards keep their
                                   // intrinsic height, so long titles/tags can
                                   // never overflow the cell.
+                                  // Same zero-width-frame guard as the
+                                  // settings accent chips: clamp, never
+                                  // negative, or Container(width: ...) throws.
                                   final colWidth =
-                                      (listConstraints.maxWidth - 1) / 2;
+                                      ((listConstraints.maxWidth - 1) / 2)
+                                          .clamp(0.0, double.infinity)
+                                          .toDouble();
                                   return Wrap(
                                     spacing: 1,
                                     runSpacing: 1,
