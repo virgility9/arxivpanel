@@ -685,8 +685,11 @@ class _AdminScreenState extends State<AdminScreen> {
       mainAxisSpacing: 16,
       // Fixed cell height with room for two-line detail text on narrow
       // phones (the old childAspectRatio starved it: BOTTOM OVERFLOWED
-      // BY 47+ PIXELS).
-      mainAxisExtent: 160,
+      // BY 47+ PIXELS). 168 is measured, not guessed: the redesigned card
+      // content is 130px tall on a narrow phone, and the cell loses 32px
+      // to padding plus 2px to the card border, so 160 left only 126px
+      // (overflowed by 4px). Do not shrink this without re-measuring.
+      mainAxisExtent: 168,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
