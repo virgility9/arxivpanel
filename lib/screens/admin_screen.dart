@@ -644,7 +644,8 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: AppIcon.papers,
-        label: 'Total papers',
+        chipColor: const Color(0xFF9AA4B2),
+        label: 'Total Papers',
         value: formatCount(_allPapers.length),
         trend: _papersThisWeek((_) => true),
         onTap: () => _openPapers(),
@@ -652,7 +653,8 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: AppIcon.pending,
-        label: 'Pending review',
+        chipColor: const Color(0xFFE8913A),
+        label: 'Pending Review',
         value: formatCount(pending),
         trend: _papersThisWeek((x) => x.status == PaperStatus.pending),
         onTap: () => _openPapers('pending'),
@@ -660,7 +662,8 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: AppIcon.published,
-        label: 'Published papers',
+        chipColor: p.accent.accent,
+        label: 'Published Papers',
         value: formatCount(approved),
         trend: _papersThisWeek((x) => x.status == PaperStatus.approved),
         onTap: () => _openPapers('approved'),
@@ -668,7 +671,8 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: AppIcon.users,
-        label: 'Registered users',
+        chipColor: const Color(0xFF4A90E2),
+        label: 'Registered Users',
         value: usersLabel,
         trend: _newUsersThisWeek(),
         onTap: _openUsers,
@@ -676,13 +680,15 @@ class _AdminScreenState extends State<AdminScreen> {
       _statCard(
         p,
         icon: AppIcon.views,
-        label: 'Total views',
+        chipColor: p.info,
+        label: 'Total Views',
         value: formatCount(_totalViews),
       ),
       _statCard(
         p,
         icon: AppIcon.rejected,
-        label: 'Rejected papers',
+        chipColor: p.danger,
+        label: 'Rejected Papers',
         value: formatCount(rejected),
         trend: _papersThisWeek((x) => x.status == PaperStatus.rejected),
         onTap: () => _openPapers('rejected'),
@@ -692,12 +698,11 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisCount: wide ? 3 : 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      // Fixed cell height: on phones the icon beside the label wraps the
-      // two longest labels ("Published papers", "Registered users") onto
-      // two lines, and 124 clipped that second line — the cell must fit
-      // number + gap + two label lines with headroom. Wide cards keep 124
-      // (their labels stay on one line); phone cards get 148.
-      mainAxisExtent: wide ? 124 : 148,
+      // Compact reference-style cells: chip row (28) + gap (8) + label
+      // (~16) + padding (24) ≈ 76, so 84 leaves headroom. The number
+      // FittedBox and the single-line ellipsized label mean the fixed
+      // height can never clip, at any phone width.
+      mainAxisExtent: 84,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
@@ -707,61 +712,62 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _statCard(
     AppPalette p, {
     AppIcon? icon,
+    Color? chipColor,
     required String label,
     required String value,
     int? trend,
     VoidCallback? onTap,
   }) {
-    // Screenshot-style card: big number, label beneath it, and a "+N this
-    // week" badge at the top right. Deliberately no sparkline under the
-    // number — the reference design has one, but virgil asked for it
-    // removed. The number sits in a scale-down FittedBox so a long count
-    // (e.g. "123,456" views) shrinks instead of wrapping and overflowing
-    // the fixed-height cell. The small line icon beside the label comes
-    // from virgil's imported PNG set.
+    // Compact reference-style card: a tinted icon chip + big number on one
+    // row, trend badge top-right, label beneath. Deliberately no sparkline
+    // and no chevron (the reference has neither). The number FittedBox and
+    // the single-line ellipsized label mean the fixed 84px cell can never
+    // clip, at any phone width.
+    final chip = chipColor ?? p.accent.accent;
     final body = Padding(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: chip.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: icon == null
+                    ? null
+                    : Center(
+                        child: AppIconImage(icon, size: 16, color: chip),
+                      ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    style: displayStyle(p, size: 34, weight: FontWeight.w700),
+                    style: displayStyle(p, size: 22, weight: FontWeight.w700),
                   ),
                 ),
               ),
-              if (trend != null && trend > 0) ...[
+              if (trend != null) ...[
                 const SizedBox(width: 8),
                 _trendBadge(p, trend),
               ],
-              if (onTap != null) ...[
-                const SizedBox(width: 6),
-                Icon(Icons.chevron_right, size: 16, color: p.c.muted),
-              ],
             ],
           ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (icon != null) ...[
-                AppIconImage(icon, size: 14, color: p.c.muted),
-                const SizedBox(width: 6),
-              ],
-              Expanded(
-                child: Text(
-                  label,
-                  style: bodyStyle(p, size: 13, color: p.c.muted),
-                ),
-              ),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: bodyStyle(p, size: 12, color: p.c.muted),
           ),
         ],
       ),
@@ -778,21 +784,26 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
+  /// Weekly trend badge, restyled to the compact reference design: a flat
+  /// colored arrow + count, no pill background. Counts are "this week"
+  /// submissions/joins, so they never go negative — zero shows as ↑ +0.
+  /// Total views has no badge (views carry no timestamps).
   Widget _trendBadge(AppPalette p, int count) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: p.success.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.trending_up, size: 12, color: p.success),
-          const SizedBox(width: 3),
-          Text('+$count', style: monoStyle(p, size: 11, color: p.success)),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.arrow_upward, size: 12, color: p.success),
+        const SizedBox(width: 2),
+        Text(
+          '+$count',
+          style: monoStyle(
+            p,
+            size: 11,
+            color: p.success,
+            weight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
