@@ -60,6 +60,7 @@ class SettingsScreen extends StatelessWidget {
     final c = p.c;
     final a = p.accent;
     final active = theme.mode == mode;
+    final narrow = MediaQuery.of(context).size.width < 700;
     final dark = mode == AppMode.dark;
     return Expanded(
       child: Material(
@@ -68,8 +69,11 @@ class SettingsScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: () => theme.update(mode: mode),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 60),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            constraints: BoxConstraints(minHeight: narrow ? 52 : 60),
+            padding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: narrow ? 12 : 14,
+            ),
             decoration: BoxDecoration(
               color: active ? c.surface : Colors.transparent,
               border: Border.all(
@@ -154,6 +158,7 @@ class SettingsScreen extends StatelessWidget {
     final c = p.c;
     final pal = AccentPalette.of(option);
     final active = theme.accent == option;
+    final narrow = MediaQuery.of(context).size.width < 700;
     return SizedBox(
       width: width,
       child: Material(
@@ -162,8 +167,11 @@ class SettingsScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: () => theme.update(accent: option),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 72),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            constraints: BoxConstraints(minHeight: narrow ? 60 : 72),
+            padding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: narrow ? 12 : 14,
+            ),
             decoration: BoxDecoration(
               color: active ? pal.swatch.withValues(alpha: 0.09) : c.surface,
               border: Border.all(
@@ -214,6 +222,7 @@ class SettingsScreen extends StatelessWidget {
     final p = theme.palette;
     final c = p.c;
     final a = p.accent;
+    final narrow = MediaQuery.of(context).size.width < 700;
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -223,7 +232,12 @@ class SettingsScreen extends StatelessWidget {
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
+              padding: EdgeInsets.fromLTRB(
+                narrow ? 16 : 20,
+                narrow ? 20 : 28,
+                narrow ? 16 : 20,
+                narrow ? 20 : 24,
+              ),
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: c.border)),
               ),
@@ -262,7 +276,12 @@ class SettingsScreen extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 120),
+                  padding: EdgeInsets.fromLTRB(
+                    narrow ? 16 : 20,
+                    narrow ? 20 : 28,
+                    narrow ? 16 : 20,
+                    120,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

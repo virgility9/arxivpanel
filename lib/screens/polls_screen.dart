@@ -318,8 +318,9 @@ class _PollsScreenState extends State<PollsScreen> {
   // -------------------------------------------------------------- insight
 
   Widget _buildInsightBox() {
+    final narrow = MediaQuery.of(context).size.width < 700;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(narrow ? 16 : 20),
       decoration: BoxDecoration(
         color: c.surface,
         border: Border.all(color: c.border),
@@ -397,6 +398,7 @@ class _MetricTab extends StatelessWidget {
   Widget build(BuildContext context) {
     // Palette-driven so the tab bar stays readable in light mode too.
     final muted = palette.c.muted;
+    final narrow = MediaQuery.of(context).size.width < 700;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -410,7 +412,10 @@ class _MetricTab extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: narrow ? 16 : 20,
+            vertical: narrow ? 12 : 14,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

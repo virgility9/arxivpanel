@@ -168,7 +168,7 @@ class _PaperCardState extends State<PaperCard> {
           // 100px cover stuck out by 99px. At every normal width this is
           // exactly the old 100/120.
           final maxW = constraints.maxWidth;
-          final full = isNarrow ? 100.0 : 120.0;
+          final full = isNarrow ? 80.0 : 120.0;
           final coverW =
               maxW.isFinite ? full.clamp(0.0, maxW).toDouble() : full;
           return IntrinsicHeight(
@@ -211,7 +211,12 @@ class _PaperCardState extends State<PaperCard> {
             // Content
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                padding: EdgeInsets.fromLTRB(
+                  isNarrow ? 12 : 14,
+                  isNarrow ? 12 : 14,
+                  isNarrow ? 12 : 14,
+                  isNarrow ? 10 : 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

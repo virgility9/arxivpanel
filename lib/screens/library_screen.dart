@@ -274,6 +274,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final c = p.c;
     final a = p.accent;
     final active = _hasActiveFilters;
+    final narrow = MediaQuery.of(context).size.width < 700;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -284,8 +285,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onTap: () => _openFilterSheet(p),
             borderRadius: BorderRadius.circular(12),
             child: Container(
-              width: 50,
-              height: 50,
+              width: narrow ? 44 : 50,
+              height: narrow ? 44 : 50,
               decoration: BoxDecoration(
                 color: c.surface,
                 border: Border.all(color: active ? a.accent : c.border),
@@ -294,7 +295,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               child: Icon(
                 Icons.tune,
                 color: active ? a.accent : c.muted,
-                size: 22,
+                size: narrow ? 20 : 22,
               ),
             ),
           ),
@@ -453,7 +454,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   child: SafeArea(
                     top: false,
                     child: SizedBox(
-                      height: 50,
+                      height: 48,
                       child: ElevatedButton(
                         onPressed: () => Navigator.of(sheetCtx).pop(),
                         style: ElevatedButton.styleFrom(
