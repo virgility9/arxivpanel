@@ -971,17 +971,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   // ---------------------------------------------------------------------- pdf
 
-  /// Download URL for a paper PDF: inserts Cloudinary's `fl_attachment`
-  /// flag (with the paper title as the filename) right after `/upload/`,
-  /// so the browser saves the file instead of opening it in a viewer tab.
-  /// Non-Cloudinary URLs pass through unchanged (the browser then decides
-  /// based on the response headers).
-  String _downloadUrl(String url, String title) {
+  /// Download URL for a paper PDF: inserts Cloudinary's bare `fl_attachment`
+  /// flag right after `/upload/`, so the browser saves the file instead of
+  /// opening it in a viewer tab. The flag takes NO filename value: putting
+  /// one (with its `.pdf` extension) after a colon made Cloudinary parse
+  /// `pdf` as a separate flag ("Invalid flag in transformation: pdf").
+  /// With no filename given, Cloudinary uses the file's original upload
+  /// name. Non-Cloudinary URLs pass through unchanged (the browser then
+  /// decides based on the response headers).
+  String _downloadUrl(String url) {
     const marker = '/upload/';
     final at = url.indexOf(marker);
     if (at < 0) return url;
     final cut = at + marker.length;
-    return '${url.substring(0, cut)}fl_attachment:${_safeFileName(title)}/${url.substring(cut)}';
+    return '${url.substring(0, cut)}fl_attachment/${url.substring(cut)}';
   }
 
   /// Paper title made safe for a download filename (capped at 80 chars).
@@ -1043,7 +1046,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 return;
               }
               downloadFile(
-                _downloadUrl(url, paper.title),
+                _downloadUrl(url),
                 _safeFileName(paper.title),
               );
               widget.appState.showToast('Download started', '⬇️');
