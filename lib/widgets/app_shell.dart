@@ -279,7 +279,7 @@ class _Navbar extends StatelessWidget {
                 const SizedBox(width: 12),
                 navLink('Library', AppView.library, icon: AppIcon.library),
                 navLink('Contest', AppView.polls, icon: AppIcon.contest),
-                navLink('Submit', AppView.post),
+                navLink('Submit', AppView.post, icon: AppIcon.submit),
                 if (user?.isAdmin == true)
                   navLink(
                     'Admin',
@@ -537,7 +537,7 @@ class _BottomNav extends StatelessWidget {
         <
           ({
             AppView view,
-            AppIcon? icon,
+            AppIcon icon,
             String label,
             bool requiresAuth,
             int? badge,
@@ -558,11 +558,10 @@ class _BottomNav extends StatelessWidget {
             badge: null,
           ),
           // Admins do admin tasks only — paper submission is hidden for them.
-          // Submit has no icon in virgil's set, so it keeps its emoji.
           if (!isAdmin)
             (
               view: AppView.post,
-              icon: null,
+              icon: AppIcon.submit,
               label: 'Submit',
               requiresAuth: false,
               badge: null,
@@ -628,24 +627,13 @@ class _BottomNav extends StatelessWidget {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            if (item.icon != null)
-                              AppIconImage(
-                                item.icon!,
-                                size: 20,
-                                color: active
-                                    ? a.accent
-                                    : c.muted.withValues(alpha: 0.7),
-                              )
-                            else
-                              Text(
-                                '✏️',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  color: active
-                                      ? null
-                                      : c.muted.withValues(alpha: 0.7),
-                                ),
-                              ),
+                            AppIconImage(
+                              item.icon,
+                              size: 20,
+                              color: active
+                                  ? a.accent
+                                  : c.muted.withValues(alpha: 0.7),
+                            ),
                             if (item.badge != null)
                               Positioned(
                                 top: -6,
