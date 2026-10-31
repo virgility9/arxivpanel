@@ -692,11 +692,12 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisCount: wide ? 3 : 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      // Fixed cell height: the screenshot-style card (34px number + label)
-      // measures ~99px tall with a one-line label and ~115px when the label
-      // wraps to two lines on narrow phones, so 124 leaves headroom either
-      // way. Do not shrink this without re-measuring.
-      mainAxisExtent: 124,
+      // Fixed cell height: on phones the icon beside the label wraps the
+      // two longest labels ("Published papers", "Registered users") onto
+      // two lines, and 124 clipped that second line — the cell must fit
+      // number + gap + two label lines with headroom. Wide cards keep 124
+      // (their labels stay on one line); phone cards get 148.
+      mainAxisExtent: wide ? 124 : 148,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
