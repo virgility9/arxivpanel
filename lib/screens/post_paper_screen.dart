@@ -8,17 +8,15 @@
 /// attached PDF — there is no manual cover picker.
 library;
 
-import 'dart:js_interop';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
 
 import '../data/constants.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../utils/blob_url.dart';
 import '../utils/file_pick.dart';
 import '../utils/pdf_pages.dart';
 import '../widgets/pdf_view.dart';
@@ -175,7 +173,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     _pdfPreviewUrl = null;
     _pdfCoverPreview = null;
     if (url != null && kIsWeb) {
-      web.URL.revokeObjectURL(url);
+      revokeBlobUrl(url);
     }
   }
 
@@ -191,11 +189,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
         _pdfName = picked.name;
         _pdfPageCount = countPdfPages(picked.bytes);
         if (kIsWeb) {
-          final blob = web.Blob(
-            [Uint8List.fromList(picked.bytes).buffer.toJS].toJS,
-            web.BlobPropertyBag(type: 'application/pdf'),
-          );
-          _pdfPreviewUrl = web.URL.createObjectURL(blob);
+          _pdfPreviewUrl = createBlobUrl(picked.bytes, 'application/pdf');
           _pdfCoverPreview = buildPdfView(_pdfPreviewUrl!);
         }
       });
