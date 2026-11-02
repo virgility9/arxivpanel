@@ -11,6 +11,7 @@
 library;
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase/firebase_config.dart';
@@ -25,9 +26,18 @@ Future<void> main() async {
   var firebaseReady = false;
   if (DefaultFirebaseConfig.isConfigured) {
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseConfig.currentPlatform,
-      );
+      if (kIsWeb) {
+        // Web has no config file, so it needs the explicit options.
+        await Firebase.initializeApp(
+          options: DefaultFirebaseConfig.currentPlatform,
+        );
+      } else {
+        // Android/iOS read their own config files (google-services.json /
+        // GoogleService-Info.plist). The google-services plugin already
+        // initialized the default app at startup, so passing the web
+        // options here would throw ("duplicate app").
+        await Firebase.initializeApp();
+      }
       firebaseReady = true;
     } catch (e) {
       // Invalid values, no network, etc. — fall through to the setup screen.
