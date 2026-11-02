@@ -16,13 +16,11 @@ import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/foundation.dart';
 
 import 'file_pick_stub.dart'
-    if (dart.library.html) 'file_pick_web.dart' as web_impl;
+    if (dart.library.html) 'file_pick_web.dart'
+    as web_impl;
 
 /// What kind of file to pick.
-enum PickKind {
-  image,
-  pdf,
-}
+enum PickKind { image, pdf }
 
 /// A picked file: its bytes and original file name.
 class PickedFile {
