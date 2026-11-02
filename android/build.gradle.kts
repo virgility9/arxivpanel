@@ -1,6 +1,9 @@
 allprojects {
     repositories {
         google()
+        // Mirror of Maven Central (Google's storage mirror): repo.maven.apache.org
+        // returns 403 on this network, so try this host before Central.
+        maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2") }
         mavenCentral()
     }
 }
@@ -22,3 +25,4 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
