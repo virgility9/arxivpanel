@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:415626437581:android:d245b70084f34bcbd9da84",
+        "android_client_info": {
+          "package_name": "com.example.arxiv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChl3uFVyunRR3VnqweIuegqk9lBvk7puk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:415626437581:android:6cdea3bd748ab240d9da84",
         "android_client_info": {
           "package_name": "com.negus.arxivpanel"
