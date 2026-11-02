@@ -11,7 +11,6 @@
 library;
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/foundation.dart';
