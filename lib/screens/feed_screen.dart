@@ -421,11 +421,11 @@ class _FeedScreenState extends State<FeedScreen> {
 
 /// A news story rendered like a social post, matching the reference
 /// design: full-width image on top, bold headline, summary with a
-/// "See more" expander, relative time, and a like / comment / share row.
+/// "See more" expander, relative time, and a like / share row.
 ///
 /// The like is a local on-screen toggle only — it is not saved anywhere
-/// (news has no reactions in Firestore). Comment opens the article,
-/// where the discussion lives. Share copies the article link.
+/// (news has no reactions in Firestore). Share copies the article link.
+/// There is deliberately no comment button: like / unlike + share only.
 class _NewsCard extends StatefulWidget {
   const _NewsCard({
     required this.item,
@@ -617,11 +617,6 @@ class _NewsCardState extends State<_NewsCard> {
                                 setState(() => _liked = !_liked),
                           ),
                           _actionButton(
-                            icon: Icons.mode_comment_outlined,
-                            color: hasLink ? c.muted : c.faint,
-                            onTap: hasLink ? widget.onOpen : null,
-                          ),
-                          _actionButton(
                             icon: Icons.share_outlined,
                             color: hasLink ? c.muted : c.faint,
                             onTap: hasLink ? widget.onShare : null,
@@ -639,8 +634,8 @@ class _NewsCardState extends State<_NewsCard> {
     );
   }
 
-  /// One third of the like / comment / share row. Greyed out with no
-  /// tap when there is no article link to open or share.
+  /// One half of the like / share row. Greyed out with no
+  /// tap when there is no article link to share.
   Widget _actionButton({
     required IconData icon,
     required Color color,
