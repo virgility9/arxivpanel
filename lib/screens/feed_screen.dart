@@ -8,6 +8,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/constants.dart';
@@ -61,8 +62,13 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  String _dateOf(NewsItem item) =>
-      formatShortDate(item.publishedAt.toIso8601String().substring(0, 10));
+  Future<void> _shareNews(NewsItem item) async {
+    if (item.url.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: item.url));
+    widget.appState.showToast('Link copied', '🔗');
+  }
+
+  String _dateOf(NewsItem item) => timeAgo(item.publishedAt);
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +114,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             canDelete: isAdmin,
                             onOpen: () => _openUrl(item.url),
                             onDelete: () => _confirmDelete(p, item),
+                            onShare: () => _shareNews(item),
                             dateLabel: _dateOf(item),
                           ),
                           const SizedBox(height: 12),
@@ -178,6 +185,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             item: item,
                             palette: p,
                             onOpen: () => _openUrl(item.url),
+                            onShare: () => _shareNews(item),
                             dateLabel: _dateOf(item),
                           ),
                           const SizedBox(height: 12),
@@ -411,7 +419,14 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 }
 
-class _NewsCard extends StatelessWidget {
+/// A news story rendered like a social post, matching the reference
+/// design: full-width image on top, bold headline, summary with a
+/// "See more" expander, relative time, and a like / comment / share row.
+///
+/// The like is a local on-screen toggle only — it is not saved anywhere
+/// (news has no reactions in Firestore). Comment opens the article,
+/// where the discussion lives. Share copies the article link.
+class _NewsCard extends StatefulWidget {
   const _NewsCard({
     required this.item,
     required this.palette,
@@ -419,6 +434,7 @@ class _NewsCard extends StatelessWidget {
     this.canDelete = false,
     required this.onOpen,
     this.onDelete,
+    required this.onShare,
     required this.dateLabel,
   });
 
@@ -428,31 +444,63 @@ class _NewsCard extends StatelessWidget {
   final bool canDelete;
   final VoidCallback onOpen;
   final VoidCallback? onDelete;
+  final VoidCallback onShare;
   final String dateLabel;
 
   @override
+  State<_NewsCard> createState() => _NewsCardState();
+}
+
+class _NewsCardState extends State<_NewsCard> {
+  /// Like state lives only on screen for now — it is not saved anywhere.
+  bool _liked = false;
+
+  /// Long summaries start collapsed at 3 lines with a "See more" link.
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final palette = widget.palette;
     final c = palette.c;
     final a = palette.accent;
+    final hasLink = item.url.isNotEmpty;
+    final longSummary = item.summary.length > 180;
+
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: item.url.isEmpty ? null : onOpen,
+        onTap: hasLink ? widget.onOpen : null,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isAdminPost ? a.accent.withValues(alpha: 0.06) : c.surface,
+            color: widget.isAdminPost
+                ? a.accent.withValues(alpha: 0.06)
+                : c.surface,
             border: Border.all(
-              color: isAdminPost ? a.accent.withValues(alpha: 0.5) : c.border,
+              color: widget.isAdminPost
+                  ? a.accent.withValues(alpha: 0.5)
+                  : c.border,
             ),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
+              // Full-width cover image, like a social post. Admin posts
+              // carry no image, so they start straight at the text.
+              if (item.imageUrl.isNotEmpty)
+                NetImage(
+                  url: item.imageUrl,
+                  width: double.infinity,
+                  height: 190,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -464,27 +512,28 @@ class _NewsCard extends StatelessWidget {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: isAdminPost ? a.accent : c.surface2,
+                            color: widget.isAdminPost
+                                ? a.accent
+                                : c.surface2,
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
-                            isAdminPost ? 'ARXIV' : item.source.toUpperCase(),
+                            widget.isAdminPost
+                                ? 'ARXIV'
+                                : item.source.toUpperCase(),
                             style: monoStyle(
                               palette,
                               size: 9,
-                              color: isAdminPost ? a.accentFg : c.muted,
+                              color: widget.isAdminPost
+                                  ? a.accentFg
+                                  : c.muted,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          dateLabel,
-                          style: monoStyle(palette, size: 10, color: c.faint),
-                        ),
                         const Spacer(),
-                        if (canDelete)
+                        if (widget.canDelete)
                           InkWell(
-                            onTap: onDelete,
+                            onTap: widget.onDelete,
                             borderRadius: BorderRadius.circular(14),
                             child: const Padding(
                               padding: EdgeInsets.all(6),
@@ -499,7 +548,9 @@ class _NewsCard extends StatelessWidget {
                     const SizedBox(height: 10),
                     Text(
                       item.title,
-                      style: displayStyle(palette, size: 16),
+                      style: displayStyle(palette, size: 17).copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -507,32 +558,101 @@ class _NewsCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         item.summary,
-                        style: bodyStyle(palette, size: 13, color: c.muted),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
+                        style: bodyStyle(
+                          palette,
+                          size: 13,
+                          color: c.muted,
+                        ),
+                        maxLines: _expanded ? null : 3,
+                        overflow: _expanded
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
                       ),
+                      if (longSummary) ...[
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: () =>
+                              setState(() => _expanded = !_expanded),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Text(
+                              _expanded ? 'See less' : 'See more',
+                              style: bodyStyle(
+                                palette,
+                                size: 12,
+                                color: a.accent,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                    if (item.url.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Read the full story ↗',
-                        style: bodyStyle(palette, size: 12, color: a.accent),
+                    const SizedBox(height: 8),
+                    // Relative time, like the reference post's "1d".
+                    Text(
+                      widget.dateLabel,
+                      style: monoStyle(
+                        palette,
+                        size: 10,
+                        color: c.faint,
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: c.surface2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          _actionButton(
+                            icon: _liked
+                                ? Icons.thumb_up
+                                : Icons.thumb_up_outlined,
+                            color: _liked ? a.accent : c.muted,
+                            onTap: () =>
+                                setState(() => _liked = !_liked),
+                          ),
+                          _actionButton(
+                            icon: Icons.mode_comment_outlined,
+                            color: hasLink ? c.muted : c.faint,
+                            onTap: hasLink ? widget.onOpen : null,
+                          ),
+                          _actionButton(
+                            icon: Icons.share_outlined,
+                            color: hasLink ? c.muted : c.faint,
+                            onTap: hasLink ? widget.onShare : null,
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-              if (item.imageUrl.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                NetImage(
-                  url: item.imageUrl,
-                  width: 72,
-                  height: 72,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// One third of the like / comment / share row. Greyed out with no
+  /// tap when there is no article link to open or share.
+  Widget _actionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback? onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Icon(icon, size: 20, color: color),
         ),
       ),
     );
