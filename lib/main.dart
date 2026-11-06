@@ -137,13 +137,40 @@ class _ArxivAppState extends State<ArxivApp> {
 }
 
 /// Logo splash shown the moment the app opens, while Firebase initializes.
-class SplashScreen extends StatelessWidget {
+///
+/// No subtitle, no spinner: the logo itself is the loading indicator —
+/// a soft highlight sweeps across it while boot runs.
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.palette});
 
   final AppPalette palette;
 
   @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmer = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmer.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final palette = widget.palette;
     final c = palette.c;
     return Scaffold(
       backgroundColor: c.bg,
@@ -152,26 +179,35 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const AppLogoImage(size: 96),
+              AnimatedBuilder(
+                animation: _shimmer,
+                builder: (context, child) {
+                  // Highlight band sweeps left to right across the logo.
+                  // srcATop keeps the shine on the book itself, so the
+                  // transparent background stays transparent.
+                  final center = -2.0 + 4.0 * _shimmer.value;
+                  return ShaderMask(
+                    blendMode: BlendMode.srcATop,
+                    shaderCallback: (bounds) => LinearGradient(
+                      begin: Alignment(center - 1, 0),
+                      end: Alignment(center + 1, 0),
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withValues(alpha: 0.45),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ).createShader(bounds),
+                    child: child,
+                  );
+                },
+                child: const AppLogoImage(size: 96),
+              ),
               const SizedBox(height: 20),
               Text(
                 'Arxiv',
                 style: displayStyle(palette, size: 32)
                     .copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'a paper library',
-                style: bodyStyle(palette, size: 14, color: c.muted),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  color: palette.accent.accent,
-                  strokeWidth: 2.5,
-                ),
               ),
             ],
           ),
