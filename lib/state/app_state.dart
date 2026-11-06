@@ -481,10 +481,11 @@ class AppState extends ChangeNotifier {
 
   // --------------------------------------------------------------- reactions
 
-  /// Mirrors `handleReact` — toggles a single emoji reaction per user.
+  /// Toggles the user's like (the heart reaction) on a paper.
   ///
   /// Reads the user's current reaction from the live stream, then
-  /// fire-and-forget writes the toggle (pass `null` to remove).
+  /// fire-and-forget writes the toggle (pass `null` to remove). A
+  /// like is the heart; any older emoji reaction is replaced by it.
   void reactToPaper(String paperId, String emoji) {
     if (!_firebaseReady) return;
     final user = _user;
@@ -493,7 +494,7 @@ class AppState extends ChangeNotifier {
     final current = (paper?.reactions[emoji] ?? const []).contains(user.id);
     final toSet = current ? null : emoji;
     unawaited(_repo!.setReaction(paperId, user.id, toSet));
-    if (!current) showToast('Reacted $emoji', emoji);
+    if (!current) showToast('Liked', '❤️');
   }
 
   // ---------------------------------------------------------------- comments

@@ -1,8 +1,8 @@
 /// Polls / Community Rankings screen, ported from `PollsView.tsx`.
 ///
 /// Papers ranked by community engagement with a metric tab switcher
-/// (Most Reacted / Most Read / Most Discussed), a top-3 medal podium,
-/// an animated full rankings list, and a "how rankings work" insight box.
+/// (Most Liked / Most Read / Most Discussed), a top-3 medal podium,
+/// and an animated full rankings list.
 library;
 
 import 'package:flutter/material.dart';
@@ -118,8 +118,6 @@ class _PollsScreenState extends State<PollsScreen> {
                     else ...[
                       _buildPodium(ranked, wide),
                       _buildRankingsList(ranked, maxScore, wide),
-                      const SizedBox(height: 40),
-                      _buildInsightBox(),
                     ],
                   ],
                 ),
@@ -202,7 +200,7 @@ class _PollsScreenState extends State<PollsScreen> {
 
   Widget _buildTabs() {
     final tabs = [
-      (key: _Metric.reactions, icon: '🔥', label: 'Most Reacted'),
+      (key: _Metric.reactions, icon: '❤️', label: 'Most Liked'),
       (key: _Metric.views, icon: '👁', label: 'Most Read'),
       (key: _Metric.comments, icon: '💬', label: 'Most Discussed'),
     ];
@@ -315,62 +313,6 @@ class _PollsScreenState extends State<PollsScreen> {
     );
   }
 
-  // -------------------------------------------------------------- insight
-
-  Widget _buildInsightBox() {
-    final narrow = MediaQuery.of(context).size.width < 700;
-    return Container(
-      padding: EdgeInsets.all(narrow ? 16 : 20),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Container(
-        decoration: const BoxDecoration(
-          border: Border(left: BorderSide(color: _violet, width: 3)),
-        ),
-        padding: const EdgeInsets.only(left: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'HOW RANKINGS WORK',
-              style: monoStyle(
-                p,
-                size: 10,
-                color: _violet,
-                letterSpacing: 0.1,
-              ),
-            ),
-            const SizedBox(height: 8),
-            RichText(
-              text: TextSpan(
-                style: bodyStyle(p, size: 13, color: c.muted, height: 1.7),
-                children: [
-                  TextSpan(
-                    text: 'Most Reacted',
-                    style: TextStyle(color: p.c.text, fontWeight: FontWeight.w700),
-                  ),
-                  const TextSpan(text: ' counts all emoji reactions (🔥🧠👏❤️✨🌱) left by readers. '),
-                  TextSpan(
-                    text: 'Most Read',
-                    style: TextStyle(color: p.c.text, fontWeight: FontWeight.w700),
-                  ),
-                  const TextSpan(text: ' counts unique page opens. '),
-                  TextSpan(
-                    text: 'Most Discussed',
-                    style: TextStyle(color: p.c.text, fontWeight: FontWeight.w700),
-                  ),
-                  const TextSpan(text: ' counts comments. Rankings update as you read and react.'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------

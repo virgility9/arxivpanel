@@ -3,8 +3,8 @@
 /// Layout follows virgil's reference card (2026-11-07): a framed cover
 /// image, the field in gold caps, a big bold title, "author · year",
 /// a divider, then the action row — eye + views, comment, bookmark,
-/// and a round accent button with a heart that opens the reaction
-/// picker. No tag chip, no badges on the cover, no reaction count.
+/// and a round accent button with a heart that toggles a like.
+/// No tag chip, no badges on the cover, no reaction count.
 /// Sized for the library grid (2 columns on phones, 3–4 on wider
 /// screens); the title is capped at 2 lines.
 ///
@@ -18,7 +18,6 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../data/constants.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
@@ -43,110 +42,13 @@ class PaperCard extends StatefulWidget {
 }
 
 class _PaperCardState extends State<PaperCard> {
-  /// The reaction popover lives in the app [Overlay] (not in the card's own
-  /// stack) so it dismisses on outside tap and never clips at card edges.
-  OverlayEntry? _reactionOverlay;
-
-  @override
-  void dispose() {
-    _removeReactionOverlay();
-    super.dispose();
-  }
-
-  void _removeReactionOverlay() {
-    _reactionOverlay?.remove();
-    _reactionOverlay = null;
-  }
-
-  void _toggleReactions() {
-    if (_reactionOverlay != null) {
-      _removeReactionOverlay();
-      return;
-    }
-    final overlay = Overlay.of(context);
-    final entry = OverlayEntry(
-      builder: (ctx) {
-        final screen = MediaQuery.of(ctx).size;
-        // Anchor the popover above the card's bottom-right action area.
-        const pickerWidth = 300.0;
-        const pickerHeight = 60.0;
-        var left = screen.width - pickerWidth - 16;
-        var top = screen.height - pickerHeight - 120;
-        final cardBox = context.findRenderObject() as RenderBox?;
-        if (cardBox != null && cardBox.hasSize) {
-          final pos = cardBox.localToGlobal(Offset.zero);
-          left = pos.dx + cardBox.size.width - pickerWidth - 8;
-          top = pos.dy + cardBox.size.height - pickerHeight - 52;
-        }
-        // clamp() returns num; toDouble() keeps the inferred double type.
-        left = left.clamp(8.0, screen.width - pickerWidth - 8).toDouble();
-        top = top.clamp(8.0, screen.height - pickerHeight - 8).toDouble();
-        return Stack(
-          children: [
-            // Outside-tap scrim: transparent, closes the popover.
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _removeReactionOverlay,
-              ),
-            ),
-            Positioned(
-              left: left,
-              top: top,
-              child: _reactionPopover(ctx),
-            ),
-          ],
-        );
-      },
-    );
-    _reactionOverlay = entry;
-    overlay.insert(entry);
-  }
-
-  /// The emoji popover rendered inside the overlay.
-  Widget _reactionPopover(BuildContext ctx) {
-    final palette = widget.theme.palette;
-    final c = palette.c;
-    final a = palette.accent;
-    final paper = widget.paper;
-    final user = widget.appState.user;
-    final reacted = user == null ? null : paper.reactionOf(user.id);
-    return Material(
-      color: c.surface,
-      elevation: 6,
-      shadowColor: c.shadow,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          border: Border.all(color: c.border),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: AppConstants.reactions.map((emoji) {
-            final active = reacted == emoji;
-            return GestureDetector(
-              onTap: () {
-                _requireAuth(
-                    () => widget.appState.reactToPaper(paper.id, emoji));
-                _removeReactionOverlay();
-              },
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: active
-                      ? a.accent.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(emoji, style: const TextStyle(fontSize: 22)),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
+  /// The heart is a simple like: tap to like, tap again to unlike.
+  /// A like is the heart reaction; an older emoji reaction is
+  /// replaced by it, and tapping while liked removes it — the toggle
+  /// in [AppState.reactToPaper] handles all three cases.
+  void _toggleLike() {
+    _requireAuth(
+        () => widget.appState.reactToPaper(widget.paper.id, '❤️'));
   }
 
   void _requireAuth(VoidCallback action) {
@@ -305,13 +207,11 @@ class _PaperCardState extends State<PaperCard> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      // Reaction picker trigger — a round accent button
-                      // with a heart, like the reference card. The
-                      // popover itself is an OverlayEntry (see
-                      // _toggleReactions), so it dismisses on outside
-                      // tap and never clips.
+                      // Like button — a round accent button with a
+                      // heart, like the reference card. Tapping it
+                      // likes or unlikes; there is no emoji picker.
                       GestureDetector(
-                        onTap: _toggleReactions,
+                        onTap: _toggleLike,
                         child: Container(
                           width: isNarrow ? 36 : 44,
                           height: isNarrow ? 36 : 44,

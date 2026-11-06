@@ -398,29 +398,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
               _statColumn(
                   p, 'Read time', '~${paper.readTimeMinutes}m', narrow),
               _statColumn(
-                  p, 'Reactions', '${paper.totalReactions}', narrow),
+                  p, 'Likes', '${paper.totalReactions}', narrow),
               _statColumn(
                   p, 'Comments', '${paper.comments.length}', narrow),
             ],
           ),
           const SizedBox(height: 16),
-          // Reactions
+          // Like — one heart pill, no emoji picker. Any older emoji
+          // reaction counts as a like here; tapping the pill toggles
+          // the heart (see _reactionButton, called with '❤️').
           Container(
             padding: const EdgeInsets.only(top: 14),
             decoration: BoxDecoration(
               border: Border(top: BorderSide(color: c.border)),
             ),
-            child: Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: AppConstants.reactions.map((emoji) {
-                final count =
-                    (paper.reactions[emoji] ?? const []).length;
-                final active = _activeReactionFor(paper) == emoji;
-                return _reactionButton(
-                  p, paper, emoji, count, active);
-              }).toList(),
-            ),
+            child: _reactionButton(p, paper, '❤️', paper.totalReactions,
+                _activeReactionFor(paper) != null),
           ),
         ],
       ),

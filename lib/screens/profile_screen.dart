@@ -837,7 +837,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _statCell(
               p,
               value: '$reactions',
-              label: 'Reactions Received',
+              label: 'Likes Received',
               color: p.danger,
             ),
             _statCell(
@@ -1023,7 +1023,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: monoStyle(p, size: 10),
                         ),
                         Text(
-                          '${paper.totalReactions} reactions',
+                          '${paper.totalReactions} likes',
                           style: monoStyle(p, size: 10),
                         ),
                       ],

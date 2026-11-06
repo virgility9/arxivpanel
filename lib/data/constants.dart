@@ -1,14 +1,12 @@
 /// UI constants shared across the app.
 ///
-/// These are UI constants (emoji palette, research fields, cover/avatar
-/// image pools), not mock data, so they live in a dedicated constants file
-/// rather than with any dataset.
+/// These are UI constants (research fields, cover/avatar image pools),
+/// not mock data, so they live in a dedicated constants file rather
+/// than with any dataset.
 library;
 
 class AppConstants {
   AppConstants._();
-
-  static const List<String> reactions = ['🔥', '🧠', '👏', '❤️', '✨', '🌱'];
 
   static const List<String> fields = [
     'All Fields',
