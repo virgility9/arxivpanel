@@ -116,8 +116,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       ],
                       _sectionLabel(p, 'LIVE FROM THE WEB'),
                       const SizedBox(height: 12),
-                      if (widget.appState.liveNewsLoading &&
-                          liveNews.isEmpty)
+                      if (widget.appState.liveNewsLoading && liveNews.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 48),
                           child: Center(
@@ -127,11 +126,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                 const SizedBox(height: 16),
                                 Text(
                                   'Fetching the latest headlines…',
-                                  style: bodyStyle(
-                                    p,
-                                    size: 13,
-                                    color: c.muted,
-                                  ),
+                                  style: bodyStyle(p, size: 13, color: c.muted),
                                 ),
                               ],
                             ),
@@ -143,10 +138,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 32),
                           child: Column(
                             children: [
-                              const Text(
-                                '📶',
-                                style: TextStyle(fontSize: 32),
-                              ),
+                              const Text('📶', style: TextStyle(fontSize: 32)),
                               const SizedBox(height: 12),
                               Text(
                                 'Couldn\'t load live news',
@@ -159,19 +151,16 @@ class _FeedScreenState extends State<FeedScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 'Check your connection and try again.',
-                                style: bodyStyle(
-                                  p,
-                                  size: 13,
-                                  color: c.muted,
-                                ),
+                                style: bodyStyle(p, size: 13, color: c.muted),
                               ),
                               const SizedBox(height: 16),
                               GoldButton(
                                 palette: p,
                                 label: 'Retry',
                                 minHeight: 44,
-                                onPressed: () => widget.appState
-                                    .fetchLiveNews(forceRefresh: true),
+                                onPressed: () => widget.appState.fetchLiveNews(
+                                  forceRefresh: true,
+                                ),
                               ),
                             ],
                           ),
@@ -229,8 +218,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   children: [
                     Text(
                       'NEWS FEED',
-                      style: monoStyle(p, size: 10, color: a.accent)
-                          .copyWith(
+                      style: monoStyle(p, size: 10, color: a.accent).copyWith(
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.12,
                       ),
@@ -267,10 +255,11 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _sectionLabel(AppPalette p, String label) {
     return Text(
       label,
-      style: monoStyle(p, size: 10, color: p.c.faint).copyWith(
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.12,
-      ),
+      style: monoStyle(
+        p,
+        size: 10,
+        color: p.c.faint,
+      ).copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.12),
     );
   }
 
@@ -283,10 +272,7 @@ class _FeedScreenState extends State<FeedScreen> {
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: p.c.border),
         ),
-        title: Text(
-          'Delete this news post?',
-          style: displayStyle(p, size: 17),
-        ),
+        title: Text('Delete this news post?', style: displayStyle(p, size: 17)),
         content: Text(
           item.title,
           style: bodyStyle(p, size: 13, color: p.c.muted),
@@ -457,13 +443,9 @@ class _NewsCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isAdminPost
-                ? a.accent.withValues(alpha: 0.06)
-                : c.surface,
+            color: isAdminPost ? a.accent.withValues(alpha: 0.06) : c.surface,
             border: Border.all(
-              color: isAdminPost
-                  ? a.accent.withValues(alpha: 0.5)
-                  : c.border,
+              color: isAdminPost ? a.accent.withValues(alpha: 0.5) : c.border,
             ),
             borderRadius: BorderRadius.circular(12),
           ),
@@ -486,25 +468,18 @@ class _NewsCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
-                            isAdminPost
-                                ? 'ARXIV'
-                                : item.source.toUpperCase(),
+                            isAdminPost ? 'ARXIV' : item.source.toUpperCase(),
                             style: monoStyle(
                               palette,
                               size: 9,
-                              color:
-                                  isAdminPost ? a.accentFg : c.muted,
+                              color: isAdminPost ? a.accentFg : c.muted,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           dateLabel,
-                          style: monoStyle(
-                            palette,
-                            size: 10,
-                            color: c.faint,
-                          ),
+                          style: monoStyle(palette, size: 10, color: c.faint),
                         ),
                         const Spacer(),
                         if (canDelete)
@@ -532,11 +507,7 @@ class _NewsCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         item.summary,
-                        style: bodyStyle(
-                          palette,
-                          size: 13,
-                          color: c.muted,
-                        ),
+                        style: bodyStyle(palette, size: 13, color: c.muted),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -545,11 +516,7 @@ class _NewsCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         'Read the full story ↗',
-                        style: bodyStyle(
-                          palette,
-                          size: 12,
-                          color: a.accent,
-                        ),
+                        style: bodyStyle(palette, size: 12, color: a.accent),
                       ),
                     ],
                   ],
