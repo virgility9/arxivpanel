@@ -125,20 +125,13 @@ class _FeedScreenState extends State<FeedScreen> {
                       _sectionLabel(p, 'LIVE FROM THE WEB'),
                       const SizedBox(height: 12),
                       if (widget.appState.liveNewsLoading && liveNews.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 48),
-                          child: Center(
-                            child: Column(
-                              children: [
-                                CircularProgressIndicator(color: a.accent),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Fetching the latest headlines…',
-                                  style: bodyStyle(p, size: 13, color: c.muted),
-                                ),
-                              ],
-                            ),
-                          ),
+                        Column(
+                          children: [
+                            for (var i = 0; i < 3; i++) ...[
+                              _NewsSkeletonCard(palette: p),
+                              if (i < 2) const SizedBox(height: 12),
+                            ],
+                          ],
                         )
                       else if (widget.appState.liveNewsError &&
                           liveNews.isEmpty)
@@ -667,6 +660,101 @@ class _NewsCardState extends State<_NewsCard> {
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Icon(icon, size: 20, color: color),
         ),
+      ),
+    );
+  }
+}
+
+/// Placeholder post card shown while live headlines load, shaped like
+/// a real `_NewsCard` (image block, title and summary bars, action row)
+/// instead of a spinner. Static grey bars on purpose — no animation
+/// controller to manage, and the cards are replaced by real headlines
+/// the moment the fetch lands.
+class _NewsSkeletonCard extends StatelessWidget {
+  const _NewsSkeletonCard({required this.palette});
+
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = palette.c;
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 190,
+            decoration: BoxDecoration(
+              color: c.surface2,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _bar(width: 72, height: 14),
+                const SizedBox(height: 10),
+                _bar(width: double.infinity, height: 16),
+                const SizedBox(height: 8),
+                _bar(width: 220, height: 16),
+                const SizedBox(height: 8),
+                _bar(width: double.infinity, height: 11),
+                const SizedBox(height: 6),
+                _bar(width: double.infinity, height: 11),
+                const SizedBox(height: 6),
+                _bar(width: 180, height: 11),
+                const SizedBox(height: 8),
+                _bar(width: 56, height: 10),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: c.surface2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: _bar(width: 20, height: 20),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: _bar(width: 20, height: 20),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bar({required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: palette.c.surface2,
+        borderRadius: BorderRadius.circular(4),
       ),
     );
   }

@@ -205,6 +205,8 @@ class NetImage extends StatelessWidget {
       height: height,
       fit: fit,
       // Loading placeholder so images don't pop in from blank.
+      // Skeleton-style loading: a plain grey block while the image
+      // loads, no spinner.
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
         final surfaceColor = Theme.of(context).colorScheme.surfaceContainerHighest;
@@ -212,13 +214,6 @@ class NetImage extends StatelessWidget {
           width: width,
           height: height,
           color: surfaceColor,
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
         );
       },
       errorBuilder: (context, _, _) {
