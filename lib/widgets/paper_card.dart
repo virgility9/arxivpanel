@@ -1,10 +1,11 @@
 /// Paper card ported from `PaperCard` in `src/components/LibraryView.tsx`.
 ///
 /// Layout follows virgil's reference card (2026-11-07): a framed cover
-/// image, the field in gold caps, a big bold title, "author · year",
-/// a divider, then the action row — eye + views, comment, bookmark,
-/// and a round accent button with a heart that toggles a like.
-/// No tag chip, no badges on the cover, no reaction count.
+/// image, the field in gold caps with the save button at the right end
+/// of that row, a big bold title, "author · year", a divider, then the
+/// action row — eye + views, comment, and a round accent button with a
+/// heart that toggles a like. No tag chip, no badges on the cover, no
+/// reaction count.
 /// Sized for the library grid (2 columns on phones, 3–4 on wider
 /// screens); the title is capped at 2 lines.
 ///
@@ -112,12 +113,36 @@ class _PaperCardState extends State<PaperCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Field label, gold caps — like the reference card.
-                Text(
-                  paper.field.toUpperCase(),
-                  style: monoStyle(palette,
-                      size: 10, color: a.accent, weight: FontWeight.w700),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                // The save button sits at the right end of this row.
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        paper.field.toUpperCase(),
+                        style: monoStyle(palette,
+                            size: 10,
+                            color: a.accent,
+                            weight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _requireAuth(() =>
+                          widget.appState.toggleBookmark(paper.id)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 6),
+                        child: Icon(
+                          bookmarked
+                              ? Icons.bookmark
+                              : Icons.bookmark_border,
+                          size: 18,
+                          color: bookmarked ? a.accent : c.muted,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 GestureDetector(
@@ -192,17 +217,6 @@ class _PaperCardState extends State<PaperCard> {
                               onTap: () =>
                                   widget.appState.openPaper(paper),
                             ),
-                            const SizedBox(width: 8),
-                            _actionIcon(
-                              icon: bookmarked
-                                  ? Icons.bookmark
-                                  : Icons.bookmark_border,
-                              size: isNarrow ? 16 : 18,
-                              color: bookmarked ? a.accent : null,
-                              onTap: () => _requireAuth(() => widget
-                                  .appState
-                                  .toggleBookmark(paper.id)),
-                            ),
                           ],
                         ),
                       ),
@@ -239,9 +253,9 @@ class _PaperCardState extends State<PaperCard> {
     );
   }
 
-  /// Small icon button for the views / comment / bookmark slots in the
-  /// action row. The icon stays compact; the padding keeps the tap
-  /// target close to the 36/44px reaction button.
+  /// Small icon button for the views / comment slots in the action
+  /// row. The icon stays compact; the padding keeps the tap target
+  /// close to the 36/44px reaction button.
   Widget _actionIcon({
     required IconData icon,
     required VoidCallback onTap,
