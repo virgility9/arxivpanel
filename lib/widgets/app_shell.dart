@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../data/constants.dart';
 import '../models/models.dart';
 import '../screens/admin_screen.dart';
 import '../screens/library_screen.dart';
@@ -301,7 +302,7 @@ class _Navbar extends StatelessWidget {
                     children: [
                       GhostButton(
                         palette: palette,
-                        label: 'Sign In',
+                        label: AppConstants.signInLabel,
                         minHeight: 36,
                         onPressed: () => onAuthPrompt(AuthMode.login),
                       ),
@@ -342,7 +343,7 @@ class _Navbar extends StatelessWidget {
                     children: [
                       GhostButton(
                         palette: palette,
-                        label: 'Sign In',
+                        label: AppConstants.signInLabel,
                         minHeight: 32,
                         onPressed: () => onAuthPrompt(AuthMode.login),
                       ),
@@ -662,12 +663,12 @@ class _BottomNav extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           item.label.toUpperCase(),
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 9,
+                          style: monoStyle(
+                            palette,
+                            size: 9,
                             letterSpacing: 0.04,
                             color: active ? a.accent : c.muted,
-                            fontWeight: active
+                            weight: active
                                 ? FontWeight.w600
                                 : FontWeight.w400,
                           ),

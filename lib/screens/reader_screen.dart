@@ -45,13 +45,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   /// Comment dates render like "Nov 14, 2024" (mirrors the React
   /// `toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })`).
-  String _fmtCommentDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-  }
+  String _fmtCommentDate(DateTime dt) =>
+      formatShortDate(dt.toIso8601String().substring(0, 10));
 
   @override
   Widget build(BuildContext context) {
@@ -826,7 +821,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       const SizedBox(height: 12),
                       GoldButton(
                         palette: p,
-                        label: 'Sign In',
+                        label: AppConstants.signInLabel,
                         onPressed: widget.onAuthPrompt,
                         minHeight: 44,
                       ),

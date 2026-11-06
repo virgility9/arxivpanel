@@ -326,7 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             actions: [
               TextButton(
                 onPressed: saving ? null : () => Navigator.of(ctx).pop(),
-                child: Text('Cancel', style: TextStyle(color: c.muted)),
+                child: Text(AppConstants.cancelLabel, style: TextStyle(color: c.muted)),
               ),
               GoldButton(
                 palette: p,
@@ -363,7 +363,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel', style: TextStyle(color: p.c.muted)),
+            child: Text(AppConstants.cancelLabel, style: TextStyle(color: p.c.muted)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -388,7 +388,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(AppConstants.cancelLabel),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
