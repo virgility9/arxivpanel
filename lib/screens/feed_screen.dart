@@ -15,7 +15,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
-import 'shared.dart';
+import '../widgets/shared.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key, required this.appState, required this.theme});
