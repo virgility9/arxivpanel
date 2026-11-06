@@ -183,6 +183,7 @@ class NetImage extends StatelessWidget {
     this.height,
     this.fit = BoxFit.cover,
     this.borderRadius,
+    this.onError,
   });
 
   final String url;
@@ -190,6 +191,11 @@ class NetImage extends StatelessWidget {
   final double? height;
   final BoxFit fit;
   final BorderRadius? borderRadius;
+
+  /// Called when the image fails to load, so a caller can hide the
+  /// image block instead of showing the 📄 placeholder box. Callers
+  /// that ignore it keep the old placeholder behavior.
+  final VoidCallback? onError;
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +222,13 @@ class NetImage extends StatelessWidget {
         );
       },
       errorBuilder: (context, _, _) {
+        // Tell the caller the image failed (post-frame: errorBuilder
+        // can run during build, so a setState inside the callback
+        // would throw). The placeholder is still returned, so callers
+        // that ignore onError keep the old behavior.
+        if (onError != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => onError!());
+        }
         final surfaceColor = Theme.of(context).colorScheme.surfaceContainerHighest;
         return Container(
           width: width,

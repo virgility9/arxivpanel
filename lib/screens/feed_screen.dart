@@ -108,6 +108,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         const SizedBox(height: 12),
                         for (final item in adminNews) ...[
                           _NewsCard(
+                            key: ValueKey(item.id),
                             item: item,
                             palette: p,
                             isAdminPost: true,
@@ -182,6 +183,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       else
                         for (final item in liveNews) ...[
                           _NewsCard(
+                            key: ValueKey(item.id),
                             item: item,
                             palette: p,
                             onOpen: () => _openUrl(item.url),
@@ -428,6 +430,7 @@ class _FeedScreenState extends State<FeedScreen> {
 /// There is deliberately no comment button: like / unlike + share only.
 class _NewsCard extends StatefulWidget {
   const _NewsCard({
+    super.key,
     required this.item,
     required this.palette,
     this.isAdminPost = false,
@@ -457,6 +460,10 @@ class _NewsCardState extends State<_NewsCard> {
 
   /// Long summaries start collapsed at 3 lines with a "See more" link.
   bool _expanded = false;
+
+  /// Set when the cover image fails to load: the image block is dropped
+  /// entirely instead of leaving a tall empty box with a 📄 in it.
+  bool _imageFailed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -489,8 +496,10 @@ class _NewsCardState extends State<_NewsCard> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Full-width cover image, like a social post. Admin posts
-              // carry no image, so they start straight at the text.
-              if (item.imageUrl.isNotEmpty)
+              // carry no image, so they start straight at the text. A
+              // thumbnail that fails to load hides the block instead of
+              // leaving an empty box behind.
+              if (item.imageUrl.isNotEmpty && !_imageFailed)
                 NetImage(
                   url: item.imageUrl,
                   width: double.infinity,
@@ -498,6 +507,11 @@ class _NewsCardState extends State<_NewsCard> {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(12),
                   ),
+                  onError: () {
+                    if (!_imageFailed) {
+                      setState(() => _imageFailed = true);
+                    }
+                  },
                 ),
               Padding(
                 padding: const EdgeInsets.all(16),
