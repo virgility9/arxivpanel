@@ -157,12 +157,47 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                 ),
               ),
+              // Offline banner: papers already loaded, but the live
+              // stream died — the grid shows the last loaded papers.
+              if (widget.appState.isOffline &&
+                  widget.appState.papersResolved)
+                Container(
+                  color: a.accent.withValues(alpha: 0.12),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isNarrow ? 16 : 24,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('📶', style: TextStyle(fontSize: 14)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You\'re offline — showing the last loaded papers.',
+                          style: bodyStyle(p, size: 12, color: c.textSub),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: widget.appState.retryConnection,
+                        child: Text(
+                          'Retry',
+                          style: bodyStyle(
+                            p,
+                            size: 12,
+                            color: a.accent,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // ---------------------------------------- Paper list ----
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                  isNarrow ? 0 : 24,
-                  isNarrow ? 20 : 40,
-                  isNarrow ? 0 : 24,
+                  isNarrow ? 16 : 24,
+                  isNarrow ? 16 : 32,
+                  isNarrow ? 16 : 24,
                   80,
                 ),
                 child: Center(
@@ -170,23 +205,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     constraints: const BoxConstraints(maxWidth: 1280),
                     child: !widget.appState.papersResolved
                         // First Firestore emission hasn't arrived yet —
-                        // distinguish loading from genuinely empty.
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 64),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  CircularProgressIndicator(color: a.accent),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'Loading the archive…',
-                                    style:
-                                        bodyStyle(p, size: 13, color: c.muted),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
+                        // distinguish loading from genuinely empty, and
+                        // from slow/offline connections.
+                        ? _buildLoadingState(p)
                         : filtered.isEmpty
                         ? EmptyState(
                             palette: p,
@@ -194,67 +215,40 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             title: 'No papers found',
                             sub: 'Try a different search or field filter',
                           )
-                        : isNarrow
-                            // SizedBox forces the list to the full available
-                            // width: without it the Column sizes itself from
-                            // the cards' intrinsic width, and IntrinsicHeight
-                            // + Expanded inside PaperCard can collapse that
-                            // to a degenerate width (seen: the card Row laid
-                            // out at 1px, so the 100px cover stuck out 99px).
-                            ? SizedBox(
-                                width: double.infinity,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    for (var i = 0;
-                                        i < filtered.length;
-                                        i++) ...[
-                                      PaperCard(
-                                        key: ValueKey(filtered[i].id),
-                                        paper: filtered[i],
-                                        appState: widget.appState,
-                                        theme: widget.theme,
-                                        onAuthPrompt: widget.onAuthPrompt,
-                                      ),
-                                      Container(height: 1, color: c.border),
-                                    ],
-                                  ],
+                        : LayoutBuilder(
+                            builder: (context, listConstraints) {
+                              // Comfortable grid: 2 columns on phones,
+                              // 3 on tablets, 4 on wide screens. Fixed
+                              // cell height (mainAxisExtent) so cards keep
+                              // their shape; the vertical PaperCard bounds
+                              // its own content (title 2 lines, one tag),
+                              // so nothing can overflow the cell.
+                              final width = listConstraints.maxWidth;
+                              final columns =
+                                  width < 700 ? 2 : width < 1100 ? 3 : 4;
+                              final extent = width < 700 ? 292.0 : 312.0;
+                              return GridView.builder(
+                                shrinkWrap: true,
+                                physics:
+                                    const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  mainAxisExtent: extent,
                                 ),
-                              )
-                            : LayoutBuilder(
-                                builder: (context, listConstraints) {
-                                  // Two-column Wrap instead of a fixed
-                                  // childAspectRatio grid: cards keep their
-                                  // intrinsic height, so long titles/tags can
-                                  // never overflow the cell.
-                                  // Same zero-width-frame guard as the
-                                  // settings accent chips: clamp, never
-                                  // negative, or Container(width: ...) throws.
-                                  final colWidth =
-                                      ((listConstraints.maxWidth - 1) / 2)
-                                          .clamp(0.0, double.infinity)
-                                          .toDouble();
-                                  return Wrap(
-                                    spacing: 1,
-                                    runSpacing: 1,
-                                    children: [
-                                      for (final paper in filtered)
-                                        Container(
-                                          width: colWidth,
-                                          color: c.border,
-                                          child: PaperCard(
-                                            key: ValueKey(paper.id),
-                                            paper: paper,
-                                            appState: widget.appState,
-                                            theme: widget.theme,
-                                            onAuthPrompt: widget.onAuthPrompt,
-                                          ),
-                                        ),
-                                    ],
-                                  );
-                                },
-                              ),
+                                itemCount: filtered.length,
+                                itemBuilder: (context, i) => PaperCard(
+                                  key: ValueKey(filtered[i].id),
+                                  paper: filtered[i],
+                                  appState: widget.appState,
+                                  theme: widget.theme,
+                                  onAuthPrompt: widget.onAuthPrompt,
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ),
               ),
@@ -267,6 +261,93 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   /// Whether any filter differs from the defaults.
   bool get _hasActiveFilters => _field != AppConstants.fields[0] || _sort != 'popular';
+
+  /// Loading / buffering / offline states for the first papers emission.
+  Widget _buildLoadingState(AppPalette p) {
+    final c = p.c;
+    final a = p.accent;
+    if (widget.appState.isOffline) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+        child: Center(
+          child: Column(
+            children: [
+              const Text('📶', style: TextStyle(fontSize: 32)),
+              const SizedBox(height: 16),
+              Text(
+                'You\'re offline',
+                style: displayStyle(p, size: 17, color: c.muted),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Check your connection, then try again.',
+                style: bodyStyle(p, size: 13, color: c.muted),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              GoldButton(
+                palette: p,
+                label: 'Retry',
+                minHeight: 44,
+                onPressed: widget.appState.retryConnection,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (widget.appState.isSlowConnection) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+        child: Center(
+          child: Column(
+            children: [
+              CircularProgressIndicator(color: a.accent),
+              const SizedBox(height: 16),
+              Text(
+                'Slow connection…',
+                style: displayStyle(p, size: 17, color: c.muted),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Still loading the archive — your connection seems slow.',
+                style: bodyStyle(p, size: 13, color: c.muted),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: widget.appState.retryConnection,
+                child: Text(
+                  'Retry',
+                  style: bodyStyle(
+                    p,
+                    size: 13,
+                    color: a.accent,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 64),
+      child: Center(
+        child: Column(
+          children: [
+            CircularProgressIndicator(color: a.accent),
+            const SizedBox(height: 16),
+            Text(
+              'Loading the archive…',
+              style: bodyStyle(p, size: 13, color: c.muted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   /// Tune-icon button beside the search field. Shows a gold dot while any
   /// filter is active; opens the filter bottom sheet on tap.

@@ -555,6 +555,8 @@ class TagChip extends StatelessWidget {
       ),
       child: Text(
         '#$tag',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: monoStyle(
           palette,
           size: 10,

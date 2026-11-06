@@ -1,8 +1,11 @@
 /// Paper card ported from `PaperCard` in `src/components/LibraryView.tsx`.
 ///
-/// Horizontal card: cover strip on the left with field + page badges, then
-/// title, author row, tag chips, and a bottom action row (views, comments,
-/// bookmark, reaction picker).
+/// Vertical grid card: cover image on top with field + page badges, then
+/// title, author row, one tag chip, and a bottom action row (views,
+/// comments, bookmark, reaction picker). Sized for the library grid
+/// (2 columns on phones, 3–4 on wider screens): the title is capped at
+/// 2 lines and only the first tag is shown, so the card always fits its
+/// fixed grid cell.
 library;
 
 import 'package:flutter/material.dart';
@@ -157,140 +160,144 @@ class _PaperCardState extends State<PaperCard> {
     final totalReactions = paper.totalReactions;
     final bookmarked = widget.appState.isBookmarked(paper.id);
     final isNarrow = MediaQuery.of(context).size.width < 700;
+    final coverH = isNarrow ? 132.0 : 150.0;
 
     return Container(
       color: c.surface,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Clamp the cover strip to the width actually available. The
-          // card has been seen laid out at a degenerate 1px width (the
-          // list-level full-width fix did not reach it), where the fixed
-          // 100px cover stuck out by 99px. At every normal width this is
-          // exactly the old 100/120.
-          final maxW = constraints.maxWidth;
-          final full = isNarrow ? 80.0 : 120.0;
-          final coverW =
-              maxW.isFinite ? full.clamp(0.0, maxW).toDouble() : full;
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Cover strip
-                GestureDetector(
-                  onTap: () => widget.appState.openPaper(paper),
-                  child: SizedBox(
-                    width: coverW,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    NetImage(url: paper.coverImage),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.transparent, c.surface.withValues(alpha: 0.0), c.surface],
-                          stops: const [0.4, 0.7, 1.0],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Cover
+          GestureDetector(
+            onTap: () => widget.appState.openPaper(paper),
+            child: SizedBox(
+              height: coverH,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  NetImage(url: paper.coverImage),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          c.surface.withValues(alpha: 0.0),
+                          c.surface
+                        ],
+                        stops: const [0.4, 0.7, 1.0],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
                       ),
                     ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: _miniBadge(paper.field.split(' ').first.toUpperCase(), a.accent),
-                    ),
-                    Positioned(
-                      bottom: 8,
-                      left: 8,
-                      child: _miniBadge('${paper.pages}p', c.faint),
-                    ),
-                  ],
-                ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: _miniBadge(
+                        paper.field.split(' ').first.toUpperCase(), a.accent),
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    left: 8,
+                    child: _miniBadge('${paper.pages}p', c.faint),
+                  ),
+                ],
               ),
             ),
-            // Content
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  isNarrow ? 12 : 14,
-                  isNarrow ? 12 : 14,
-                  isNarrow ? 12 : 14,
-                  isNarrow ? 10 : 12,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () => widget.appState.openPaper(paper),
-                      child: Text(
-                        paper.title,
-                        style: displayStyle(palette, size: isNarrow ? 15 : 16),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+          ),
+          // Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    onTap: () => widget.appState.openPaper(paper),
+                    child: Text(
+                      paper.title,
+                      style: displayStyle(palette, size: isNarrow ? 15 : 16),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      AvatarImage(
+                          url: paper.authorAvatar,
+                          size: 18,
+                          borderColor: c.border,
+                          borderWidth: 1),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          paper.author,
+                          style: bodyStyle(palette, size: 11, color: c.muted),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text('·',
+                          style: TextStyle(color: c.fainter, fontSize: 10)),
+                      const SizedBox(width: 4),
+                      Text(paper.year,
+                          style: monoStyle(palette, size: 10, color: c.faint)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (paper.tags.isNotEmpty)
                     Row(
                       children: [
-                        AvatarImage(url: paper.authorAvatar, size: 18, borderColor: c.border, borderWidth: 1),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            paper.author,
-                            style: bodyStyle(palette, size: 11, color: c.muted),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        Flexible(
+                          child: TagChip(
+                              palette: palette, tag: paper.tags.first),
                         ),
-                        Text('·', style: TextStyle(color: c.fainter, fontSize: 10)),
-                        const SizedBox(width: 4),
-                        Text(paper.year, style: monoStyle(palette, size: 10, color: c.faint)),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: paper.tags.take(2).map((t) => TagChip(palette: palette, tag: t)).toList(),
+                  const Spacer(),
+                  Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    padding: const EdgeInsets.only(top: 6),
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: c.surface2)),
                     ),
-                    const Spacer(),
-                    Container(
-                      margin: const EdgeInsets.only(top: 6),
-                      padding: const EdgeInsets.only(top: 6),
-                      decoration: BoxDecoration(
-                        border: Border(top: BorderSide(color: c.surface2)),
-                      ),
-                      child: Row(
-                        children: [
-                          Text('${formatCount(paper.views)}v', style: monoStyle(palette, size: 10, color: c.faint)),
-                          const SizedBox(width: 8),
-                          Text('${paper.comments.length}💬', style: monoStyle(palette, size: 10, color: c.faint)),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: () => _requireAuth(() => widget.appState.toggleBookmark(paper.id)),
-                            child: Padding(
-                              // Visual stays compact; hit area meets 44px.
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                              child: Text(
-                                bookmarked ? '🔖' : '🏷️',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: bookmarked ? a.accent : c.fainter,
-                                ),
+                    child: Row(
+                      children: [
+                        Text('${formatCount(paper.views)}v',
+                            style:
+                                monoStyle(palette, size: 10, color: c.faint)),
+                        const SizedBox(width: 8),
+                        Text('${paper.comments.length}💬',
+                            style:
+                                monoStyle(palette, size: 10, color: c.faint)),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => _requireAuth(() =>
+                              widget.appState.toggleBookmark(paper.id)),
+                          child: Padding(
+                            // Visual stays compact; hit area meets 44px.
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 10),
+                            child: Text(
+                              bookmarked ? '🔖' : '🏷️',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: bookmarked ? a.accent : c.fainter,
                               ),
                             ),
                           ),
-                          const Spacer(),
-                          // Reaction picker trigger — the popover itself is
-                          // an OverlayEntry (see _toggleReactions), so it
-                          // dismisses on outside tap and never clips.
-                          GestureDetector(
-                            onTap: _toggleReactions,
-                            // Extra vertical padding keeps the pill compact
-                            // while the tap target meets the 44px minimum.
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 8),
-                              child: Container(
+                        ),
+                        // Reaction picker trigger — the popover itself is
+                        // an OverlayEntry (see _toggleReactions), so it
+                        // dismisses on outside tap and never clips.
+                        GestureDetector(
+                          onTap: _toggleReactions,
+                          // Extra vertical padding keeps the pill compact
+                          // while the tap target meets the 44px minimum.
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 8),
+                            child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
@@ -319,18 +326,15 @@ class _PaperCardState extends State<PaperCard> {
                               ),
                             ),
                           ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      );
-        },
+          ),
+        ],
       ),
     );
   }

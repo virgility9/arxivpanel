@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import '../data/constants.dart';
 import '../models/models.dart';
 import '../screens/admin_screen.dart';
+import '../screens/feed_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/polls_screen.dart';
 import '../screens/post_paper_screen.dart';
@@ -21,6 +22,7 @@ import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
 import 'app_icons.dart';
 import 'auth_dialog.dart';
+import 'feed_icon.dart';
 import 'shared.dart';
 
 class AppShell extends StatelessWidget {
@@ -116,6 +118,8 @@ class AppShell extends StatelessWidget {
           theme: theme,
           onAuthPrompt: onAuthPrompt,
         );
+      case AppView.feed:
+        return FeedScreen(appState: appState, theme: theme);
       case AppView.reader:
         if (appState.selectedPaper == null) {
           return LibraryScreen(
@@ -190,7 +194,8 @@ class _Navbar extends StatelessWidget {
     final view = appState.view;
     final pendingCount = appState.pendingPapers.length;
 
-    Widget navLink(String label, AppView v, {AppIcon? icon, int? badge}) {
+    Widget navLink(String label, AppView v,
+        {AppIcon? icon, bool feedIcon = false, int? badge}) {
       final active =
           view == v || (v == AppView.library && view == AppView.reader);
       return InkWell(
@@ -209,7 +214,13 @@ class _Navbar extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (icon != null) ...[
+              if (feedIcon) ...[
+                FeedIconImage(
+                  size: 16,
+                  color: active ? a.accent : c.muted,
+                ),
+                const SizedBox(width: 6),
+              ] else if (icon != null) ...[
                 AppIconImage(
                   icon,
                   size: 16,
@@ -279,6 +290,7 @@ class _Navbar extends StatelessWidget {
               if (!isNarrow) ...[
                 const SizedBox(width: 12),
                 navLink('Library', AppView.library, icon: AppIcon.library),
+                navLink('Feed', AppView.feed, feedIcon: true),
                 navLink('Contest', AppView.polls, icon: AppIcon.contest),
                 navLink('Submit', AppView.post, icon: AppIcon.submit),
                 if (user?.isAdmin == true)
@@ -538,7 +550,7 @@ class _BottomNav extends StatelessWidget {
         <
           ({
             AppView view,
-            AppIcon icon,
+            AppIcon? icon,
             String label,
             bool requiresAuth,
             int? badge,
@@ -548,6 +560,14 @@ class _BottomNav extends StatelessWidget {
             view: AppView.library,
             icon: AppIcon.library,
             label: 'Library',
+            requiresAuth: false,
+            badge: null,
+          ),
+          (
+            view: AppView.feed,
+            // Null icon means the custom newspaper icon below.
+            icon: null,
+            label: 'Feed',
             requiresAuth: false,
             badge: null,
           ),
@@ -628,13 +648,20 @@ class _BottomNav extends StatelessWidget {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            AppIconImage(
-                              item.icon,
-                              size: 20,
-                              color: active
-                                  ? a.accent
-                                  : c.muted.withValues(alpha: 0.7),
-                            ),
+                            item.icon != null
+                                ? AppIconImage(
+                                    item.icon!,
+                                    size: 20,
+                                    color: active
+                                        ? a.accent
+                                        : c.muted.withValues(alpha: 0.7),
+                                  )
+                                : FeedIconImage(
+                                    size: 20,
+                                    color: active
+                                        ? a.accent
+                                        : c.muted.withValues(alpha: 0.7),
+                                  ),
                             if (item.badge != null)
                               Positioned(
                                 top: -6,
