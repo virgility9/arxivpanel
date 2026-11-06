@@ -391,7 +391,12 @@ class _FeedScreenState extends State<FeedScreen> {
                           summary: _summaryController.text,
                           url: _urlController.text,
                         );
-                        if (!mounted) return;
+                        // `mounted` guards the Feed screen's own State,
+                        // but `ctx` is the dialog's context — it needs
+                        // its own check. Without it, popping (or
+                        // setDialogState below) after the dialog was
+                        // already dismissed uses a dead context.
+                        if (!mounted || !ctx.mounted) return;
                         if (ok) {
                           Navigator.of(ctx).pop();
                         } else {
