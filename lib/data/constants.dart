@@ -24,6 +24,17 @@ class AppConstants {
     'Electrical Engineering',
   ];
 
+  /// Shared user-facing message for invalid email input (client-side
+  /// validation and the password-reset error case).
+  static const String invalidEmailMessage = 'Enter a valid email address.';
+
+  /// Firebase error code for denied reads/writes.
+  static const String permissionDeniedCode = 'permission-denied';
+
+  /// Shared button/dialog labels.
+  static const String cancelLabel = 'Cancel';
+  static const String signInLabel = 'Sign In';
+
   /// Cartoonish preset avatars (DiceBear, PNG). Shown in the Edit Profile
   /// dialog and assigned to new signups.
   static const List<String> randomAvatars = [

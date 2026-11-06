@@ -1,5 +1,5 @@
 name: arxivpanel
-description: "A new Flutter project."
+description: "Arxiv - a paper library app."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -36,11 +36,6 @@ dependencies:
   firebase_core: ^3.8.0
   firebase_auth: ^5.3.3
   cloud_firestore: ^5.5.0
-  firebase_storage: ^12.3.7
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
 
   # Opens PDF / website URLs in the browser (admin "Read PDF", profile
   # website links). Run `flutter pub get` after adding.

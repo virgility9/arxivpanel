@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/constants.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -117,7 +118,7 @@ class _AdminScreenState extends State<AdminScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(AppConstants.cancelLabel),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -1971,7 +1972,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                   Expanded(
                                     child: GhostButton(
                                       palette: p,
-                                      label: 'Cancel',
+                                      label: AppConstants.cancelLabel,
                                       minHeight: 44,
                                       onPressed: () =>
                                           setD(() => reviewAction = null),
