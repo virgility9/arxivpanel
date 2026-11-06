@@ -540,11 +540,15 @@ class AppState extends ChangeNotifier {
 
   // -------------------------------------------------------------------- news
 
-  /// Fetches live education/science headlines (cached 5 min in the repo).
-  /// Called when the Feed tab opens and on pull-to-refresh. Never throws.
+  /// Fetches live education/science headlines. Called every time the
+  /// Feed tab opens and on pull-to-refresh. The repo caches results for
+  /// 5 minutes, so a revisit inside that window reuses the cached list
+  /// and a stale one is refetched — headlines no longer freeze after
+  /// the first load. The loading spinner only shows while the list is
+  /// empty (see feed_screen.dart), so a background refresh never
+  /// flashes over headlines already on screen. Never throws.
   Future<void> fetchLiveNews({bool forceRefresh = false}) async {
     if (_liveNewsLoading) return;
-    if (!forceRefresh && _liveNews.isNotEmpty) return;
     _liveNewsLoading = true;
     _liveNewsError = false;
     notifyListeners();
