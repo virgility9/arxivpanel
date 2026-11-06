@@ -587,6 +587,48 @@ class FirestoreRepository {
   }
 
   // ------------------------------------------------------------------
+  // News
+  // ------------------------------------------------------------------
+
+  /// Streams admin-posted news items, newest first.
+  Stream<List<NewsItem>> watchNews() {
+    return _firestore
+        .collection('news')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => NewsItem.fromJson(d.id, d.data())).toList());
+  }
+
+  /// Posts a news item to `news` (admin only per `firestore.rules`).
+  /// Returns the new document id.
+  Future<String> postNews({
+    required String title,
+    required String summary,
+    required String url,
+    required String createdBy,
+  }) async {
+    final data = NewsItem(
+      id: '',
+      title: title,
+      summary: summary,
+      url: url,
+      source: 'Arxiv',
+      publishedAt: DateTime.now(),
+      isAdminPosted: true,
+      postedBy: createdBy,
+    ).toJson()
+      ..['createdAt'] = FieldValue.serverTimestamp();
+    final ref = await _firestore.collection('news').add(data);
+    return ref.id;
+  }
+
+  /// Deletes an admin-posted news item (admin only per `firestore.rules`).
+  Future<void> deleteNews(String newsId) {
+    return _firestore.collection('news').doc(newsId).delete();
+  }
+
+  // ------------------------------------------------------------------
   // Lifecycle
   // ------------------------------------------------------------------
 

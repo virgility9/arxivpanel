@@ -21,8 +21,14 @@ import '../data/cloudinary_config.dart';
 import '../data/cloudinary_repository.dart';
 import '../data/constants.dart';
 import '../data/firestore_repository.dart';
+import '../data/news_repository.dart';
 import '../firebase/firebase_config.dart';
 import '../models/models.dart';
+
+/// The app's connection health, derived from the papers stream: `online`
+/// once data flows, `slow` when the first emission takes over 8 seconds,
+/// `offline` when the stream fails with a network error.
+enum ConnectionStatus { online, slow, offline }
 
 class AppState extends ChangeNotifier {
   AppState() {
@@ -41,6 +47,13 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     });
     _subscribeAuth();
+    _newsSub = _repo!.watchNews().listen((news) {
+      _adminNews = news;
+      _adminNewsLoaded = true;
+      notifyListeners();
+    }, onError: (Object e) {
+      debugPrint('[AppState] news stream error: $e');
+    });
   }
 
   /// Subscribes to the auth stream, resubscribing on error. If this stream
@@ -112,10 +125,21 @@ class AppState extends ChangeNotifier {
       (papers) {
         _papers = papers;
         _papersLoaded = true;
+        _connectionStatus = ConnectionStatus.online;
+        _slowTimer?.cancel();
         notifyListeners();
       },
       onError: _onPapersError,
     );
+    // No first emission after 8s on a slow connection — say so instead of
+    // spinning on "Loading the archive…" forever.
+    _slowTimer?.cancel();
+    _slowTimer = Timer(const Duration(seconds: 8), () {
+      if (!_papersLoaded && !_disposed) {
+        _connectionStatus = ConnectionStatus.slow;
+        notifyListeners();
+      }
+    });
   }
 
   void _onPapersError(Object e) {
@@ -133,16 +157,49 @@ class AppState extends ChangeNotifier {
       _subscribePapers();
       return;
     }
+    if (!_isPermissionDenied(e)) {
+      _connectionStatus = ConnectionStatus.offline;
+      _slowTimer?.cancel();
+      notifyListeners();
+    }
     debugPrint('[AppState] papers stream error: $e');
   }
 
   bool _isPermissionDenied(Object e) =>
       e is FirebaseException && e.code == AppConstants.permissionDeniedCode;
 
+  /// Re-subscribes to the papers feed after a slow/offline state (the
+  /// Library's Retry button). Keeps already-loaded papers on screen.
+  void retryConnection() {
+    if (_repo == null) return;
+    _connectionStatus = ConnectionStatus.online;
+    _papersSub?.cancel();
+    _papersSub = null;
+    // Fire-and-forget: teardown is idempotent and never throws.
+    unawaited(_papersDispose?.call());
+    _papersDispose = null;
+    _subscribePapers();
+    notifyListeners();
+  }
+
   StreamSubscription<List<AppUser>>? _usersSub;
   StreamSubscription<AppUser?>? _authSub;
   StreamSubscription<Set<String>>? _bookmarksSub;
   StreamSubscription<List<ReadEntry>>? _historySub;
+  StreamSubscription<List<NewsItem>>? _newsSub;
+
+  /// Connection health (see [ConnectionStatus]). Starts `online`; the
+  /// slow timer in [_subscribePapers] flips it to `slow`, and a network
+  /// papers error flips it to `offline`. A fresh emission flips it back.
+  ConnectionStatus _connectionStatus = ConnectionStatus.online;
+  Timer? _slowTimer;
+
+  final NewsRepository _newsRepo = NewsRepository();
+  List<NewsItem> _adminNews = <NewsItem>[];
+  bool _adminNewsLoaded = false;
+  List<NewsItem> _liveNews = <NewsItem>[];
+  bool _liveNewsLoading = false;
+  bool _liveNewsError = false;
 
   AppUser? _user;
   AppView _view = AppView.library;
@@ -167,6 +224,22 @@ class AppState extends ChangeNotifier {
   /// loading indicator until [papersResolved] so users never see a flash of
   /// "no papers" on first load.
   bool get papersResolved => _papersLoaded || !_firebaseReady;
+
+  /// Current connection health (see [ConnectionStatus]).
+  ConnectionStatus get connectionStatus => _connectionStatus;
+  bool get isOffline => _connectionStatus == ConnectionStatus.offline;
+  bool get isSlowConnection => _connectionStatus == ConnectionStatus.slow;
+
+  /// Admin-posted news items, newest first.
+  List<NewsItem> get adminNews => _adminNews;
+
+  /// True once the admin-news stream has emitted at least once.
+  bool get adminNewsResolved => _adminNewsLoaded || !_firebaseReady;
+
+  /// Live headlines from the education/science feeds.
+  List<NewsItem> get liveNews => _liveNews;
+  bool get liveNewsLoading => _liveNewsLoading;
+  bool get liveNewsError => _liveNewsError;
 
   /// Resolves the selected paper id against the live [_papers] list so the
   /// returned object is always fresh (streams keep it up to date).
@@ -465,6 +538,70 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // -------------------------------------------------------------------- news
+
+  /// Fetches live education/science headlines (cached 5 min in the repo).
+  /// Called when the Feed tab opens and on pull-to-refresh. Never throws.
+  Future<void> fetchLiveNews({bool forceRefresh = false}) async {
+    if (_liveNewsLoading) return;
+    if (!forceRefresh && _liveNews.isNotEmpty) return;
+    _liveNewsLoading = true;
+    _liveNewsError = false;
+    notifyListeners();
+    try {
+      final items = await _newsRepo.fetchLiveNews(forceRefresh: forceRefresh);
+      _liveNews = items;
+      _liveNewsError = items.isEmpty;
+    } catch (e) {
+      debugPrint('[AppState] live news fetch failed: $e');
+      _liveNewsError = true;
+    }
+    _liveNewsLoading = false;
+    notifyListeners();
+  }
+
+  /// Posts a news item to the Feed (admin only). Returns true when
+  /// Firestore accepted the write; surfaces a toast either way.
+  Future<bool> postNews({
+    required String title,
+    required String summary,
+    required String url,
+  }) async {
+    if (!_firebaseReady) return false;
+    final user = _user;
+    if (user == null || !user.isAdmin) return false;
+    if (title.trim().isEmpty) return false;
+    try {
+      await _repo!.postNews(
+        title: title.trim(),
+        summary: summary.trim(),
+        url: url.trim(),
+        createdBy: user.id,
+      );
+      showToast('News posted!', '📰');
+      return true;
+    } catch (e) {
+      debugPrint('postNews failed: $e');
+      showToast('Could not post the news.', '⚠️');
+      return false;
+    }
+  }
+
+  /// Deletes an admin-posted news item. Returns false — and toasts —
+  /// when the write is rejected.
+  Future<bool> deleteNews(String newsId) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.deleteNews(newsId);
+      showToast('News removed', '🗑');
+      return true;
+    } catch (e) {
+      debugPrint('deleteNews failed: $e');
+      showToast('Could not remove the news.', '⚠️');
+      return false;
+    }
+  }
+
   // ------------------------------------------------------------- submissions
 
   /// Submits a paper for review. The passed paper's `id` is ignored —
@@ -626,6 +763,8 @@ class AppState extends ChangeNotifier {
     _papersSub?.cancel();
     _usersSub?.cancel();
     _authSub?.cancel();
+    _newsSub?.cancel();
+    _slowTimer?.cancel();
     _cancelUserSubs();
     _repo?.dispose();
     super.dispose();

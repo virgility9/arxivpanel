@@ -382,7 +382,7 @@ class ReadEntry {
 }
 
 /// The top-level navigation views (mirrors the `View` union type).
-enum AppView { library, reader, post, polls, profile, settings, admin }
+enum AppView { library, feed, reader, post, polls, profile, settings, admin }
 
 /// A transient toast notification.
 class AppToast {
@@ -507,5 +507,130 @@ class Poll {
       isActive: json['isActive'] as bool? ?? true,
       options: options,
     );
+  }
+}
+
+/// A news story for the Feed tab.
+///
+/// Two kinds: live stories fetched from education/science news feeds
+/// ([source] is the publisher, [url] opens the article), and admin-posted
+/// items stored in Firestore under `news` ([isAdminPosted] is true and
+/// [id] is the document id).
+class NewsItem {
+  const NewsItem({
+    required this.id,
+    required this.title,
+    this.summary = '',
+    this.url = '',
+    required this.source,
+    required this.publishedAt,
+    this.imageUrl = '',
+    this.isAdminPosted = false,
+    this.postedBy = '',
+  });
+
+  final String id;
+  final String title;
+  final String summary;
+  final String url;
+  final String source;
+  final DateTime publishedAt;
+  final String imageUrl;
+  final bool isAdminPosted;
+  final String postedBy;
+
+  NewsItem copyWith({
+    String? title,
+    String? summary,
+    String? url,
+    String? source,
+    DateTime? publishedAt,
+    String? imageUrl,
+    bool? isAdminPosted,
+    String? postedBy,
+  }) {
+    return NewsItem(
+      id: id,
+      title: title ?? this.title,
+      summary: summary ?? this.summary,
+      url: url ?? this.url,
+      source: source ?? this.source,
+      publishedAt: publishedAt ?? this.publishedAt,
+      imageUrl: imageUrl ?? this.imageUrl,
+      isAdminPosted: isAdminPosted ?? this.isAdminPosted,
+      postedBy: postedBy ?? this.postedBy,
+    );
+  }
+
+  /// Firestore document data (id is the document id, excluded here).
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'summary': summary,
+      'url': url,
+      'source': source,
+      'createdBy': postedBy,
+      'createdAt': Timestamp.fromDate(publishedAt),
+    };
+  }
+
+  /// Builds an admin-posted [NewsItem] from a Firestore `news` document.
+  static NewsItem fromJson(String id, Map<String, dynamic> json) {
+    final createdAt = json['createdAt'];
+    DateTime parsed;
+    if (createdAt is Timestamp) {
+      parsed = createdAt.toDate();
+    } else if (createdAt is DateTime) {
+      parsed = createdAt;
+    } else if (createdAt is String && createdAt.isNotEmpty) {
+      parsed = DateTime.tryParse(createdAt) ?? DateTime.now();
+    } else {
+      parsed = DateTime.now();
+    }
+    return NewsItem(
+      id: id,
+      title: json['title'] as String? ?? '',
+      summary: json['summary'] as String? ?? '',
+      url: json['url'] as String? ?? '',
+      source: json['source'] as String? ?? 'Arxiv',
+      publishedAt: parsed,
+      isAdminPosted: true,
+      postedBy: json['createdBy'] as String? ?? '',
+    );
+  }
+
+  /// Builds a live-feed item from one rss2json item object.
+  static NewsItem fromLiveJson(Map<String, dynamic> json, String source) {
+    final rawDate = json['pubDate'] as String? ?? '';
+    final link = json['link'] as String? ?? '';
+    String? thumb;
+    final enclosure = json['enclosure'];
+    if (enclosure is Map<String, dynamic>) {
+      thumb = enclosure['thumbnail'] as String?;
+    }
+    thumb ??= json['thumbnail'] as String?;
+    return NewsItem(
+      id: link.isNotEmpty ? link : '$source:${json['guid'] ?? ''}',
+      title: _plainText(json['title'] as String? ?? ''),
+      summary: _plainText(json['description'] as String? ?? ''),
+      url: link,
+      source: source,
+      publishedAt: DateTime.tryParse(rawDate) ?? DateTime.now(),
+      imageUrl: thumb ?? '',
+    );
+  }
+
+  /// Strips HTML tags and common entities from a feed summary.
+  static String _plainText(String raw) {
+    var text = raw.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    text = text
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&nbsp;', ' ');
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
