@@ -109,16 +109,6 @@ String formatCount(int n) {
   return buf.toString();
 }
 
-/// Compact form for tight spaces: 18420 -> "18.4k".
-String formatCompact(int n) {
-  if (n >= 1000) {
-    final v = n / 1000;
-    final s = v >= 100 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-    return '${s}k';
-  }
-  return n.toString();
-}
-
 /// Mirrors `timeAgo` in AdminPanel.tsx.
 String timeAgo(DateTime dt) {
   final diff = DateTime.now().difference(dt);
@@ -129,21 +119,7 @@ String timeAgo(DateTime dt) {
   if (hours < 24) return '$hours hr ago';
   final days = diff.inDays;
   if (days < 30) return '$days day${days == 1 ? '' : 's'} ago';
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  return formatShortDate(dt.toIso8601String().substring(0, 10));
 }
 
 /// "2024-11-12" -> "November 2024" (reader info box).
@@ -597,19 +573,17 @@ class SelectChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    this.selectedColor,
   });
 
   final AppPalette palette;
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final Color? selectedColor;
 
   @override
   Widget build(BuildContext context) {
     final c = palette.c;
-    final sel = selectedColor ?? palette.accent.accent;
+    final sel = palette.accent.accent;
     // Material + InkWell gives the ripple and tap semantics a bare
     // GestureDetector lacks; minHeight keeps a comfortable tap target.
     return Material(
@@ -729,60 +703,6 @@ class EmptyState extends StatelessWidget {
             sub,
             style: bodyStyle(palette, size: 13, color: c.muted),
             textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Small icon + value + label stat tile (mirrors ProfilePage stats grid).
-class StatTile extends StatelessWidget {
-  const StatTile({
-    super.key,
-    required this.palette,
-    required this.icon,
-    required this.value,
-    required this.label,
-    required this.color,
-  });
-
-  final AppPalette palette;
-  final String icon;
-  final String value;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = palette.c;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border.all(color: c.borderFaint),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: c.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(icon, style: const TextStyle(fontSize: 20)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: displayStyle(
-              palette,
-              size: 22,
-              weight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label.toUpperCase(),
-            style: monoStyle(palette, size: 9, letterSpacing: 0.1),
           ),
         ],
       ),

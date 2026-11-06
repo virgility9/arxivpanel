@@ -9,7 +9,6 @@ library;
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
@@ -259,7 +258,7 @@ class _PollFeed {
 }
 
 class FirestoreRepository {
-  FirestoreRepository({FirebaseFirestore? firestore, FirebaseStorage? storage})
+  FirestoreRepository({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
@@ -490,22 +489,6 @@ class FirestoreRepository {
     }).handleError((Object e, StackTrace s) {
       debugPrint('[FirestoreRepository] users snapshot error: $e');
     });
-  }
-
-  /// Streams the user document at `users/{uid}`, or `null` when missing.
-  Stream<AppUser?> watchUser(String uid) {
-    return _firestore
-        .collection('users')
-        .doc(uid)
-        .snapshots()
-        .map((doc) {
-          final data = doc.data();
-          if (data == null) return null;
-          return AppUser.fromJson(doc.id, data);
-        })
-        .handleError((Object e, StackTrace s) {
-          debugPrint('[FirestoreRepository] user snapshot error: $e');
-        });
   }
 
   /// Writes the user document (merged with any existing fields).

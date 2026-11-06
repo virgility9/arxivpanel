@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 import '../data/auth_repository.dart';
 import '../data/cloudinary_config.dart';
 import '../data/cloudinary_repository.dart';
+import '../data/constants.dart';
 import '../data/firestore_repository.dart';
 import '../firebase/firebase_config.dart';
 import '../models/models.dart';
@@ -136,7 +137,7 @@ class AppState extends ChangeNotifier {
   }
 
   bool _isPermissionDenied(Object e) =>
-      e is FirebaseException && e.code == 'permission-denied';
+      e is FirebaseException && e.code == AppConstants.permissionDeniedCode;
 
   StreamSubscription<List<AppUser>>? _usersSub;
   StreamSubscription<AppUser?>? _authSub;

@@ -33,7 +33,7 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
-  String _field = 'All Fields';
+  String _field = AppConstants.fields[0];
   String _sort = 'popular';
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
@@ -49,7 +49,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   List<Paper> _filtered(List<Paper> papers) {
     final q = _search.trim().toLowerCase();
     final out = papers.where((p) {
-      final matchField = _field == 'All Fields' || p.field == _field;
+      final matchField = _field == AppConstants.fields[0] || p.field == _field;
       final matchSearch = q.isEmpty ||
           p.title.toLowerCase().contains(q) ||
           p.author.toLowerCase().contains(q) ||
@@ -266,7 +266,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   /// Whether any filter differs from the defaults.
-  bool get _hasActiveFilters => _field != 'All Fields' || _sort != 'popular';
+  bool get _hasActiveFilters => _field != AppConstants.fields[0] || _sort != 'popular';
 
   /// Tune-icon button beside the search field. Shows a gold dot while any
   /// filter is active; opens the filter bottom sheet on tap.
@@ -372,11 +372,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       TextButton(
                         onPressed: () {
                           setSheetState(() {
-                            _field = 'All Fields';
+                            _field = AppConstants.fields[0];
                             _sort = 'popular';
                           });
                           setState(() {
-                            _field = 'All Fields';
+                            _field = AppConstants.fields[0];
                             _sort = 'popular';
                           });
                         },
