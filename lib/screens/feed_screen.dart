@@ -514,7 +514,11 @@ class _NewsCardState extends State<_NewsCard> {
                   },
                 ),
               Padding(
-                padding: const EdgeInsets.all(16),
+                // Tight bottom padding: the buttons already carry 12px
+                // of vertical padding for their tap target, so a full
+                // 16px here left a dead gap under the like/share row
+                // (12 + 16 = 28px below the icons, only 12px above).
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
