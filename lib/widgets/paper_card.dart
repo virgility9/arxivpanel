@@ -180,7 +180,7 @@ class _PaperCardState extends State<PaperCard> {
           GestureDetector(
             onTap: () => widget.appState.openPaper(paper),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
               child: Container(
                 decoration: BoxDecoration(
                   border: Border.all(color: c.border),
@@ -204,7 +204,7 @@ class _PaperCardState extends State<PaperCard> {
           // the reference card: field label, big title, author, then
           // the divider and the action row.
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,29 +258,53 @@ class _PaperCardState extends State<PaperCard> {
                   ),
                   child: Row(
                     children: [
-                      _actionIcon(
-                        icon: Icons.visibility_outlined,
-                        onTap: () => widget.appState.openPaper(paper),
+                      // Left cluster takes whatever width remains after
+                      // the reaction button, so the row can never
+                      // overflow the card: a long views count ellipsizes
+                      // instead of pushing the button off the edge (the
+                      // 22px overflow on 2026-11-07 was this row at
+                      // 156px in a 134px-wide phone cell).
+                      Expanded(
+                        child: Row(
+                          children: [
+                            _actionIcon(
+                              icon: Icons.visibility_outlined,
+                              size: isNarrow ? 16 : 18,
+                              onTap: () =>
+                                  widget.appState.openPaper(paper),
+                            ),
+                            const SizedBox(width: 2),
+                            Flexible(
+                              child: Text(
+                                formatCount(paper.views),
+                                style: monoStyle(palette,
+                                    size: 10, color: c.faint),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _actionIcon(
+                              icon: Icons.mode_comment_outlined,
+                              size: isNarrow ? 16 : 18,
+                              onTap: () =>
+                                  widget.appState.openPaper(paper),
+                            ),
+                            const SizedBox(width: 8),
+                            _actionIcon(
+                              icon: bookmarked
+                                  ? Icons.bookmark
+                                  : Icons.bookmark_border,
+                              size: isNarrow ? 16 : 18,
+                              color: bookmarked ? a.accent : null,
+                              onTap: () => _requireAuth(() => widget
+                                  .appState
+                                  .toggleBookmark(paper.id)),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 4),
-                      Text(formatCount(paper.views),
-                          style:
-                              monoStyle(palette, size: 10, color: c.faint)),
-                      const SizedBox(width: 12),
-                      _actionIcon(
-                        icon: Icons.mode_comment_outlined,
-                        onTap: () => widget.appState.openPaper(paper),
-                      ),
-                      const SizedBox(width: 12),
-                      _actionIcon(
-                        icon: bookmarked
-                            ? Icons.bookmark
-                            : Icons.bookmark_border,
-                        color: bookmarked ? a.accent : null,
-                        onTap: () => _requireAuth(() =>
-                            widget.appState.toggleBookmark(paper.id)),
-                      ),
-                      const Spacer(),
                       // Reaction picker trigger — a round accent button
                       // with a heart, like the reference card. The
                       // popover itself is an OverlayEntry (see
@@ -289,8 +313,8 @@ class _PaperCardState extends State<PaperCard> {
                       GestureDetector(
                         onTap: _toggleReactions,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: isNarrow ? 36 : 44,
+                          height: isNarrow ? 36 : 44,
                           decoration: BoxDecoration(
                             color: a.accent,
                             shape: BoxShape.circle,
@@ -299,7 +323,7 @@ class _PaperCardState extends State<PaperCard> {
                             reacted != null
                                 ? Icons.favorite
                                 : Icons.favorite_border,
-                            size: 22,
+                            size: isNarrow ? 18 : 22,
                             color: a.accentFg,
                           ),
                         ),
@@ -317,18 +341,19 @@ class _PaperCardState extends State<PaperCard> {
 
   /// Small icon button for the views / comment / bookmark slots in the
   /// action row. The icon stays compact; the padding keeps the tap
-  /// target close to the 44px reaction button.
+  /// target close to the 36/44px reaction button.
   Widget _actionIcon({
     required IconData icon,
     required VoidCallback onTap,
+    double size = 18,
     Color? color,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 10),
         child: Icon(icon,
-            size: 18, color: color ?? widget.theme.palette.c.muted),
+            size: size, color: color ?? widget.theme.palette.c.muted),
       ),
     );
   }
