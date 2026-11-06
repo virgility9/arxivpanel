@@ -4,8 +4,14 @@
 /// title, author row, one tag chip, and a bottom action row (views,
 /// comments, bookmark, reaction picker). Sized for the library grid
 /// (2 columns on phones, 3–4 on wider screens): the title is capped at
-/// 2 lines and only the first tag is shown, so the card always fits its
-/// fixed grid cell.
+/// 2 lines and only the first tag is shown.
+///
+/// The card sizes to its own content (no Spacer, no Expanded): a short
+/// title with no tags used to leave a big empty gap between the author
+/// row and the action row, because the old fixed-height grid cell
+/// stretched the card and the Spacer filled the slack. Now the action
+/// row sits directly under the author/tag rows, and the grid (see
+/// library_screen.dart) lays the cards out at their own heights.
 library;
 
 import 'package:flutter/material.dart';
@@ -165,6 +171,7 @@ class _PaperCardState extends State<PaperCard> {
     return Container(
       color: c.surface,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Cover
@@ -205,135 +212,138 @@ class _PaperCardState extends State<PaperCard> {
               ),
             ),
           ),
-          // Content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  GestureDetector(
-                    onTap: () => widget.appState.openPaper(paper),
-                    child: Text(
-                      paper.title,
-                      style: displayStyle(palette, size: isNarrow ? 15 : 16),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+          // Content — no Expanded/Spacer here: the card must size to
+          // its own content, or a short title with no tags leaves a
+          // big empty gap above the action row (see header comment).
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: () => widget.appState.openPaper(paper),
+                  child: Text(
+                    paper.title,
+                    style: displayStyle(palette, size: isNarrow ? 15 : 16),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    AvatarImage(
+                        url: paper.authorAvatar,
+                        size: 18,
+                        borderColor: c.border,
+                        borderWidth: 1),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        paper.author,
+                        style: bodyStyle(palette, size: 11, color: c.muted),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text('·',
+                        style: TextStyle(color: c.fainter, fontSize: 10)),
+                    const SizedBox(width: 4),
+                    Text(paper.year,
+                        style: monoStyle(palette, size: 10, color: c.faint)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                if (paper.tags.isNotEmpty)
                   Row(
                     children: [
-                      AvatarImage(
-                          url: paper.authorAvatar,
-                          size: 18,
-                          borderColor: c.border,
-                          borderWidth: 1),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          paper.author,
-                          style: bodyStyle(palette, size: 11, color: c.muted),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Flexible(
+                        child: TagChip(
+                            palette: palette, tag: paper.tags.first),
                       ),
-                      Text('·',
-                          style: TextStyle(color: c.fainter, fontSize: 10)),
-                      const SizedBox(width: 4),
-                      Text(paper.year,
-                          style: monoStyle(palette, size: 10, color: c.faint)),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  if (paper.tags.isNotEmpty)
-                    Row(
-                      children: [
-                        Flexible(
-                          child: TagChip(
-                              palette: palette, tag: paper.tags.first),
-                        ),
-                      ],
-                    ),
-                  const Spacer(),
-                  Container(
-                    margin: const EdgeInsets.only(top: 6),
-                    padding: const EdgeInsets.only(top: 6),
-                    decoration: BoxDecoration(
-                      border: Border(top: BorderSide(color: c.surface2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Text('${formatCount(paper.views)}v',
-                            style:
-                                monoStyle(palette, size: 10, color: c.faint)),
-                        const SizedBox(width: 8),
-                        Text('${paper.comments.length}💬',
-                            style:
-                                monoStyle(palette, size: 10, color: c.faint)),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () => _requireAuth(() =>
-                              widget.appState.toggleBookmark(paper.id)),
-                          child: Padding(
-                            // Visual stays compact; hit area meets 44px.
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 10),
-                            child: Text(
-                              bookmarked ? '🔖' : '🏷️',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: bookmarked ? a.accent : c.fainter,
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Reaction picker trigger — the popover itself is
-                        // an OverlayEntry (see _toggleReactions), so it
-                        // dismisses on outside tap and never clips.
-                        GestureDetector(
-                          onTap: _toggleReactions,
-                          // Extra vertical padding keeps the pill compact
-                          // while the tap target meets the 44px minimum.
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: reacted != null
-                                    ? a.accent.withValues(alpha: 0.15)
-                                    : c.surface2,
-                                border: Border.all(
-                                    color: reacted != null
-                                        ? a.accent
-                                        : c.border),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(reacted ?? '+',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: reacted != null
-                                              ? a.accent
-                                              : c.muted)),
-                                  const SizedBox(width: 4),
-                                  Text('$totalReactions',
-                                      style: monoStyle(palette, size: 10)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                // Fixed gap, not a Spacer: the action row sits
+                // directly under the author/tag rows.
+                const SizedBox(height: 10),
+                Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.only(top: 6),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: c.surface2)),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      Text('${formatCount(paper.views)}v',
+                          style:
+                              monoStyle(palette, size: 10, color: c.faint)),
+                      const SizedBox(width: 8),
+                      Text('${paper.comments.length}💬',
+                          style:
+                              monoStyle(palette, size: 10, color: c.faint)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => _requireAuth(() =>
+                            widget.appState.toggleBookmark(paper.id)),
+                        child: Padding(
+                          // Visual stays compact; hit area meets 44px.
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 10),
+                          child: Text(
+                            bookmarked ? '🔖' : '🏷️',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: bookmarked ? a.accent : c.fainter,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Reaction picker trigger — the popover itself is
+                      // an OverlayEntry (see _toggleReactions), so it
+                      // dismisses on outside tap and never clips.
+                      GestureDetector(
+                        onTap: _toggleReactions,
+                        // Extra vertical padding keeps the pill compact
+                        // while the tap target meets the 44px minimum.
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: reacted != null
+                                  ? a.accent.withValues(alpha: 0.15)
+                                  : c.surface2,
+                              border: Border.all(
+                                  color: reacted != null
+                                      ? a.accent
+                                      : c.border),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(reacted ?? '+',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: reacted != null
+                                            ? a.accent
+                                            : c.muted)),
+                                const SizedBox(width: 4),
+                                Text('$totalReactions',
+                                    style: monoStyle(palette, size: 10)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               ),
             ),
-          ),
         ],
       ),
     );

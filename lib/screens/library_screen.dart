@@ -218,34 +218,37 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         : LayoutBuilder(
                             builder: (context, listConstraints) {
                               // Comfortable grid: 2 columns on phones,
-                              // 3 on tablets, 4 on wide screens. Fixed
-                              // cell height (mainAxisExtent) so cards keep
-                              // their shape; the vertical PaperCard bounds
-                              // its own content (title 2 lines, one tag),
-                              // so nothing can overflow the cell.
+                              // 3 on tablets, 4 on wide screens. A Wrap
+                              // (not a fixed-extent GridView) so each
+                              // PaperCard is only as tall as its own
+                              // content — a fixed cell height stretched
+                              // short cards and left a big empty gap
+                              // between the author row and the action row.
+                              // Cards in a row top-align; the next row
+                              // starts below the tallest card in the row.
                               final width = listConstraints.maxWidth;
                               final columns =
                                   width < 700 ? 2 : width < 1100 ? 3 : 4;
-                              final extent = width < 700 ? 292.0 : 312.0;
-                              return GridView.builder(
-                                shrinkWrap: true,
-                                physics:
-                                    const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  mainAxisExtent: extent,
-                                ),
-                                itemCount: filtered.length,
-                                itemBuilder: (context, i) => PaperCard(
-                                  key: ValueKey(filtered[i].id),
-                                  paper: filtered[i],
-                                  appState: widget.appState,
-                                  theme: widget.theme,
-                                  onAuthPrompt: widget.onAuthPrompt,
-                                ),
+                              const spacing = 12.0;
+                              final cellWidth =
+                                  (width - spacing * (columns - 1)) /
+                                      columns;
+                              return Wrap(
+                                spacing: spacing,
+                                runSpacing: spacing,
+                                children: [
+                                  for (final paper in filtered)
+                                    SizedBox(
+                                      width: cellWidth,
+                                      child: PaperCard(
+                                        key: ValueKey(paper.id),
+                                        paper: paper,
+                                        appState: widget.appState,
+                                        theme: widget.theme,
+                                        onAuthPrompt: widget.onAuthPrompt,
+                                      ),
+                                    ),
+                                ],
                               );
                             },
                           ),
