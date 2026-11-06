@@ -1,16 +1,18 @@
 /// Paper card ported from `PaperCard` in `src/components/LibraryView.tsx`.
 ///
-/// Vertical grid card: cover image on top with field + page badges, then
-/// title, author row, one tag chip, and a bottom action row (views,
-/// comments, bookmark, reaction picker). Sized for the library grid
-/// (2 columns on phones, 3–4 on wider screens): the title is capped at
-/// 2 lines and only the first tag is shown.
+/// Layout follows virgil's reference card (2026-11-07): a framed cover
+/// image, the field in gold caps, a big bold title, "author · year",
+/// a divider, then the action row — eye + views, comment, bookmark,
+/// and a round accent button with a heart that opens the reaction
+/// picker. No tag chip, no badges on the cover, no reaction count.
+/// Sized for the library grid (2 columns on phones, 3–4 on wider
+/// screens); the title is capped at 2 lines.
 ///
 /// The card sizes to its own content (no Spacer, no Expanded): a short
-/// title with no tags used to leave a big empty gap between the author
-/// row and the action row, because the old fixed-height grid cell
-/// stretched the card and the Spacer filled the slack. Now the action
-/// row sits directly under the author/tag rows, and the grid (see
+/// title used to leave a big empty gap between the author row and the
+/// action row, because the old fixed-height grid cell stretched the
+/// card and the Spacer filled the slack. Now the action row sits
+/// directly under the author row, and the grid (see
 /// library_screen.dart) lays the cards out at their own heights.
 library;
 
@@ -163,7 +165,6 @@ class _PaperCardState extends State<PaperCard> {
     final paper = widget.paper;
     final user = widget.appState.user;
     final reacted = user == null ? null : paper.reactionOf(user.id);
-    final totalReactions = paper.totalReactions;
     final bookmarked = widget.appState.isBookmarked(paper.id);
     final isNarrow = MediaQuery.of(context).size.width < 700;
     final coverH = isNarrow ? 132.0 : 150.0;
@@ -174,58 +175,55 @@ class _PaperCardState extends State<PaperCard> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Cover
+          // Cover — framed figure, like the reference card: inset
+          // with a hairline border, no badges overlaid on the image.
           GestureDetector(
             onTap: () => widget.appState.openPaper(paper),
-            child: SizedBox(
-              height: coverH,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  NetImage(url: paper.coverImage),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          c.surface.withValues(alpha: 0.0),
-                          c.surface
-                        ],
-                        stops: const [0.4, 0.7, 1.0],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                    ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: c.border),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(1),
+                  child: NetImage(
+                    url: paper.coverImage,
+                    width: double.infinity,
+                    height: coverH,
+                    borderRadius: BorderRadius.circular(7),
                   ),
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: _miniBadge(
-                        paper.field.split(' ').first.toUpperCase(), a.accent),
-                  ),
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
-                    child: _miniBadge('${paper.pages}p', c.faint),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
           // Content — no Expanded/Spacer here: the card must size to
-          // its own content, or a short title with no tags leaves a
-          // big empty gap above the action row (see header comment).
+          // its own content, or a short title leaves a big empty gap
+          // above the action row (see header comment). Order follows
+          // the reference card: field label, big title, author, then
+          // the divider and the action row.
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Field label, gold caps — like the reference card.
+                Text(
+                  paper.field.toUpperCase(),
+                  style: monoStyle(palette,
+                      size: 10, color: a.accent, weight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
                 GestureDetector(
                   onTap: () => widget.appState.openPaper(paper),
                   child: Text(
                     paper.title,
-                    style: displayStyle(palette, size: isNarrow ? 15 : 16),
+                    style: displayStyle(palette, size: isNarrow ? 19 : 21)
+                        .copyWith(fontWeight: FontWeight.w700),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -233,38 +231,24 @@ class _PaperCardState extends State<PaperCard> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    AvatarImage(
-                        url: paper.authorAvatar,
-                        size: 18,
-                        borderColor: c.border,
-                        borderWidth: 1),
-                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         paper.author,
-                        style: bodyStyle(palette, size: 11, color: c.muted),
+                        style: bodyStyle(palette,
+                            size: 12,
+                            color: c.text,
+                            weight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text('·',
-                        style: TextStyle(color: c.fainter, fontSize: 10)),
-                    const SizedBox(width: 4),
+                    Text(' · ',
+                        style: TextStyle(color: c.fainter, fontSize: 12)),
                     Text(paper.year,
                         style: monoStyle(palette, size: 10, color: c.faint)),
                   ],
                 ),
-                const SizedBox(height: 6),
-                if (paper.tags.isNotEmpty)
-                  Row(
-                    children: [
-                      Flexible(
-                        child: TagChip(
-                            palette: palette, tag: paper.tags.first),
-                      ),
-                    ],
-                  ),
                 // Fixed gap, not a Spacer: the action row sits
-                // directly under the author/tag rows.
+                // directly under the author row.
                 const SizedBox(height: 10),
                 Container(
                   margin: const EdgeInsets.only(top: 6),
@@ -274,67 +258,49 @@ class _PaperCardState extends State<PaperCard> {
                   ),
                   child: Row(
                     children: [
-                      Text('${formatCount(paper.views)}v',
+                      _actionIcon(
+                        icon: Icons.visibility_outlined,
+                        onTap: () => widget.appState.openPaper(paper),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(formatCount(paper.views),
                           style:
                               monoStyle(palette, size: 10, color: c.faint)),
-                      const SizedBox(width: 8),
-                      Text('${paper.comments.length}💬',
-                          style:
-                              monoStyle(palette, size: 10, color: c.faint)),
-                      const Spacer(),
-                      GestureDetector(
+                      const SizedBox(width: 12),
+                      _actionIcon(
+                        icon: Icons.mode_comment_outlined,
+                        onTap: () => widget.appState.openPaper(paper),
+                      ),
+                      const SizedBox(width: 12),
+                      _actionIcon(
+                        icon: bookmarked
+                            ? Icons.bookmark
+                            : Icons.bookmark_border,
+                        color: bookmarked ? a.accent : null,
                         onTap: () => _requireAuth(() =>
                             widget.appState.toggleBookmark(paper.id)),
-                        child: Padding(
-                          // Visual stays compact; hit area meets 44px.
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 10),
-                          child: Text(
-                            bookmarked ? '🔖' : '🏷️',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: bookmarked ? a.accent : c.fainter,
-                            ),
-                          ),
-                        ),
                       ),
-                      // Reaction picker trigger — the popover itself is
-                      // an OverlayEntry (see _toggleReactions), so it
-                      // dismisses on outside tap and never clips.
+                      const Spacer(),
+                      // Reaction picker trigger — a round accent button
+                      // with a heart, like the reference card. The
+                      // popover itself is an OverlayEntry (see
+                      // _toggleReactions), so it dismisses on outside
+                      // tap and never clips.
                       GestureDetector(
                         onTap: _toggleReactions,
-                        // Extra vertical padding keeps the pill compact
-                        // while the tap target meets the 44px minimum.
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: reacted != null
-                                  ? a.accent.withValues(alpha: 0.15)
-                                  : c.surface2,
-                              border: Border.all(
-                                  color: reacted != null
-                                      ? a.accent
-                                      : c.border),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(reacted ?? '+',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        color: reacted != null
-                                            ? a.accent
-                                            : c.muted)),
-                                const SizedBox(width: 4),
-                                Text('$totalReactions',
-                                    style: monoStyle(palette, size: 10)),
-                              ],
-                            ),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: a.accent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            reacted != null
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            size: 22,
+                            color: a.accentFg,
                           ),
                         ),
                       ),
@@ -349,16 +315,20 @@ class _PaperCardState extends State<PaperCard> {
     );
   }
 
-  Widget _miniBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: widget.theme.palette.c.bg.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Text(
-        text,
-        style: monoStyle(widget.theme.palette, size: 9, color: color),
+  /// Small icon button for the views / comment / bookmark slots in the
+  /// action row. The icon stays compact; the padding keeps the tap
+  /// target close to the 44px reaction button.
+  Widget _actionIcon({
+    required IconData icon,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        child: Icon(icon,
+            size: 18, color: color ?? widget.theme.palette.c.muted),
       ),
     );
   }
