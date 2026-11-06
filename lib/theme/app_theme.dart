@@ -15,37 +15,6 @@ enum AppMode { dark, light }
 /// Accent choices (mirrors `Accent` in ThemeContext.tsx).
 enum AppAccent { terracotta, gold, violet, teal, coral, sage }
 
-/// Text size choices (mirrors `FontScale` in ThemeContext.tsx).
-enum AppFontScale { compact, normal, large }
-
-extension AppFontScaleX on AppFontScale {
-  /// Base font size in logical pixels (13 / 15 / 17 in the web app).
-  double get baseSize {
-    switch (this) {
-      case AppFontScale.compact:
-        return 13;
-      case AppFontScale.normal:
-        return 15;
-      case AppFontScale.large:
-        return 17;
-    }
-  }
-
-  /// Multiplier relative to the default 15px base.
-  double get scale => baseSize / 15.0;
-
-  String get label {
-    switch (this) {
-      case AppFontScale.compact:
-        return 'Compact';
-      case AppFontScale.normal:
-        return 'Normal';
-      case AppFontScale.large:
-        return 'Large';
-    }
-  }
-}
-
 /// One accent palette (mirrors `ACCENT_PALETTES`).
 /// Forms the 10% accent layer in the 60/30/10 rule.
 class AccentPalette {
@@ -277,8 +246,7 @@ class AppPalette {
   final AccentPalette accent;
 
   /// Multiplier applied to custom typography helpers (mirrors the web app's
-  /// font-size setting). Defaults to 1.0; [ThemeProvider] sets it from the
-  /// user's chosen [AppFontScale].
+  /// font-size setting). Defaults to 1.0; text renders at the Normal scale.
   final double textScale;
 
   AppColors get c => AppColors.of(mode);

@@ -44,7 +44,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   late final TextEditingController _institution;
   late final TextEditingController _tags;
 
-  String _field = 'Machine Learning';
+  String _field = AppConstants.fields[1];
   Map<String, String> _errors = {};
   bool _loading = false;
   bool _submitted = false;
@@ -400,7 +400,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   }
 
   Widget _buildForm(AppPalette p, AppUser user) {
-    final fields = AppConstants.fields.where((f) => f != 'All Fields').toList();
+    final fields = AppConstants.fields.where((f) => f != AppConstants.fields[0]).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

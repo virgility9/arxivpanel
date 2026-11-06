@@ -9,6 +9,7 @@ library;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../data/constants.dart';
 import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
 import 'shared.dart';
@@ -96,7 +97,7 @@ class _AuthDialogState extends State<AuthDialog> {
     if (email.isEmpty || password.isEmpty) {
       validationError = 'Email and password are required.';
     } else if (!email.contains('@')) {
-      validationError = 'Enter a valid email address.';
+      validationError = AppConstants.invalidEmailMessage;
     } else if (_mode == AuthMode.register && username.isEmpty) {
       validationError = 'Please choose a display name.';
     } else if (_mode == AuthMode.register && password.length < 6) {

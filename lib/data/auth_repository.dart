@@ -140,7 +140,7 @@ class AuthRepository {
     } on FirebaseAuthException catch (e) {
       return _friendlySignInError(e.code);
     } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied') {
+      if (e.code == AppConstants.permissionDeniedCode) {
         return 'Signed in, but saving your profile was blocked. '
             'Publish the Firestore rules from firestore.rules, then try again.';
       }
@@ -183,7 +183,7 @@ class AuthRepository {
     } on FirebaseAuthException catch (e) {
       return _friendlySignUpError(e.code);
     } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied') {
+      if (e.code == AppConstants.permissionDeniedCode) {
         return 'Account created, but saving your profile was blocked. '
             'Publish the Firestore rules from firestore.rules, then sign in — '
             'your profile will be created automatically.';
@@ -207,7 +207,7 @@ class AuthRepository {
         case 'user-not-found':
           return 'No account found for that email.';
         case 'invalid-email':
-          return 'Enter a valid email address.';
+          return AppConstants.invalidEmailMessage;
         default:
           return 'Could not send the reset email (${e.code}). Try again.';
       }

@@ -366,19 +366,6 @@ class Paper {
       rejectionReason: json['rejectionReason'] as String?,
     );
   }
-
-  /// Deep copy used when seeding state from the mock dataset.
-  Paper deepCopy() {
-    return copyWith(
-      tags: List<String>.of(tags),
-      reactions: {
-        for (final e in reactions.entries) e.key: List<String>.of(e.value),
-      },
-      comments: comments
-          .map((c) => c.copyWith(likedBy: List<String>.of(c.likedBy)))
-          .toList(),
-    );
-  }
 }
 
 /// One reading session recorded when leaving the reader view.

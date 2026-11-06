@@ -344,12 +344,7 @@ class _PaperCardState extends State<PaperCard> {
       ),
       child: Text(
         text,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 9,
-          color: color,
-          letterSpacing: 0.06,
-        ),
+        style: monoStyle(widget.theme.palette, size: 9, color: color),
       ),
     );
   }
