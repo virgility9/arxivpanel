@@ -13,6 +13,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/motion.dart';
 import '../widgets/paper_card.dart';
 import '../widgets/shared.dart';
 
@@ -237,15 +238,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 spacing: spacing,
                                 runSpacing: spacing,
                                 children: [
-                                  for (final paper in filtered)
+                                  for (var i = 0; i < filtered.length; i++)
                                     SizedBox(
+                                      key: ValueKey(filtered[i].id),
                                       width: cellWidth,
-                                      child: PaperCard(
-                                        key: ValueKey(paper.id),
-                                        paper: paper,
-                                        appState: widget.appState,
-                                        theme: widget.theme,
-                                        onAuthPrompt: widget.onAuthPrompt,
+                                      child: FadeSlideIn(
+                                        index: i,
+                                        child: PaperCard(
+                                          key: ValueKey(filtered[i].id),
+                                          paper: filtered[i],
+                                          appState: widget.appState,
+                                          theme: widget.theme,
+                                          onAuthPrompt: widget.onAuthPrompt,
+                                        ),
                                       ),
                                     ),
                                 ],

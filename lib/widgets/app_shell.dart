@@ -23,6 +23,7 @@ import '../theme/theme_provider.dart';
 import 'app_icons.dart';
 import 'auth_dialog.dart';
 import 'feed_icon.dart';
+import 'motion.dart';
 import 'shared.dart';
 
 class AppShell extends StatelessWidget {
@@ -67,7 +68,21 @@ class AppShell extends StatelessWidget {
                   onNavigate: (v) => _navigate(context, v),
                   onAuthPrompt: (m) => _promptAuth(context, m),
                 ),
-                Expanded(child: _buildView(context)),
+                Expanded(
+                  child: MotionSwitcher(
+                    expand: true,
+                    child: KeyedSubtree(
+                      // New key per screen (and per paper in the reader) so
+                      // the switcher animates each navigation.
+                      key: ValueKey(
+                        appState.view == AppView.reader
+                            ? 'reader:${appState.selectedPaper?.id}'
+                            : appState.view.name,
+                      ),
+                      child: _buildView(context),
+                    ),
+                  ),
+                ),
               ],
             ),
             // Faint paper grain over the whole page (ignores touches).
