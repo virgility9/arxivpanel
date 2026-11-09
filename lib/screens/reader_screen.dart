@@ -986,7 +986,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget _buildPdfTab(AppPalette p, Paper paper) {
     final c = p.c;
     final url = paper.pdfUrl ?? '';
-    final canEmbed = kIsWeb && url.isNotEmpty;
+    final canEmbed = url.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1001,10 +1001,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
               style: displayStyle(p, size: 18, weight: FontWeight.w600)),
           const SizedBox(height: 12),
           if (canEmbed)
-            // On web the PDF renders inline in an iframe (Chrome's built-in
-            // viewer). A bounded height is needed because the tab scrolls;
-            // scale it to the viewport so it feels like a real document
-            // viewer instead of a fixed 640px box.
+            // The PDF renders inline: on web in an iframe (Chrome's
+            // built-in viewer), on mobile in-app via pdfx (see
+            // lib/widgets/pdf_view_mobile.dart). A bounded height is
+            // needed because the tab scrolls; scale it to the viewport
+            // so it feels like a real document viewer instead of a
+            // fixed 640px box.
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: SizedBox(
@@ -1016,11 +1018,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
             )
           else ...[
             Text(
-              'The embedded PDF viewer is only available on web. Download the paper to read it on your device.',
+              'No PDF attached to this paper.',
               style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
             ),
-            const SizedBox(height: 12),
-            SelectableText(url, style: monoStyle(p, size: 11)),
           ],
           const SizedBox(height: 16),
           GoldButton(

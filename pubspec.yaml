@@ -54,6 +54,11 @@ dependencies:
   # Cloudinary unsigned uploads for paper PDFs (free tier, no card needed).
   http: ^1.6.0
 
+  # In-app PDF preview on mobile (reader PDF tab) — renders via Android's
+  # native PdfRenderer, no license key needed. Web keeps the iframe viewer
+  # (see lib/widgets/pdf_view.dart). Run `flutter pub get` after adding.
+  pdfx: ^2.11.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
