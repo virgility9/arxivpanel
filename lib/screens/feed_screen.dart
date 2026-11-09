@@ -138,6 +138,7 @@ class _FeedScreenState extends State<FeedScreen> {
     List<NewsItem> liveNews,
     bool isAdmin,
   ) {
+    final c = p.c;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
