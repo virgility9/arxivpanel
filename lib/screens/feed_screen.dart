@@ -1,5 +1,8 @@
-/// News Feed tab: admin-posted news (Firestore `news`) on top, then live
-/// education/science headlines fetched from the web.
+/// News Feed tab with two inner tabs: "News for today" (admin-posted news
+/// from Firestore `news` on top, then live education/science headlines
+/// fetched from the web) and "Published papers" (the latest papers from
+/// arXiv, fetched live through the arXiv API via rss2json — same
+/// no-new-dependency path as the headlines).
 ///
 /// Live headlines come from [AppState.liveNews] (rss2json JSON, cached
 /// 5 min); tapping a story opens it in the browser. Pull down to refresh.
@@ -34,15 +37,19 @@ class _FeedScreenState extends State<FeedScreen> {
   final TextEditingController _urlController = TextEditingController();
   bool _posting = false;
   String? _formError;
+  // Inner tabs: 0 = News for today, 1 = Published papers.
+  int _tabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    // Defer past the first frame: fetchLiveNews notifies listeners, and
-    // notifying during initState would call setState mid-build.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => widget.appState.fetchLiveNews(),
-    );
+    // Defer past the first frame: fetchLiveNews/fetchArxivPapers notify
+    // listeners, and notifying during initState would call setState
+    // mid-build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.appState.fetchLiveNews();
+      widget.appState.fetchArxivPapers();
+    });
   }
 
   @override
@@ -79,11 +86,14 @@ class _FeedScreenState extends State<FeedScreen> {
     final isAdmin = widget.appState.user?.isAdmin == true;
     final adminNews = widget.appState.adminNews;
     final liveNews = widget.appState.liveNews;
+    final arxivPapers = widget.appState.arxivPapers;
 
     return RefreshIndicator(
       color: a.accent,
       backgroundColor: c.surface,
-      onRefresh: () => widget.appState.fetchLiveNews(forceRefresh: true),
+      onRefresh: () => _tabIndex == 0
+          ? widget.appState.fetchLiveNews(forceRefresh: true)
+          : widget.appState.fetchArxivPapers(forceRefresh: true),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -103,94 +113,236 @@ class _FeedScreenState extends State<FeedScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (adminNews.isNotEmpty) ...[
-                        _sectionLabel(p, 'POSTED BY ARXIV'),
-                        const SizedBox(height: 12),
-                        for (final item in adminNews) ...[
-                          _NewsCard(
-                            key: ValueKey(item.id),
-                            item: item,
-                            palette: p,
-                            isAdminPost: true,
-                            canDelete: isAdmin,
-                            onOpen: () => _openUrl(item.url),
-                            onDelete: () => _confirmDelete(p, item),
-                            onShare: () => _shareNews(item),
-                            dateLabel: _dateOf(item),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        const SizedBox(height: 20),
-                      ],
-                      _sectionLabel(p, 'LIVE FROM THE WEB'),
-                      const SizedBox(height: 12),
-                      if (widget.appState.liveNewsLoading && liveNews.isEmpty)
-                        Column(
-                          children: [
-                            for (var i = 0; i < 3; i++) ...[
-                              _NewsSkeletonCard(palette: p),
-                              if (i < 2) const SizedBox(height: 12),
-                            ],
-                          ],
-                        )
-                      else if (widget.appState.liveNewsError &&
-                          liveNews.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 32),
-                          child: Column(
-                            children: [
-                              const Text('📶', style: TextStyle(fontSize: 32)),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Couldn\'t load live news',
-                                style: displayStyle(
-                                  p,
-                                  size: 17,
-                                  color: c.muted,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Check your connection and try again.',
-                                style: bodyStyle(p, size: 13, color: c.muted),
-                              ),
-                              const SizedBox(height: 16),
-                              GoldButton(
-                                palette: p,
-                                label: 'Retry',
-                                minHeight: 44,
-                                onPressed: () => widget.appState.fetchLiveNews(
-                                  forceRefresh: true,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else if (liveNews.isEmpty && adminNews.isEmpty)
-                        EmptyState(
-                          palette: p,
-                          icon: '📰',
-                          title: 'No news yet',
-                          sub: 'Pull down to refresh, or check back later',
-                        )
+                      _buildTabSwitcher(p),
+                      const SizedBox(height: 20),
+                      if (_tabIndex == 0)
+                        _buildNewsTab(p, adminNews, liveNews, isAdmin)
                       else
-                        for (final item in liveNews) ...[
-                          _NewsCard(
-                            key: ValueKey(item.id),
-                            item: item,
-                            palette: p,
-                            onOpen: () => _openUrl(item.url),
-                            onShare: () => _shareNews(item),
-                            dateLabel: _dateOf(item),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
+                        _buildPapersTab(p, arxivPapers),
                     ],
                   ),
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// News tab content: admin posts, then live headlines. Extracted so
+  /// the tab switch in [build] stays a one-liner.
+  Widget _buildNewsTab(
+    AppPalette p,
+    List<NewsItem> adminNews,
+    List<NewsItem> liveNews,
+    bool isAdmin,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (adminNews.isNotEmpty) ...[
+          _sectionLabel(p, 'POSTED BY ARXIV'),
+          const SizedBox(height: 12),
+          for (final item in adminNews) ...[
+            _NewsCard(
+              key: ValueKey(item.id),
+              item: item,
+              palette: p,
+              isAdminPost: true,
+              canDelete: isAdmin,
+              onOpen: () => _openUrl(item.url),
+              onDelete: () => _confirmDelete(p, item),
+              onShare: () => _shareNews(item),
+              dateLabel: _dateOf(item),
+            ),
+            const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 20),
+        ],
+        _sectionLabel(p, 'LIVE FROM THE WEB'),
+        const SizedBox(height: 12),
+        if (widget.appState.liveNewsLoading && liveNews.isEmpty)
+          Column(
+            children: [
+              for (var i = 0; i < 3; i++) ...[
+                _NewsSkeletonCard(palette: p),
+                if (i < 2) const SizedBox(height: 12),
+              ],
+            ],
+          )
+        else if (widget.appState.liveNewsError &&
+            liveNews.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: Column(
+              children: [
+                const Text('📶', style: TextStyle(fontSize: 32)),
+                const SizedBox(height: 12),
+                Text(
+                  'Couldn\'t load live news',
+                  style: displayStyle(
+                    p,
+                    size: 17,
+                    color: c.muted,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Check your connection and try again.',
+                  style: bodyStyle(p, size: 13, color: c.muted),
+                ),
+                const SizedBox(height: 16),
+                GoldButton(
+                  palette: p,
+                  label: 'Retry',
+                  minHeight: 44,
+                  onPressed: () => widget.appState.fetchLiveNews(
+                    forceRefresh: true,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (liveNews.isEmpty && adminNews.isEmpty)
+          EmptyState(
+            palette: p,
+            icon: '📰',
+            title: 'No news yet',
+            sub: 'Pull down to refresh, or check back later',
+          )
+        else
+          for (final item in liveNews) ...[
+            _NewsCard(
+              key: ValueKey(item.id),
+              item: item,
+              palette: p,
+              onOpen: () => _openUrl(item.url),
+              onShare: () => _shareNews(item),
+              dateLabel: _dateOf(item),
+            ),
+            const SizedBox(height: 12),
+          ],
+      ],
+    );
+  }
+
+  /// Published papers tab: the latest papers from arXiv, newest first.
+  /// Same loading/error/empty states as the news tab; tapping a card
+  /// opens the paper on arXiv.org in the browser.
+  Widget _buildPapersTab(AppPalette p, List<NewsItem> arxivPapers) {
+    final c = p.c;
+    if (widget.appState.arxivPapersLoading && arxivPapers.isEmpty) {
+      return Column(
+        children: [
+          for (var i = 0; i < 3; i++) ...[
+            _NewsSkeletonCard(palette: p),
+            if (i < 2) const SizedBox(height: 12),
+          ],
+        ],
+      );
+    }
+    if (widget.appState.arxivPapersError && arxivPapers.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
+          children: [
+            const Text('📶', style: TextStyle(fontSize: 32)),
+            const SizedBox(height: 12),
+            Text(
+              'Couldn\'t load papers',
+              style: displayStyle(
+                p,
+                size: 17,
+                color: c.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Check your connection and try again.',
+              style: bodyStyle(p, size: 13, color: c.muted),
+            ),
+            const SizedBox(height: 16),
+            GoldButton(
+              palette: p,
+              label: 'Retry',
+              minHeight: 44,
+              onPressed: () => widget.appState.fetchArxivPapers(
+                forceRefresh: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (arxivPapers.isEmpty) {
+      return EmptyState(
+        palette: p,
+        icon: '📄',
+        title: 'No papers yet',
+        sub: 'Pull down to refresh, or check back later',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in arxivPapers) ...[
+          _NewsCard(
+            key: ValueKey(item.id),
+            item: item,
+            palette: p,
+            showAuthor: true,
+            onOpen: () => _openUrl(item.url),
+            onShare: () => _shareNews(item),
+            dateLabel: _dateOf(item),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  /// Two-segment switcher for the inner Feed tabs.
+  Widget _buildTabSwitcher(AppPalette p) {
+    final c = p.c;
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          _tabSegment(p, 'News for today', 0),
+          _tabSegment(p, 'Published papers', 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabSegment(AppPalette p, String label, int index) {
+    final selected = _tabIndex == index;
+    final c = p.c;
+    final a = p.accent;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _tabIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? a.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: bodyStyle(
+              p,
+              size: 13,
+              color: selected ? a.accentFg : c.muted,
+              weight: selected ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
         ),
       ),
     );
@@ -220,7 +372,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'NEWS FEED',
+                      _tabIndex == 0 ? 'NEWS FEED' : 'PUBLISHED PAPERS',
                       style: monoStyle(p, size: 10, color: a.accent).copyWith(
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.12,
@@ -228,18 +380,22 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Popular in education & science',
+                      _tabIndex == 0
+                          ? 'Popular in education & science'
+                          : 'Latest from arXiv',
                       style: displayStyle(p, size: narrow ? 20 : 24),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Live headlines from the web, plus posts from Arxiv.',
+                      _tabIndex == 0
+                          ? 'Live headlines from the web, plus posts from Arxiv.'
+                          : 'New papers from arXiv.org, latest first.',
                       style: bodyStyle(p, size: 13, color: c.muted),
                     ),
                   ],
                 ),
               ),
-              if (isAdmin) ...[
+              if (isAdmin && _tabIndex == 0) ...[
                 const SizedBox(width: 12),
                 GoldButton(
                   palette: p,
@@ -433,6 +589,9 @@ class _NewsCard extends StatefulWidget {
     required this.palette,
     this.isAdminPost = false,
     this.canDelete = false,
+    // Papers tab only: shows the "author · category" byline under the
+    // title. News items carry no author, so news cards never pass it.
+    this.showAuthor = false,
     required this.onOpen,
     this.onDelete,
     required this.onShare,
@@ -443,6 +602,7 @@ class _NewsCard extends StatefulWidget {
   final AppPalette palette;
   final bool isAdminPost;
   final bool canDelete;
+  final bool showAuthor;
   final VoidCallback onOpen;
   final VoidCallback? onDelete;
   final VoidCallback onShare;
@@ -570,6 +730,24 @@ class _NewsCardState extends State<_NewsCard> {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (widget.showAuthor &&
+                        (item.author.isNotEmpty ||
+                            item.category.isNotEmpty)) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        [
+                          if (item.author.isNotEmpty) item.author,
+                          if (item.category.isNotEmpty) item.category,
+                        ].join(' · '),
+                        style: bodyStyle(
+                          palette,
+                          size: 12,
+                          color: c.muted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                     if (item.summary.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(

@@ -200,6 +200,9 @@ class AppState extends ChangeNotifier {
   List<NewsItem> _liveNews = <NewsItem>[];
   bool _liveNewsLoading = false;
   bool _liveNewsError = false;
+  List<NewsItem> _arxivPapers = <NewsItem>[];
+  bool _arxivPapersLoading = false;
+  bool _arxivPapersError = false;
 
   AppUser? _user;
   AppView _view = AppView.library;
@@ -240,6 +243,11 @@ class AppState extends ChangeNotifier {
   List<NewsItem> get liveNews => _liveNews;
   bool get liveNewsLoading => _liveNewsLoading;
   bool get liveNewsError => _liveNewsError;
+
+  /// Latest papers from arXiv (Feed "Published papers" tab).
+  List<NewsItem> get arxivPapers => _arxivPapers;
+  bool get arxivPapersLoading => _arxivPapersLoading;
+  bool get arxivPapersError => _arxivPapersError;
 
   /// Resolves the selected paper id against the live [_papers] list so the
   /// returned object is always fresh (streams keep it up to date).
@@ -562,6 +570,29 @@ class AppState extends ChangeNotifier {
       _liveNewsError = true;
     }
     _liveNewsLoading = false;
+    notifyListeners();
+  }
+
+  /// Fetches the latest arXiv papers for the Feed's "Published papers"
+  /// tab. Same shape as [fetchLiveNews]: the repo caches for 5 minutes,
+  /// the loading state only shows while the list is empty, and a
+  /// background refresh never flashes over papers already on screen.
+  /// Never throws.
+  Future<void> fetchArxivPapers({bool forceRefresh = false}) async {
+    if (_arxivPapersLoading) return;
+    _arxivPapersLoading = true;
+    _arxivPapersError = false;
+    notifyListeners();
+    try {
+      final items =
+          await _newsRepo.fetchArxivPapers(forceRefresh: forceRefresh);
+      _arxivPapers = items;
+      _arxivPapersError = items.isEmpty;
+    } catch (e) {
+      debugPrint('[AppState] arXiv papers fetch failed: $e');
+      _arxivPapersError = true;
+    }
+    _arxivPapersLoading = false;
     notifyListeners();
   }
 

@@ -1,4 +1,5 @@
-/// Live education/science headlines for the Feed tab.
+/// Live education/science headlines for the Feed tab, plus the latest
+/// papers from arXiv for the Feed's "Published papers" tab.
 ///
 /// Fetches RSS feeds through the free rss2json proxy (plain JSON over
 /// HTTPS, so it works on web — a direct RSS fetch would hit CORS — and on
@@ -32,9 +33,20 @@ class NewsRepository {
   static const _cacheTtl = Duration(minutes: 5);
   static const _maxItems = 30;
 
+  /// Latest papers from arXiv, via the free arXiv API (Atom) through the
+  /// same rss2json proxy — no new dependency, no XML parsing in the app.
+  /// Verified live 2026-11-09: the broad category OR query returns
+  /// `status: ok` with items newest first by submittedDate, each carrying
+  /// title, first author, abstract, link and categories.
+  static const _arxivFeedUrl =
+      'https://export.arxiv.org/api/query?search_query=cat:cs.* OR cat:math.* OR cat:physics.* OR cat:astro-ph.* OR cat:cond-mat.* OR cat:quant-ph OR cat:hep-th OR cat:hep-ph OR cat:gr-qc OR cat:q-bio.* OR cat:stat.*&start=0&max_results=20&sortBy=submittedDate&sortOrder=descending';
+  static const _arxivMaxItems = 20;
+
   final http.Client _client;
   List<NewsItem>? _cache;
   DateTime? _cacheAt;
+  List<NewsItem>? _arxivCache;
+  DateTime? _arxivCacheAt;
 
   /// Live headlines, newest first. Returns the cached list when it is
   /// fresh unless [forceRefresh] is true. Never throws — a failed source
@@ -52,6 +64,27 @@ class NewsRepository {
     final trimmed = items.take(_maxItems).toList();
     _cache = trimmed;
     _cacheAt = DateTime.now();
+    return trimmed;
+  }
+
+  /// Latest arXiv papers, newest first. Same cache rules as
+  /// [fetchLiveNews] but a separate cache, so the two tabs refresh
+  /// independently. Never throws — a failure returns an empty list.
+  Future<List<NewsItem>> fetchArxivPapers({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh &&
+        _arxivCache != null &&
+        _arxivCacheAt != null &&
+        DateTime.now().difference(_arxivCacheAt!) < _cacheTtl) {
+      return _arxivCache!;
+    }
+    final items =
+        await _fetchSource((feedUrl: _arxivFeedUrl, name: 'arXiv'))
+          ..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    final trimmed = items.take(_arxivMaxItems).toList();
+    _arxivCache = trimmed;
+    _arxivCacheAt = DateTime.now();
     return trimmed;
   }
 

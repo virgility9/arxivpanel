@@ -527,6 +527,11 @@ class NewsItem {
     this.imageUrl = '',
     this.isAdminPosted = false,
     this.postedBy = '',
+    // Live-feed only (rss2json `author` / `categories`): the first
+    // author and primary category of an arXiv paper. Empty for admin
+    // posts and for news items, which carry no author.
+    this.author = '',
+    this.category = '',
   });
 
   final String id;
@@ -538,6 +543,8 @@ class NewsItem {
   final String imageUrl;
   final bool isAdminPosted;
   final String postedBy;
+  final String author;
+  final String category;
 
   NewsItem copyWith({
     String? title,
@@ -548,6 +555,8 @@ class NewsItem {
     String? imageUrl,
     bool? isAdminPosted,
     String? postedBy,
+    String? author,
+    String? category,
   }) {
     return NewsItem(
       id: id,
@@ -559,6 +568,8 @@ class NewsItem {
       imageUrl: imageUrl ?? this.imageUrl,
       isAdminPosted: isAdminPosted ?? this.isAdminPosted,
       postedBy: postedBy ?? this.postedBy,
+      author: author ?? this.author,
+      category: category ?? this.category,
     );
   }
 
@@ -609,6 +620,13 @@ class NewsItem {
       thumb = enclosure['thumbnail'] as String?;
     }
     thumb ??= json['thumbnail'] as String?;
+    // rss2json's `author` is the first author for arXiv entries and
+    // empty for the news feeds; `categories` holds the arXiv categories
+    // (first one is the primary). Both stay empty otherwise.
+    final rawCategories = json['categories'];
+    final category = rawCategories is List && rawCategories.isNotEmpty
+        ? _plainText('${rawCategories.first}')
+        : '';
     return NewsItem(
       id: link.isNotEmpty ? link : '$source:${json['guid'] ?? ''}',
       title: _plainText(json['title'] as String? ?? ''),
@@ -617,6 +635,8 @@ class NewsItem {
       source: source,
       publishedAt: DateTime.tryParse(rawDate) ?? DateTime.now(),
       imageUrl: thumb ?? '',
+      author: _plainText(json['author'] as String? ?? ''),
+      category: category,
     );
   }
 
