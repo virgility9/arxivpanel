@@ -9,12 +9,10 @@
 /// Sized for the library grid (2 columns on phones, 3–4 on wider
 /// screens); the title is capped at 2 lines.
 ///
-/// The card sizes to its own content (no Spacer, no Expanded): a short
-/// title used to leave a big empty gap between the author row and the
-/// action row, because the old fixed-height grid cell stretched the
-/// card and the Spacer filled the slack. Now the action row sits
-/// directly under the author row, and the grid (see
-/// library_screen.dart) lays the cards out at their own heights.
+/// The card sizes to its own content (no Spacer, no Expanded), and every
+/// card ends up the same height: the title always reserves exactly two
+/// lines, so a short or long title never changes the card's size and the
+/// action row sits directly under the author row.
 library;
 
 import 'package:flutter/material.dart';
@@ -71,6 +69,8 @@ class _PaperCardState extends State<PaperCard> {
     final bookmarked = widget.appState.isBookmarked(paper.id);
     final isNarrow = MediaQuery.of(context).size.width < 700;
     final coverH = isNarrow ? 132.0 : 150.0;
+    final titleStyle = displayStyle(palette, size: isNarrow ? 19 : 21)
+        .copyWith(fontWeight: FontWeight.w700);
 
     return Container(
       color: c.surface,
@@ -145,14 +145,32 @@ class _PaperCardState extends State<PaperCard> {
                   ],
                 ),
                 const SizedBox(height: 8),
+                // Title always occupies exactly two lines of height, so a
+                // short or long title never changes the card's size. A
+                // hidden two-line placeholder reserves the space (scales
+                // with the text size setting); the real title is capped
+                // at two lines and ellipsized.
                 GestureDetector(
                   onTap: () => widget.appState.openPaper(paper),
-                  child: Text(
-                    paper.title,
-                    style: displayStyle(palette, size: isNarrow ? 19 : 21)
-                        .copyWith(fontWeight: FontWeight.w700),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  child: Stack(
+                    children: [
+                      ExcludeSemantics(
+                        child: Opacity(
+                          opacity: 0,
+                          child: Text(
+                            '\n',
+                            style: titleStyle,
+                            maxLines: 2,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        paper.title,
+                        style: titleStyle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 6),
