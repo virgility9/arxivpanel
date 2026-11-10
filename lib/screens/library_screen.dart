@@ -6,6 +6,8 @@
 /// paper list rendered with [PaperCard].
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/constants.dart';
@@ -107,8 +109,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
         final papers = widget.appState.approvedPapers;
         final filtered = _filtered(papers);
         final isNarrow = MediaQuery.of(context).size.width < 700;
-        final pageCount = (filtered.length / _pageSize).ceil().clamp(1, 1 << 30);
-        final page = _page.clamp(0, pageCount - 1);
+        final pageCount = math.max(1, (filtered.length / _pageSize).ceil());
+        final page = math.min(_page, pageCount - 1);
         final pageItems =
             filtered.skip(page * _pageSize).take(_pageSize).toList();
 
