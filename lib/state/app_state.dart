@@ -99,6 +99,14 @@ class AppState extends ChangeNotifier {
   /// (an unfiltered query would be denied for them — rules are not filters).
   bool _papersAdmin = false;
 
+  /// The signed-in author's own papers in every status. Non-admins only
+  /// load approved papers in [_papers], so without this their pending /
+  /// rejected submissions would never appear on the profile.
+  StreamSubscription<List<Paper>>? _ownSub;
+  Future<void> Function()? _ownDispose;
+  List<Paper> _ownPapers = <Paper>[];
+  String? _ownUid;
+
   /// True after the admin papers query was denied by the rules — i.e. the app
   /// believes the user is an admin but Firestore doesn't (missing
   /// `admins/{uid}` doc). While set, we stay on the public approved-only feed
@@ -114,6 +122,7 @@ class AppState extends ChangeNotifier {
   void _subscribePapers() {
     if (_repo == null) return;
     final admin = _user?.isAdmin == true && !_papersAdminDenied;
+    _syncOwnPapers(admin);
     if (_papersSub != null && _papersAdmin == admin) return;
     _papersSub?.cancel();
     // Fire-and-forget: teardown is idempotent and never throws.
@@ -140,6 +149,46 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  /// Keeps the own-papers feed in step with the signed-in user. Admins
+  /// already receive every paper through the main feed, so they skip it.
+  void _syncOwnPapers(bool admin) {
+    final uid = (!admin && _user != null) ? _user!.id : null;
+    if (uid == _ownUid) return;
+    _ownSub?.cancel();
+    _ownSub = null;
+    unawaited(_ownDispose?.call());
+    _ownDispose = null;
+    _ownUid = uid;
+    if (_ownPapers.isNotEmpty) {
+      _ownPapers = <Paper>[];
+      notifyListeners();
+    }
+    if (uid == null) return;
+    final feed = _repo!.watchOwnPapers(uid);
+    _ownDispose = feed.dispose;
+    _ownSub = feed.stream.listen(
+      (papers) {
+        _ownPapers = papers;
+        notifyListeners();
+      },
+      onError: (Object e) => debugPrint('[AppState] own papers error: $e'),
+    );
+  }
+
+  /// The signed-in user's papers in every status, newest submission first.
+  List<Paper> get myPapers {
+    final uid = _user?.id;
+    if (uid == null) return const <Paper>[];
+    final byId = <String, Paper>{
+      for (final p in _papers)
+        if (p.authorId == uid) p.id: p,
+      for (final p in _ownPapers) p.id: p,
+    };
+    final list = byId.values.toList();
+    list.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+    return list;
   }
 
   void _onPapersError(Object e) {
@@ -275,6 +324,10 @@ class AppState extends ChangeNotifier {
 
   Paper? paperById(String id) {
     for (final p in _papers) {
+      if (p.id == id) return p;
+    }
+    // Own pending / rejected papers aren't in the public feed.
+    for (final p in _ownPapers) {
       if (p.id == id) return p;
     }
     return null;
@@ -797,6 +850,8 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _papersSub?.cancel();
+    _ownSub?.cancel();
+    unawaited(_ownDispose?.call());
     _usersSub?.cancel();
     _authSub?.cancel();
     _newsSub?.cancel();

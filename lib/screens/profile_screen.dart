@@ -431,7 +431,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         // -------------------------------------------------- derived data
         final papers = widget.appState.papers;
-        final myPapers = papers.where((pp) => pp.authorId == user.id).toList();
+        final myPapers = widget.appState.myPapers;
         final savedPapers = papers
             .where((pp) => widget.appState.bookmarks.contains(pp.id))
             .toList();
@@ -532,7 +532,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   icon: Icons.description_outlined,
                                   title: 'No papers yet',
                                   sub:
-                                      'Papers you publish will show up here.',
+                                      'Papers you submit show up here, with their review status.',
                                   // Admins do admin tasks only — no submit
                                   // action for them.
                                   actionLabel: widget.appState.user?.isAdmin ==
@@ -550,6 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   c,
                                   myPapers,
                                   showStats: true,
+                                  showStatus: true,
                                   onDelete: _confirmDelete,
                                 )
                         else if (_tab == 1)
@@ -979,6 +980,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     AppColors c,
     Paper paper, {
     bool showStats = false,
+    bool showStatus = false,
     Widget? trailing,
   }) {
     return InkWell(
@@ -1017,6 +1019,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     runSpacing: 2,
                     children: [
                       Text(paper.field, style: monoStyle(p, size: 10)),
+                      if (showStatus && paper.status != PaperStatus.approved)
+                        _statusBadge(p, c, paper),
                       if (showStats) ...[
                         Text(
                           '${formatCount(paper.views)} views',
@@ -1040,11 +1044,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Moderation status chip for the author's own papers (hidden once
+  /// approved). Rejected papers show the admin's reason when there is one.
+  Widget _statusBadge(AppPalette p, AppColors c, Paper paper) {
+    final label = switch (paper.status) {
+      PaperStatus.pending => 'PENDING REVIEW',
+      PaperStatus.rejected => 'REJECTED',
+      PaperStatus.revision => 'REVISION REQUESTED',
+      PaperStatus.archived => 'ARCHIVED',
+      PaperStatus.approved => '',
+    };
+    final color = paper.status == PaperStatus.pending
+        ? p.accent.accent
+        : paper.status == PaperStatus.archived
+            ? c.faint
+            : Colors.redAccent;
+    final reason = paper.rejectionReason;
+    final text = (paper.status == PaperStatus.rejected ||
+                paper.status == PaperStatus.revision) &&
+            reason != null &&
+            reason.trim().isNotEmpty
+        ? '$label · ${reason.trim()}'
+        : label;
+    return Text(
+      text,
+      style: monoStyle(p, size: 10, color: color),
+    );
+  }
+
   Widget _paperList(
     AppPalette p,
     AppColors c,
     List<Paper> papers, {
     bool showStats = false,
+    bool showStatus = false,
     Future<void> Function(Paper paper)? onDelete,
   }) {
     return Column(
@@ -1055,6 +1088,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             c,
             paper,
             showStats: showStats,
+            showStatus: showStatus,
             trailing: onDelete == null
                 ? null
                 : IconButton(

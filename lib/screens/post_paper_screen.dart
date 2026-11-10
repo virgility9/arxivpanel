@@ -111,6 +111,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       errs['abstract'] = 'Abstract must be at least 80 characters';
     }
     if (institution.isEmpty) errs['institution'] = 'Institution is required';
+    if (_pdfBytes == null) errs['pdf'] = 'Attach your paper as a PDF to submit';
     setState(() => _errors = errs);
     if (errs.isNotEmpty) return;
 
@@ -145,19 +146,27 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     // The paper doc is created first, then the PDF uploads to Cloudinary
     // (free tier); the PDF's URL and its auto-generated cover (the first
     // page) are then attached to the paper.
+    // Upload first: a paper is never submitted without its file, so a failed
+    // upload (or missing Cloudinary setup) leaves nothing half-submitted.
+    final uploaded = await widget.appState.uploadPaperPdf(
+      _pdfBytes!,
+      _pdfName ?? 'paper.pdf',
+    );
+    if (uploaded == null) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _errors = {'pdf': 'Upload failed — your paper was not submitted. Try again.'};
+      });
+      return;
+    }
     final paperId = await widget.appState.submitPaper(paper);
-    if (paperId != null && _pdfBytes != null) {
-      final uploaded = await widget.appState.uploadPaperPdf(
-        _pdfBytes!,
-        _pdfName ?? 'paper.pdf',
+    if (paperId != null) {
+      await widget.appState.setPaperPdfAndCover(
+        paperId,
+        uploaded.fileUrl,
+        uploaded.coverUrl,
       );
-      if (uploaded != null) {
-        await widget.appState.setPaperPdfAndCover(
-          paperId,
-          uploaded.fileUrl,
-          uploaded.coverUrl,
-        );
-      }
     }
     if (!mounted) return;
     setState(() {
@@ -188,6 +197,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
         _pdfBytes = picked.bytes;
         _pdfName = picked.name;
         _pdfPageCount = countPdfPages(picked.bytes);
+        _errors = Map.of(_errors)..remove('pdf');
         if (kIsWeb) {
           _pdfPreviewUrl = createBlobUrl(picked.bytes, 'application/pdf');
           _pdfCoverPreview = buildPdfView(_pdfPreviewUrl!);
@@ -359,11 +369,26 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           ),
           const SizedBox(height: 20),
           Text(
-            'Your paper is under admin review. Once approved, it will appear in the library.',
+            'Your paper is under admin review. Track its status under My Papers on your profile; once approved, it will appear in the library.',
             style: bodyStyle(p, size: 15, color: c.muted),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => widget.appState.navigate(AppView.profile),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: c.border),
+                minimumSize: Size.fromHeight(narrow ? 48 : 52),
+              ),
+              child: Text(
+                'View My Papers',
+                style: bodyStyle(p, size: 13, color: c.text),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: GoldButton(
@@ -503,7 +528,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
               children: [
                 SectionLabel(palette: p, text: 'Paper File (PDF)'),
                 Text(
-                  ' — optional',
+                  ' — required',
                   style: bodyStyle(p, size: 10, color: p.c.fainter),
                 ),
               ],
@@ -597,6 +622,13 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                   ],
                 ),
               ),
+            if (_errors['pdf'] != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _errors['pdf']!,
+                style: bodyStyle(p, size: 12, color: Colors.redAccent),
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               'The PDF is uploaded (free Cloudinary hosting) when you submit.',

@@ -294,6 +294,20 @@ class FirestoreRepository {
     return (stream: feed.stream, dispose: feed.dispose);
   }
 
+  /// Streams the papers authored by [uid] in every status (pending,
+  /// rejected, ...). The `authorId ==` filter matches the rules' author
+  /// read branch exactly, so non-admins are allowed to run it; it is a
+  /// single-field equality query, so it needs no composite index.
+  ({Stream<List<Paper>> stream, Future<void> Function() dispose})
+      watchOwnPapers(String uid) {
+    final query = _firestore
+        .collection('papers')
+        .where('authorId', isEqualTo: uid);
+    final feed = _PaperFeed(_firestore, query);
+    _feedDisposers.add(feed.dispose);
+    return (stream: feed.stream, dispose: feed.dispose);
+  }
+
   /// Increments the paper's view counter atomically.
   Future<void> incrementViews(String paperId) {
     return _firestore.collection('papers').doc(paperId).update({
