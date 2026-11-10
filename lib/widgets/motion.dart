@@ -41,7 +41,7 @@ class MotionSwitcher extends StatelessWidget {
       layoutBuilder: (current, previous) => Stack(
         fit: expand ? StackFit.expand : StackFit.loose,
         alignment: Alignment.topCenter,
-        children: [...previous, if (current != null) current],
+        children: [...previous, ?current],
       ),
       transitionBuilder: (child, animation) {
         final faded = FadeTransition(opacity: animation, child: child);
