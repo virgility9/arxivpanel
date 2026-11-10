@@ -34,11 +34,11 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   String _field = AppConstants.fields[0];
-  String _sort = 'popular';
+  String _sort = 'newest';
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
 
-  static const List<String> _sortOptions = ['popular', 'newest', 'views'];
+  static const List<String> _sortOptions = ['newest', 'views'];
 
   @override
   void dispose() {
@@ -74,15 +74,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
 
     switch (_sort) {
-      case 'newest':
-        out.sort(dateCompare);
-        break;
       case 'views':
         out.sort((a, b) => b.views.compareTo(a.views));
         break;
-      case 'popular':
+      case 'newest':
       default:
-        out.sort((a, b) => b.totalReactions.compareTo(a.totalReactions));
+        // Ordered by publish date, so liking a paper never moves its card.
+        out.sort(dateCompare);
     }
     return out;
   }
@@ -263,7 +261,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   /// Whether any filter differs from the defaults.
-  bool get _hasActiveFilters => _field != AppConstants.fields[0] || _sort != 'popular';
+  bool get _hasActiveFilters => _field != AppConstants.fields[0] || _sort != 'newest';
 
   /// Loading / buffering / offline states for the first papers emission.
   Widget _buildLoadingState(AppPalette p) {
@@ -457,11 +455,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         onPressed: () {
                           setSheetState(() {
                             _field = AppConstants.fields[0];
-                            _sort = 'popular';
+                            _sort = 'newest';
                           });
                           setState(() {
                             _field = AppConstants.fields[0];
-                            _sort = 'popular';
+                            _sort = 'newest';
                           });
                         },
                         child: Text(
