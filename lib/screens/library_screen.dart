@@ -13,6 +13,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/pagination_bar.dart';
 import '../widgets/paper_card.dart';
 import '../widgets/shared.dart';
 
@@ -38,11 +39,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
 
+  /// Papers per page; the pagination bar appears once there are more.
+  static const int _pageSize = 20;
+
+  /// Current page (0-based). Reset to the first page whenever the search,
+  /// field or sort changes; clamped at build time if the list shrinks.
+  int _page = 0;
+  final ScrollController _scroll = ScrollController();
+
   static const List<String> _sortOptions = ['newest', 'views'];
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -97,8 +107,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         final papers = widget.appState.approvedPapers;
         final filtered = _filtered(papers);
         final isNarrow = MediaQuery.of(context).size.width < 700;
+        final pageCount = (filtered.length / _pageSize).ceil().clamp(1, 1 << 30);
+        final page = _page.clamp(0, pageCount - 1);
+        final pageItems =
+            filtered.skip(page * _pageSize).take(_pageSize).toList();
 
         return SingleChildScrollView(
+          controller: _scroll,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -125,7 +140,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         Expanded(
                           child: TextField(
                             controller: _searchController,
-                            onChanged: (v) => setState(() => _search = v),
+                            onChanged: (v) => setState(() {
+                              _search = v;
+                              _page = 0;
+                            }),
                             decoration: InputDecoration(
                               hintText: 'Search titles, authors, tags…',
                               prefixIcon: Icon(Icons.search,
@@ -142,7 +160,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                           minWidth: 44, minHeight: 44),
                                       onPressed: () {
                                         _searchController.clear();
-                                        setState(() => _search = '');
+                                        setState(() {
+                                          _search = '';
+                                          _page = 0;
+                                        });
                                       },
                                     ),
                             ),
@@ -231,11 +252,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               final cellWidth =
                                   (width - spacing * (columns - 1)) /
                                       columns;
-                              return Wrap(
+                              final grid = Wrap(
                                 spacing: spacing,
                                 runSpacing: spacing,
                                 children: [
-                                  for (final paper in filtered)
+                                  for (final paper in pageItems)
                                     SizedBox(
                                       width: cellWidth,
                                       child: PaperCard(
@@ -246,6 +267,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                         onAuthPrompt: widget.onAuthPrompt,
                                       ),
                                     ),
+                                ],
+                              );
+                              if (pageCount <= 1) return grid;
+                              return Column(
+                                children: [
+                                  grid,
+                                  const SizedBox(height: 28),
+                                  PaginationBar(
+                                    palette: p,
+                                    page: page,
+                                    pageCount: pageCount,
+                                    onPageChanged: (n) {
+                                      setState(() => _page = n);
+                                      if (_scroll.hasClients) {
+                                        _scroll.animateTo(
+                                          0,
+                                          duration: const Duration(
+                                              milliseconds: 250),
+                                          curve: Curves.easeOutCubic,
+                                        );
+                                      }
+                                    },
+                                  ),
                                 ],
                               );
                             },
@@ -458,6 +502,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             _sort = 'newest';
                           });
                           setState(() {
+                            _page = 0;
                             _field = AppConstants.fields[0];
                             _sort = 'newest';
                           });
@@ -504,7 +549,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 selected: _field == f,
                                 onTap: () {
                                   setSheetState(() => _field = f);
-                                  setState(() => _field = f);
+                                  setState(() {
+                                    _field = f;
+                                    _page = 0;
+                                  });
                                 },
                               ),
                           ],
@@ -578,7 +626,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
       child: InkWell(
         onTap: () {
           setSheetState(() => _sort = s);
-          setState(() => _sort = s);
+          setState(() {
+            _sort = s;
+            _page = 0;
+          });
         },
         borderRadius: BorderRadius.circular(10),
         child: Container(
