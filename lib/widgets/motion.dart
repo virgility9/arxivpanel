@@ -1,11 +1,9 @@
-/// Shared motion helpers: screen/tab transitions and list entrance effects.
+/// Shared motion helpers: screen and tab transitions.
 ///
 /// Built only from core Flutter widgets (no packages). Every helper
 /// collapses to "no animation" when the OS asks to reduce motion
 /// ([MediaQueryData.disableAnimations]).
 library;
-
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -54,30 +52,6 @@ class MotionSwitcher extends StatelessWidget {
           child: faded,
         );
       },
-      child: child,
-    );
-  }
-}
-
-/// Fades and slides [child] in once when it first appears. [index] staggers
-/// siblings in a list (capped so long lists don't wait forever).
-class FadeSlideIn extends StatelessWidget {
-  const FadeSlideIn({super.key, required this.index, required this.child});
-
-  final int index;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (motionReduced(context)) return child;
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: 260 + math.min(index, 6) * 60),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, child) => Opacity(
-        opacity: t,
-        child: Transform.translate(offset: Offset(0, (1 - t) * 14), child: child),
-      ),
       child: child,
     );
   }

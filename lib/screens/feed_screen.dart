@@ -151,20 +151,17 @@ class _FeedScreenState extends State<FeedScreen> {
         if (adminNews.isNotEmpty) ...[
           _sectionLabel(p, 'POSTED BY ARXIV'),
           const SizedBox(height: 12),
-          for (var i = 0; i < adminNews.length; i++) ...[
-            FadeSlideIn(
-              key: ValueKey(adminNews[i].id),
-              index: i,
-              child: _NewsCard(
-                item: adminNews[i],
-                palette: p,
-                isAdminPost: true,
-                canDelete: isAdmin,
-                onOpen: () => _openUrl(adminNews[i].url),
-                onDelete: () => _confirmDelete(p, adminNews[i]),
-                onShare: () => _shareNews(adminNews[i]),
-                dateLabel: _dateOf(adminNews[i]),
-              ),
+          for (final item in adminNews) ...[
+            _NewsCard(
+              key: ValueKey(item.id),
+              item: item,
+              palette: p,
+              isAdminPost: true,
+              canDelete: isAdmin,
+              onOpen: () => _openUrl(item.url),
+              onDelete: () => _confirmDelete(p, item),
+              onShare: () => _shareNews(item),
+              dateLabel: _dateOf(item),
             ),
             const SizedBox(height: 12),
           ],
@@ -222,17 +219,14 @@ class _FeedScreenState extends State<FeedScreen> {
             sub: 'Pull down to refresh, or check back later',
           )
         else
-          for (var i = 0; i < liveNews.length; i++) ...[
-            FadeSlideIn(
-              key: ValueKey(liveNews[i].id),
-              index: i,
-              child: _NewsCard(
-                item: liveNews[i],
-                palette: p,
-                onOpen: () => _openUrl(liveNews[i].url),
-                onShare: () => _shareNews(liveNews[i]),
-                dateLabel: _dateOf(liveNews[i]),
-              ),
+          for (final item in liveNews) ...[
+            _NewsCard(
+              key: ValueKey(item.id),
+              item: item,
+              palette: p,
+              onOpen: () => _openUrl(item.url),
+              onShare: () => _shareNews(item),
+              dateLabel: _dateOf(item),
             ),
             const SizedBox(height: 12),
           ],
@@ -299,18 +293,15 @@ class _FeedScreenState extends State<FeedScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < arxivPapers.length; i++) ...[
-          FadeSlideIn(
-            key: ValueKey(arxivPapers[i].id),
-            index: i,
-            child: _NewsCard(
-              item: arxivPapers[i],
-              palette: p,
-              showAuthor: true,
-              onOpen: () => _openUrl(arxivPapers[i].url),
-              onShare: () => _shareNews(arxivPapers[i]),
-              dateLabel: _dateOf(arxivPapers[i]),
-            ),
+        for (final item in arxivPapers) ...[
+          _NewsCard(
+            key: ValueKey(item.id),
+            item: item,
+            palette: p,
+            showAuthor: true,
+            onOpen: () => _openUrl(item.url),
+            onShare: () => _shareNews(item),
+            dateLabel: _dateOf(item),
           ),
           const SizedBox(height: 12),
         ],
