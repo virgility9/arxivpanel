@@ -200,44 +200,68 @@ class NetImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final img = Image.network(
-      url,
-      width: width,
-      height: height,
-      fit: fit,
-      // Loading placeholder so images don't pop in from blank.
-      // Skeleton-style loading: a plain grey block while the image
-      // loads, no spinner.
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        final surfaceColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-        return Container(
+    // Decode at (about) display size, not full resolution: covers are
+    // often 1200px+ but display at 130-360px, and decoding the full
+    // bitmap on a phone wastes CPU and memory on every scroll. The
+    // layout width is the real display width (cell width for cards,
+    // full width for feed images). 2x headroom: the images use
+    // BoxFit.cover, which can upscale a too-small decode, so the cache
+    // box is twice the display size to stay sharp in both orientations.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final dpr = MediaQuery.devicePixelRatioOf(context);
+        final displayWidth = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final cacheWidth = (displayWidth * dpr * 2).round();
+        final cacheHeight = (height != null && height!.isFinite)
+            ? (height! * dpr * 2).round()
+            : null;
+        final img = Image.network(
+          url,
           width: width,
           height: height,
-          color: surfaceColor,
+          fit: fit,
+          cacheWidth: cacheWidth,
+          cacheHeight: cacheHeight,
+          // Loading placeholder so images don't pop in from blank.
+          // Skeleton-style loading: a plain grey block while the image
+          // loads, no spinner.
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            final surfaceColor =
+                Theme.of(context).colorScheme.surfaceContainerHighest;
+            return Container(
+              width: width,
+              height: height,
+              color: surfaceColor,
+            );
+          },
+          errorBuilder: (context, _, _) {
+            // Tell the caller the image failed (post-frame: errorBuilder
+            // can run during build, so a setState inside the callback
+            // would throw). The placeholder is still returned, so callers
+            // that ignore onError keep the old behavior.
+            if (onError != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => onError!());
+            }
+            final surfaceColor =
+                Theme.of(context).colorScheme.surfaceContainerHighest;
+            return Container(
+              width: width,
+              height: height,
+              color: surfaceColor,
+              child: const Center(
+                  child: Text('📄', style: TextStyle(fontSize: 24))),
+            );
+          },
         );
-      },
-      errorBuilder: (context, _, _) {
-        // Tell the caller the image failed (post-frame: errorBuilder
-        // can run during build, so a setState inside the callback
-        // would throw). The placeholder is still returned, so callers
-        // that ignore onError keep the old behavior.
-        if (onError != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => onError!());
+        if (borderRadius != null) {
+          return ClipRRect(borderRadius: borderRadius!, child: img);
         }
-        final surfaceColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-        return Container(
-          width: width,
-          height: height,
-          color: surfaceColor,
-          child: const Center(child: Text('📄', style: TextStyle(fontSize: 24))),
-        );
+        return img;
       },
     );
-    if (borderRadius != null) {
-      return ClipRRect(borderRadius: borderRadius!, child: img);
-    }
-    return img;
   }
 }
 

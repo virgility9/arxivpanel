@@ -170,13 +170,18 @@ class _FeedScreenState extends State<FeedScreen> {
         _sectionLabel(p, 'LIVE FROM THE WEB'),
         const SizedBox(height: 12),
         if (widget.appState.liveNewsLoading && liveNews.isEmpty)
-          Column(
-            children: [
-              for (var i = 0; i < 3; i++) ...[
-                _NewsSkeletonCard(palette: p),
-                if (i < 2) const SizedBox(height: 12),
+          // One shimmer sweep over the whole list, not one per card:
+          // three ShaderMasks (three saveLayers per frame) made the
+          // first load stutter on phones.
+          Shimmer(
+            child: Column(
+              children: [
+                for (var i = 0; i < 3; i++) ...[
+                  _NewsSkeletonCard(palette: p),
+                  if (i < 2) const SizedBox(height: 12),
+                ],
               ],
-            ],
+            ),
           )
         else if (widget.appState.liveNewsError &&
             liveNews.isEmpty)
@@ -240,13 +245,16 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _buildPapersTab(AppPalette p, List<NewsItem> arxivPapers) {
     final c = p.c;
     if (widget.appState.arxivPapersLoading && arxivPapers.isEmpty) {
-      return Column(
-        children: [
-          for (var i = 0; i < 3; i++) ...[
-            _NewsSkeletonCard(palette: p),
-            if (i < 2) const SizedBox(height: 12),
+      // One shimmer sweep over the whole list, not one per card.
+      return Shimmer(
+        child: Column(
+          children: [
+            for (var i = 0; i < 3; i++) ...[
+              _NewsSkeletonCard(palette: p),
+              if (i < 2) const SizedBox(height: 12),
+            ],
           ],
-        ],
+        ),
       );
     }
     if (widget.appState.arxivPapersError && arxivPapers.isEmpty) {
@@ -879,8 +887,9 @@ class _NewsSkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = palette.c;
-    return Shimmer(
-      child: Container(
+    // The shimmer sweep wraps the whole skeleton list in
+    // [_buildNewsTab]/[_buildPapersTab], not each card.
+    return Container(
       decoration: BoxDecoration(
         color: c.surface,
         border: Border.all(color: c.border),
@@ -946,7 +955,6 @@ class _NewsSkeletonCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
       ),
     );
   }

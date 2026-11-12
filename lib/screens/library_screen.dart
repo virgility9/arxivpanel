@@ -402,16 +402,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
               const spacing = 12.0;
               final cellWidth =
                   (width - spacing * (columns - 1)) / columns;
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (var i = 0; i < 6; i++)
-                    SizedBox(
-                      width: cellWidth,
-                      child: _paperSkeletonCard(p),
-                    ),
-                ],
+              // One shimmer sweep over the whole grid, not one per card:
+              // six ShaderMasks (six saveLayers per frame) made the
+              // first load stutter on phones.
+              return Shimmer(
+                child: Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (var i = 0; i < 6; i++)
+                      SizedBox(
+                        width: cellWidth,
+                        child: _paperSkeletonCard(p),
+                      ),
+                  ],
+                ),
               );
             },
           ),
@@ -426,41 +431,40 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   /// One placeholder paper card for the first-load shimmer grid,
-  /// shaped like a [PaperCard] (cover + title/author bars).
+  /// shaped like a [PaperCard] (cover + title/author bars). The shimmer
+  /// sweep wraps the whole grid in [_buildLoadingState], not each card.
   Widget _paperSkeletonCard(AppPalette p) {
     final c = p.c;
-    return Shimmer(
-      child: Container(
-        color: c.surface,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-              child: Container(
-                height: 132,
-                decoration: BoxDecoration(
-                  color: c.surface2,
-                  borderRadius: BorderRadius.circular(7),
-                ),
+    return Container(
+      color: c.surface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+            child: Container(
+              height: 132,
+              decoration: BoxDecoration(
+                color: c.surface2,
+                borderRadius: BorderRadius.circular(7),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _skeletonBar(width: 72, height: 10),
-                  const SizedBox(height: 8),
-                  _skeletonBar(width: double.infinity, height: 16),
-                  const SizedBox(height: 6),
-                  _skeletonBar(width: 140, height: 12),
-                ],
-              ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _skeletonBar(width: 72, height: 10),
+                const SizedBox(height: 8),
+                _skeletonBar(width: double.infinity, height: 16),
+                const SizedBox(height: 6),
+                _skeletonBar(width: 140, height: 12),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
