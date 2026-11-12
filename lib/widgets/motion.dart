@@ -22,14 +22,12 @@ class MotionSwitcher extends StatelessWidget {
     required this.child,
     this.duration = const Duration(milliseconds: 240),
     this.slide = true,
-    this.slideOffset = const Offset(0, 0.02),
     this.expand = false,
   });
 
   final Widget child;
   final Duration duration;
   final bool slide;
-  final Offset slideOffset;
   final bool expand;
 
   @override
@@ -48,7 +46,7 @@ class MotionSwitcher extends StatelessWidget {
         if (!slide) return faded;
         return SlideTransition(
           position: Tween<Offset>(
-            begin: slideOffset,
+            begin: const Offset(0, 0.02),
             end: Offset.zero,
           ).animate(animation),
           child: faded,

@@ -36,11 +36,8 @@ class AppShell extends StatelessWidget {
     AuthDialog.show(context, mode: mode, appState: appState, theme: theme);
   }
 
-  void _navigate(BuildContext context, AppView view,
-      [Offset? slideOffset]) {
-    appState.navigate(view,
-        slideOffset: slideOffset, onAuthPrompt: () => _promptAuth(context));
-  }
+  void _navigate(BuildContext context, AppView view) =>
+      appState.navigate(view, onAuthPrompt: () => _promptAuth(context));
 
   @override
   Widget build(BuildContext context) {
@@ -71,23 +68,15 @@ class AppShell extends StatelessWidget {
                   onAuthPrompt: (m) => _promptAuth(context, m),
                 ),
                 Expanded(
-                  child: _SwipeTabs(
-                    appState: appState,
-                    onNavigate: (view, offset) =>
-                        _navigate(context, view, offset),
-                    child: MotionSwitcher(
-                      expand: true,
-                      slideOffset: appState.viewSlideOffset,
-                      child: KeyedSubtree(
-                        // New key per screen (and per paper in the reader) so
-                        // the switcher animates each navigation.
-                        key: ValueKey(
-                          appState.view == AppView.reader
-                              ? 'reader:${appState.selectedPaper?.id}'
-                              : appState.view.name,
-                        ),
-                        child: _buildView(context),
-                      ),
+                  child: MotionSwitcher(
+                    expand: true,
+                    child: KeyedSubtree(
+                      // One key for all tabs: tab-to-tab motion is owned by
+                      // the PageView, so the switcher must not animate it.
+                      // The reader and the submit form keep their own keys
+                      // so the switcher still fades/slides those in.
+                      key: ValueKey(_contentKey),
+                      child: _buildContent(context),
                     ),
                   ),
                 ),
@@ -132,9 +121,9 @@ class AppShell extends StatelessWidget {
     );
   }
 
-  Widget _buildView(BuildContext context) {
+  Widget _buildView(BuildContext context, AppView view) {
     void onAuthPrompt() => _promptAuth(context);
-    switch (appState.view) {
+    switch (view) {
       case AppView.library:
         return LibraryScreen(
           appState: appState,
@@ -187,37 +176,75 @@ class AppShell extends StatelessWidget {
         return AdminScreen(appState: appState, theme: theme);
     }
   }
+
+  /// MotionSwitcher key: one key for all tabs, so tab-to-tab motion is
+  /// owned by the PageView and the switcher does not animate it; the
+  /// reader and the submit form keep their own keys so the switcher
+  /// still fades/slides those in.
+  String get _contentKey {
+    final view = appState.view;
+    if (view == AppView.reader) return 'reader:${appState.selectedPaper?.id}';
+    if (view == AppView.post) return 'post';
+    return 'tabs';
+  }
+
+  Widget _buildContent(BuildContext context) {
+    final view = appState.view;
+    if (view == AppView.reader || view == AppView.post) {
+      return _buildView(context, view);
+    }
+    return _TabPages(
+      appState: appState,
+      pageBuilder: (v) => _buildView(context, v),
+      onPageChanged: (v) => _navigate(context, v),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Swipe between tabs
 // ---------------------------------------------------------------------------
 
-/// Swiping left/right on a tab switches to the next/previous tab in
-/// bottom-nav order, with the transition sliding in the swipe
-/// direction. Only the browsable tabs participate: the reader is
-/// excluded (its PDF view uses horizontal swipes to turn pages) and
-/// the submit form is excluded (a swipe must never discard a draft).
-/// A swipe over a horizontally scrolling list scrolls that list
-/// instead — the inner scroller wins the gesture arena — and vertical
-/// scrolling is untouched.
-class _SwipeTabs extends StatefulWidget {
-  const _SwipeTabs({
+/// The swipeable tab strip: a [PageView] over the bottom-nav tabs, so a
+/// swipe drags the next tab in under the finger (like Facebook) and the
+/// release snaps to the nearest tab — the tab is visible mid-swipe
+/// instead of only appearing after the drag ends. Pages stay alive while
+/// the user moves between tabs (scroll position, search text, Feed tab,
+/// local likes), and bottom-nav taps animate the PageView to the tapped
+/// tab. Only the browsable tabs participate: the reader is excluded
+/// (its PDF view uses horizontal swipes to turn pages) and the submit
+/// form is excluded (a swipe must never discard a draft). A swipe over
+/// a horizontally scrolling list scrolls that list instead — the inner
+/// scroller wins the gesture arena — and vertical scrolling is
+/// untouched.
+class _TabPages extends StatefulWidget {
+  const _TabPages({
     required this.appState,
-    required this.onNavigate,
-    required this.child,
+    required this.pageBuilder,
+    required this.onPageChanged,
   });
 
   final AppState appState;
-  final void Function(AppView view, Offset slideOffset) onNavigate;
-  final Widget child;
+  final Widget Function(AppView view) pageBuilder;
+  final void Function(AppView view) onPageChanged;
 
   @override
-  State<_SwipeTabs> createState() => _SwipeTabsState();
+  State<_TabPages> createState() => _TabPagesState();
 }
 
-class _SwipeTabsState extends State<_SwipeTabs> {
-  double _dragDx = 0;
+class _TabPagesState extends State<_TabPages> {
+  late final PageController _controller;
+
+  /// The page the view wants but the PageView has not reached yet (a
+  /// bottom-nav tap whose animation is still in flight). Cleared when
+  /// the PageView lands on it; a drag that lands elsewhere overrides
+  /// it (see [_onPageChanged]).
+  int? _tapTarget;
+
+  /// The view the last sync ran for. Only a view change (a tap, a
+  /// swipe landing, back-to-library) needs the PageView to move — a
+  /// data update must never retarget a drag or fling in progress.
+  late AppView _lastView;
 
   /// Tabs a swipe can move between, in bottom-nav order. Mirrors the
   /// items built by [_BottomNav] (submit excluded, admin last).
@@ -233,41 +260,130 @@ class _SwipeTabsState extends State<_SwipeTabs> {
     ];
   }
 
-  void _go(int direction) {
-    final tabs = _tabs;
-    final index = tabs.indexOf(widget.appState.view);
-    if (index < 0) return;
-    final next = index + direction;
-    if (next < 0 || next >= tabs.length) return;
-    // Swipe left: next tab, new content slides in from the right.
-    // Swipe right: previous tab, new content slides in from the left.
-    final offset = Offset(direction > 0 ? 0.08 : -0.08, 0);
-    widget.onNavigate(tabs[next], offset);
+  int _indexOf(AppView view) {
+    final index = _tabs.indexOf(view);
+    return index < 0 ? 0 : index;
   }
 
-  void _onDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    final dx = _dragDx;
-    _dragDx = 0;
-    if (dx < -80 || velocity < -300) {
-      _go(1);
-    } else if (dx > 80 || velocity > 300) {
-      _go(-1);
+  @override
+  void initState() {
+    super.initState();
+    _lastView = widget.appState.view;
+    _controller = PageController(initialPage: _indexOf(widget.appState.view));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Moves the PageView to [page]: instantly when the OS asks to reduce
+  /// motion, animated (240ms easeOutCubic) otherwise. The drag itself
+  /// is user-driven, so it is never suppressed.
+  void _goToPage(int page) {
+    if (motionReduced(context)) {
+      _controller.jumpToPage(page);
+    } else {
+      _controller.animateToPage(
+        page,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  /// Bottom-nav taps change [AppState.view] outside the PageView; animate
+  /// the PageView to match. Runs after the frame so the controller is
+  /// laid out, and only when the view actually changed — never on a
+  /// data-only rebuild, and never while the user's finger is down (a
+  /// drag in progress settles first; [_onPageChanged] syncs the view).
+  /// A tap that lands while a previous tap (or a fling) is still
+  /// settling retargets the animation instead of fighting it.
+  @override
+  void didUpdateWidget(covariant _TabPages oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.appState.view == _lastView) return;
+    _lastView = widget.appState.view;
+    if (!_controller.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_controller.hasClients) return;
+      final target = _indexOf(widget.appState.view);
+      final current = _controller.page?.round() ?? _controller.initialPage;
+      if (current == target) {
+        _tapTarget = null;
+        return;
+      }
+      // Finger down: the user owns the PageView until the drag settles.
+      if (_controller.position.activity is DragScrollActivity) return;
+      _goToPage(target);
+      _tapTarget = target;
+    });
+  }
+
+  void _onPageChanged(int index) {
+    if (_tapTarget != null) {
+      if (index == _tapTarget) {
+        // A tap animation landed on its target; the view is already right.
+        _tapTarget = null;
+        return;
+      }
+      // A tap was pending but the page settled elsewhere: the user
+      // dragged and overrode it, so the swipe wins.
+      _tapTarget = null;
+    }
+    final view = _tabs[index];
+    if (widget.appState.view == view) return;
+    final before = widget.appState.view;
+    widget.onPageChanged(view);
+    // A refused navigation (e.g. Profile while signed out) leaves the
+    // view on the old tab: slide the PageView back to it.
+    if (widget.appState.view == before && before != view) {
+      _goToPage(_indexOf(before));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // No swipe detector on the reader or the submit form, so their own
-    // horizontal gestures (PDF pages) and drafts are never disturbed.
-    if (!_tabs.contains(widget.appState.view)) return widget.child;
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onHorizontalDragUpdate: (details) => _dragDx += details.delta.dx,
-      onHorizontalDragEnd: _onDragEnd,
-      onHorizontalDragCancel: () => _dragDx = 0,
-      child: widget.child,
+    final tabs = _tabs;
+    return PageView.builder(
+      controller: _controller,
+      itemCount: tabs.length,
+      onPageChanged: _onPageChanged,
+      itemBuilder: (context, index) {
+        final view = tabs[index];
+        return _KeepAlive(
+          child: KeyedSubtree(
+            key: ValueKey(view.name),
+            child: widget.pageBuilder(view),
+          ),
+        );
+      },
     );
+  }
+}
+
+/// Keeps a PageView page's state alive while the user swipes to another
+/// tab (scroll position, text, local toggles), so coming back feels like
+/// returning, not reopening.
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 
