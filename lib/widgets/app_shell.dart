@@ -246,6 +246,13 @@ class _TabPagesState extends State<_TabPages> {
   /// data update must never retarget a drag or fling in progress.
   late AppView _lastView;
 
+  /// True while the user's finger is dragging the PageView (set by the
+  /// [ScrollNotification] listener in [build]). A programmatic page
+  /// animation does not set it. (Do not read
+  /// `PageController.position.activity` for this: it is a protected /
+  /// test-only member and the analyzer rejects it from app code.)
+  bool _userDragging = false;
+
   /// Tabs a swipe can move between, in bottom-nav order. Mirrors the
   /// items built by [_BottomNav] (submit excluded, admin last).
   List<AppView> get _tabs {
@@ -315,7 +322,7 @@ class _TabPagesState extends State<_TabPages> {
         return;
       }
       // Finger down: the user owns the PageView until the drag settles.
-      if (_controller.position.activity is DragScrollActivity) return;
+      if (_userDragging) return;
       _goToPage(target);
       _tapTarget = target;
     });
@@ -346,19 +353,33 @@ class _TabPagesState extends State<_TabPages> {
   @override
   Widget build(BuildContext context) {
     final tabs = _tabs;
-    return PageView.builder(
-      controller: _controller,
-      itemCount: tabs.length,
-      onPageChanged: _onPageChanged,
-      itemBuilder: (context, index) {
-        final view = tabs[index];
-        return _KeepAlive(
-          child: KeyedSubtree(
-            key: ValueKey(view.name),
-            child: widget.pageBuilder(view),
-          ),
-        );
+    // Track whether the user's finger is on the PageView: a scroll that
+    // starts with pointer details is a user drag; a programmatic
+    // animateToPage has none. No setState needed — the flag is only read
+    // by the tap-sync callback in [didUpdateWidget].
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification) {
+          _userDragging = notification.dragDetails != null;
+        } else if (notification is ScrollEndNotification) {
+          _userDragging = false;
+        }
+        return false;
       },
+      child: PageView.builder(
+        controller: _controller,
+        itemCount: tabs.length,
+        onPageChanged: _onPageChanged,
+        itemBuilder: (context, index) {
+          final view = tabs[index];
+          return _KeepAlive(
+            child: KeyedSubtree(
+              key: ValueKey(view.name),
+              child: widget.pageBuilder(view),
+            ),
+          );
+        },
+      ),
     );
   }
 }
