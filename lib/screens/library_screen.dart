@@ -15,6 +15,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/motion.dart';
 import '../widgets/pagination_bar.dart';
 import '../widgets/paper_card.dart';
 import '../widgets/shared.dart';
@@ -254,7 +255,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               final cellWidth =
                                   (width - spacing * (columns - 1)) /
                                       columns;
-                              final grid = Wrap(
+                              // AnimatedSize so the grid settles
+                              // instead of snapping when filters, search
+                              // or the page change the item count.
+                              final grid = AnimatedSize(
+                                duration:
+                                    const Duration(milliseconds: 250),
+                                curve: Curves.easeOutCubic,
+                                child: Wrap(
                                 spacing: spacing,
                                 runSpacing: spacing,
                                 children: [
@@ -270,6 +278,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                       ),
                                     ),
                                 ],
+                                ),
                               );
                               if (pageCount <= 1) return grid;
                               return Column(
@@ -379,19 +388,90 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
       );
     }
+    // First load: shimmer placeholder cards in the grid shape instead
+    // of a spinner, so the shelf fades in where the cards will land.
+    // (Slow/offline states above keep their explanatory panels.)
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 64),
-      child: Center(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final columns = width < 700 ? 2 : width < 1100 ? 3 : 4;
+              const spacing = 12.0;
+              final cellWidth =
+                  (width - spacing * (columns - 1)) / columns;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (var i = 0; i < 6; i++)
+                    SizedBox(
+                      width: cellWidth,
+                      child: _paperSkeletonCard(p),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Loading the archive…',
+            style: bodyStyle(p, size: 13, color: c.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One placeholder paper card for the first-load shimmer grid,
+  /// shaped like a [PaperCard] (cover + title/author bars).
+  Widget _paperSkeletonCard(AppPalette p) {
+    final c = p.c;
+    return Shimmer(
+      child: Container(
+        color: c.surface,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CircularProgressIndicator(color: a.accent),
-            const SizedBox(height: 16),
-            Text(
-              'Loading the archive…',
-              style: bodyStyle(p, size: 13, color: c.muted),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+              child: Container(
+                height: 132,
+                decoration: BoxDecoration(
+                  color: c.surface2,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _skeletonBar(width: 72, height: 10),
+                  const SizedBox(height: 8),
+                  _skeletonBar(width: double.infinity, height: 16),
+                  const SizedBox(height: 6),
+                  _skeletonBar(width: 140, height: 12),
+                ],
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _skeletonBar({required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: widget.theme.palette.c.surface2,
+        borderRadius: BorderRadius.circular(4),
       ),
     );
   }

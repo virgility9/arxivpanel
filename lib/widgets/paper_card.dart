@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
+import 'motion.dart';
 import 'shared.dart';
 
 class PaperCard extends StatefulWidget {
@@ -72,7 +73,8 @@ class _PaperCardState extends State<PaperCard> {
     final titleStyle = displayStyle(palette, size: isNarrow ? 19 : 21)
         .copyWith(fontWeight: FontWeight.w700);
 
-    return Container(
+    return PressScale(
+      child: Container(
       color: c.surface,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -133,6 +135,8 @@ class _PaperCardState extends State<PaperCard> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 6),
+                        child: PopIcon(
+                        active: bookmarked,
                         child: Icon(
                           bookmarked
                               ? Icons.bookmark
@@ -140,6 +144,7 @@ class _PaperCardState extends State<PaperCard> {
                           size: 18,
                           color: bookmarked ? a.accent : c.muted,
                         ),
+                      ),
                       ),
                     ),
                   ],
@@ -251,12 +256,15 @@ class _PaperCardState extends State<PaperCard> {
                             color: a.accent,
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(
-                            reacted != null
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            size: isNarrow ? 18 : 22,
-                            color: a.accentFg,
+                          child: PopIcon(
+                            active: reacted != null,
+                            child: Icon(
+                              reacted != null
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              size: isNarrow ? 18 : 22,
+                              color: a.accentFg,
+                            ),
                           ),
                         ),
                       ),
@@ -267,6 +275,7 @@ class _PaperCardState extends State<PaperCard> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

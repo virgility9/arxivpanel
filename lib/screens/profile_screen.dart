@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../utils/file_pick.dart';
 import '../utils/images.dart';
+import '../widgets/motion.dart';
 import '../widgets/shared.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -510,7 +511,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _statsPanel(
                       p,
                       myPapers.length,
-                      formatCount(totalViews),
+                      totalViews,
                       totalReactions,
                       '${(totalReadSeconds / 60).round()}m',
                     ),
@@ -793,11 +794,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _statsPanel(
     AppPalette p,
     int papers,
-    String views,
+    int views,
     int reactions,
     String readTime,
   ) {
     final c = p.c;
+    // Shared value style for the cells; the count itself glides
+    // via [AnimatedCount] instead of snapping to the new number.
+    TextStyle valueStyle(Color color) => TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: color,
+          height: 1,
+        );
     Widget row(List<Widget> cells) {
       return IntrinsicHeight(
         child: Row(
@@ -822,30 +831,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
           row([
             _statCell(
               p,
-              value: '$papers',
+              valueChild: AnimatedCount(
+                value: papers,
+                style: valueStyle(p.accent.accent),
+              ),
               label: 'Papers',
-              color: p.accent.accent,
             ),
             _statCell(
               p,
-              value: views,
+              valueChild: AnimatedCount(
+                value: views,
+                format: formatCount,
+                style: valueStyle(p.info),
+              ),
               label: 'Total Views',
-              color: p.info,
             ),
           ]),
           Container(height: 1, color: c.border),
           row([
             _statCell(
               p,
-              value: '$reactions',
+              valueChild: AnimatedCount(
+                value: reactions,
+                style: valueStyle(p.danger),
+              ),
               label: 'Likes Received',
-              color: p.danger,
             ),
             _statCell(
               p,
-              value: readTime,
+              valueChild: Text(readTime, style: valueStyle(p.success)),
               label: 'Read Time',
-              color: p.success,
             ),
           ]),
         ],
@@ -856,9 +871,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// One stats cell: colored value over an uppercase label.
   Widget _statCell(
     AppPalette p, {
-    required String value,
+    required Widget valueChild,
     required String label,
-    required Color color,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
@@ -866,15 +880,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: color,
-              height: 1,
-            ),
-          ),
+          valueChild,
           const SizedBox(height: 6),
           Text(
             label.toUpperCase(),

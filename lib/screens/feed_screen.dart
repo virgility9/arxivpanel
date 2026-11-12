@@ -639,7 +639,8 @@ class _NewsCardState extends State<_NewsCard> {
     final hasLink = item.url.isNotEmpty;
     final longSummary = item.summary.length > 180;
 
-    return Material(
+    return PressScale(
+      child: Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
@@ -810,16 +811,25 @@ class _NewsCardState extends State<_NewsCard> {
                       child: Row(
                         children: [
                           _actionButton(
-                            icon: _liked
-                                ? Icons.thumb_up
-                                : Icons.thumb_up_outlined,
-                            color: _liked ? a.accent : c.muted,
+                            child: PopIcon(
+                              active: _liked,
+                              child: Icon(
+                                _liked
+                                    ? Icons.thumb_up
+                                    : Icons.thumb_up_outlined,
+                                size: 20,
+                                color: _liked ? a.accent : c.muted,
+                              ),
+                            ),
                             onTap: () =>
                                 setState(() => _liked = !_liked),
                           ),
                           _actionButton(
-                            icon: Icons.share_outlined,
-                            color: hasLink ? c.muted : c.faint,
+                            child: Icon(
+                              Icons.share_outlined,
+                              size: 20,
+                              color: hasLink ? c.muted : c.faint,
+                            ),
                             onTap: hasLink ? widget.onShare : null,
                           ),
                         ],
@@ -832,14 +842,15 @@ class _NewsCardState extends State<_NewsCard> {
           ),
         ),
       ),
+      ),
     );
   }
 
   /// One half of the like / share row. Greyed out with no
-  /// tap when there is no article link to share.
+  /// tap when there is no article link to share. Pass [child]
+  /// to render a custom icon (e.g. a [PopIcon] for the like).
   Widget _actionButton({
-    required IconData icon,
-    required Color color,
+    required Widget child,
     required VoidCallback? onTap,
   }) {
     return Expanded(
@@ -848,7 +859,7 @@ class _NewsCardState extends State<_NewsCard> {
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Icon(icon, size: 20, color: color),
+          child: child,
         ),
       ),
     );
@@ -857,9 +868,9 @@ class _NewsCardState extends State<_NewsCard> {
 
 /// Placeholder post card shown while live headlines load, shaped like
 /// a real `_NewsCard` (image block, title and summary bars, action row)
-/// instead of a spinner. Static grey bars on purpose — no animation
-/// controller to manage, and the cards are replaced by real headlines
-/// the moment the fetch lands.
+/// instead of a spinner. The grey bars shimmer with the same gold
+/// sweep as the splash logo, and the cards are replaced by real
+/// headlines the moment the fetch lands.
 class _NewsSkeletonCard extends StatelessWidget {
   const _NewsSkeletonCard({required this.palette});
 
@@ -868,7 +879,8 @@ class _NewsSkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = palette.c;
-    return Container(
+    return Shimmer(
+      child: Container(
       decoration: BoxDecoration(
         color: c.surface,
         border: Border.all(color: c.border),
@@ -934,6 +946,7 @@ class _NewsSkeletonCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -17,6 +17,7 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../utils/images.dart';
 import 'app_logo_image.dart';
+import 'motion.dart';
 
 // ---------------------------------------------------------------------------
 // Typography helpers
@@ -367,7 +368,9 @@ class GoldButton extends StatelessWidget {
     final compact = minHeight <= 36;
     final vPad = compact ? 6.0 : 12.0;
     final labelSize = compact ? 13.0 : 15.0;
-    return Opacity(
+    return PressScale(
+      enabled: enabled,
+      child: Opacity(
       opacity: enabled ? 1 : 0.6,
       child: Container(
         constraints: BoxConstraints(minHeight: minHeight),
@@ -437,6 +440,7 @@ class GoldButton extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -462,7 +466,9 @@ class GhostButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = palette.c;
     final fg = color ?? c.text;
-    return OutlinedButton(
+    return PressScale(
+      enabled: onPressed != null,
+      child: OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         foregroundColor: fg,
@@ -473,6 +479,7 @@ class GhostButton extends StatelessWidget {
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
       child: Text(label),
+      ),
     );
   }
 }
