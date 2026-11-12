@@ -36,8 +36,10 @@ class AppShell extends StatelessWidget {
     AuthDialog.show(context, mode: mode, appState: appState, theme: theme);
   }
 
-  void _navigate(BuildContext context, AppView view) {
-    appState.navigate(view, onAuthPrompt: () => _promptAuth(context));
+  void _navigate(BuildContext context, AppView view,
+      [Offset? slideOffset]) {
+    appState.navigate(view,
+        slideOffset: slideOffset, onAuthPrompt: () => _promptAuth(context));
   }
 
   @override
@@ -69,17 +71,23 @@ class AppShell extends StatelessWidget {
                   onAuthPrompt: (m) => _promptAuth(context, m),
                 ),
                 Expanded(
-                  child: MotionSwitcher(
-                    expand: true,
-                    child: KeyedSubtree(
-                      // New key per screen (and per paper in the reader) so
-                      // the switcher animates each navigation.
-                      key: ValueKey(
-                        appState.view == AppView.reader
-                            ? 'reader:${appState.selectedPaper?.id}'
-                            : appState.view.name,
+                  child: _SwipeTabs(
+                    appState: appState,
+                    onNavigate: (view, offset) =>
+                        _navigate(context, view, offset),
+                    child: MotionSwitcher(
+                      expand: true,
+                      slideOffset: appState.viewSlideOffset,
+                      child: KeyedSubtree(
+                        // New key per screen (and per paper in the reader) so
+                        // the switcher animates each navigation.
+                        key: ValueKey(
+                          appState.view == AppView.reader
+                              ? 'reader:${appState.selectedPaper?.id}'
+                              : appState.view.name,
+                        ),
+                        child: _buildView(context),
                       ),
-                      child: _buildView(context),
                     ),
                   ),
                 ),
@@ -178,6 +186,88 @@ class AppShell extends StatelessWidget {
         }
         return AdminScreen(appState: appState, theme: theme);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Swipe between tabs
+// ---------------------------------------------------------------------------
+
+/// Swiping left/right on a tab switches to the next/previous tab in
+/// bottom-nav order, with the transition sliding in the swipe
+/// direction. Only the browsable tabs participate: the reader is
+/// excluded (its PDF view uses horizontal swipes to turn pages) and
+/// the submit form is excluded (a swipe must never discard a draft).
+/// A swipe over a horizontally scrolling list scrolls that list
+/// instead — the inner scroller wins the gesture arena — and vertical
+/// scrolling is untouched.
+class _SwipeTabs extends StatefulWidget {
+  const _SwipeTabs({
+    required this.appState,
+    required this.onNavigate,
+    required this.child,
+  });
+
+  final AppState appState;
+  final void Function(AppView view, Offset slideOffset) onNavigate;
+  final Widget child;
+
+  @override
+  State<_SwipeTabs> createState() => _SwipeTabsState();
+}
+
+class _SwipeTabsState extends State<_SwipeTabs> {
+  double _dragDx = 0;
+
+  /// Tabs a swipe can move between, in bottom-nav order. Mirrors the
+  /// items built by [_BottomNav] (submit excluded, admin last).
+  List<AppView> get _tabs {
+    final isAdmin = widget.appState.user?.isAdmin == true;
+    return [
+      AppView.library,
+      AppView.feed,
+      AppView.polls,
+      AppView.profile,
+      AppView.settings,
+      if (isAdmin) AppView.admin,
+    ];
+  }
+
+  void _go(int direction) {
+    final tabs = _tabs;
+    final index = tabs.indexOf(widget.appState.view);
+    if (index < 0) return;
+    final next = index + direction;
+    if (next < 0 || next >= tabs.length) return;
+    // Swipe left: next tab, new content slides in from the right.
+    // Swipe right: previous tab, new content slides in from the left.
+    final offset = Offset(direction > 0 ? 0.08 : -0.08, 0);
+    widget.onNavigate(tabs[next], offset);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final dx = _dragDx;
+    _dragDx = 0;
+    if (dx < -80 || velocity < -300) {
+      _go(1);
+    } else if (dx > 80 || velocity > 300) {
+      _go(-1);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // No swipe detector on the reader or the submit form, so their own
+    // horizontal gestures (PDF pages) and drafts are never disturbed.
+    if (!_tabs.contains(widget.appState.view)) return widget.child;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragUpdate: (details) => _dragDx += details.delta.dx,
+      onHorizontalDragEnd: _onDragEnd,
+      onHorizontalDragCancel: () => _dragDx = 0,
+      child: widget.child,
+    );
   }
 }
 

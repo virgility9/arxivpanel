@@ -12,6 +12,7 @@
 library;
 
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -255,6 +256,11 @@ class AppState extends ChangeNotifier {
 
   AppUser? _user;
   AppView _view = AppView.library;
+
+  /// Slide-in direction for the next view transition. Tab taps use the
+  /// default subtle upward slide; a left/right swipe sets a horizontal
+  /// offset in the swipe direction instead.
+  Offset _viewSlideOffset = const Offset(0, 0.02);
   List<Paper> _papers = <Paper>[];
   bool _papersLoaded = false;
   List<AppUser> _users = <AppUser>[];
@@ -270,6 +276,7 @@ class AppState extends ChangeNotifier {
 
   AppUser? get user => _user;
   AppView get view => _view;
+  Offset get viewSlideOffset => _viewSlideOffset;
   List<Paper> get papers => _papers;
 
   /// True once the papers stream has emitted at least once. Screens render a
@@ -494,7 +501,8 @@ class AppState extends ChangeNotifier {
 
   /// Mirrors `navigate(v)` — records reading time when leaving the reader,
   /// guards profile/admin behind auth.
-  void navigate(AppView v, {void Function()? onAuthPrompt}) {
+  void navigate(AppView v,
+      {void Function()? onAuthPrompt, Offset? slideOffset}) {
     if (v == AppView.profile && _user == null) {
       onAuthPrompt?.call();
       return;
@@ -503,6 +511,7 @@ class AppState extends ChangeNotifier {
     // Admins do admin tasks only — they cannot open the submit-paper form.
     if (v == AppView.post && _user?.isAdmin == true) return;
     _recordReadingTime();
+    _viewSlideOffset = slideOffset ?? const Offset(0, 0.02);
     _view = v;
     if (v != AppView.reader) _selectedPaperId = null;
     notifyListeners();
@@ -515,6 +524,7 @@ class AppState extends ChangeNotifier {
     _recordReadingTime();
     unawaited(_repo!.incrementViews(paper.id));
     _selectedPaperId = paper.id;
+    _viewSlideOffset = const Offset(0, 0.02);
     _view = AppView.reader;
     _readStart = DateTime.now();
     notifyListeners();
