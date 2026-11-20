@@ -13,6 +13,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/constants.dart';
 import '../data/privacy_policy.dart';
@@ -20,6 +21,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/release_notes.dart';
 import '../widgets/shared.dart';
 import 'onboarding_tour.dart';
 
@@ -307,6 +309,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      appState.showToast('Could not open the link.', '⚠️');
+    }
+  }
+
   Future<void> _checkForUpdates() async {
     if (_checkingUpdate) return;
     setState(() => _checkingUpdate = true);
@@ -376,11 +386,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: monoStyle(p, size: 10, color: p.accent.accent),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  info.notes.isEmpty
-                      ? 'No notes for this release.'
-                      : info.notes,
-                  style: bodyStyle(p, size: 14, color: c.textSub),
+                ReleaseNotesView(
+                  palette: p,
+                  notes: info.notes,
+                  version: info.latestVersion,
+                  onOpenUrl: _openUrl,
                 ),
                 if (info.isNewerThan(AppConstants.currentVersion)) ...[
                   const SizedBox(height: 20),

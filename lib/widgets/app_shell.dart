@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/constants.dart';
 import '../models/models.dart';
@@ -25,6 +26,7 @@ import 'app_icons.dart';
 import 'auth_dialog.dart';
 import 'feed_icon.dart';
 import 'motion.dart';
+import 'release_notes.dart';
 import 'shared.dart';
 
 class AppShell extends StatelessWidget {
@@ -1097,6 +1099,14 @@ class _UpdatePromptState extends State<_UpdatePrompt> {
     return const SizedBox.shrink();
   }
 
+  Future<void> _openDialogUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      widget.appState.showToast('Could not open the link.', '⚠️');
+    }
+  }
+
   Future<void> _showDialog(BuildContext context) async {
     final appState = widget.appState;
     final info = appState.updateInfo;
@@ -1131,9 +1141,13 @@ class _UpdatePromptState extends State<_UpdatePrompt> {
             ),
             if (info.notes.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Text(
-                info.notes,
-                style: TextStyle(color: c.muted, fontSize: 13, height: 1.5),
+              ReleaseNotesView(
+                palette: palette,
+                notes: info.notes,
+                version: info.latestVersion,
+                onOpenUrl: _openDialogUrl,
+                showChangelog: false,
+                compact: true,
               ),
             ],
           ],
