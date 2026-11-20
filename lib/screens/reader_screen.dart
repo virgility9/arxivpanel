@@ -68,6 +68,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
           if (paper.pdfUrl != null) _ReaderTab.pdf,
         ];
 
+        // The PDF tab gets its own layout outside the page scroll (see
+        // _buildPdfViewerLayout): the mobile viewer is itself a vertical
+        // scroller, and nested inside the SingleChildScrollView below it
+        // fought the page for every drag, so scrolling down on the
+        // preview never did anything.
+        final isPdfTab =
+            _activeTab == _ReaderTab.pdf && paper.pdfUrl != null;
+
         void share() {
           // On web the app has no router/deep links, so the only honest
           // shareable link is the current page URL.
@@ -82,17 +90,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
           children: [
             _buildTopBar(p, paper, bookmarked, narrow, share),
             Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    _buildHero(p, paper, narrow),
-                    _buildTabsBar(p, tabs, narrow, paper),
-                    _buildTabContent(
-                      p, paper, narrow, user, constraints.maxWidth,
+              child: isPdfTab
+                  ? _buildPdfViewerLayout(p, paper, tabs, narrow)
+                  : SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          _buildHero(p, paper, narrow),
+                          _buildTabsBar(p, tabs, narrow, paper),
+                          _buildTabContent(
+                            p, paper, narrow, user, constraints.maxWidth,
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
             ),
           ],
         );
@@ -610,11 +620,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: contentMax),
-          child: switch (_activeTab) {
-            _ReaderTab.abstract => _buildAbstractTab(p, paper, narrow),
-            _ReaderTab.comments => _buildCommentsTab(p, paper, user),
-            _ReaderTab.pdf => _buildPdfTab(p, paper),
-          },
+          // The PDF tab never comes through here: build() renders it in
+          // its own full-height layout outside the page scroll.
+          child: _activeTab == _ReaderTab.comments
+              ? _buildCommentsTab(p, paper, user)
+              : _buildAbstractTab(p, paper, narrow),
         ),
       ),
     );
@@ -983,65 +993,91 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return '$capped.pdf';
   }
 
-  Widget _buildPdfTab(AppPalette p, Paper paper) {
+  /// PDF tab layout, rendered OUTSIDE the page scroll (see [build]): the
+  /// viewer fills the remaining viewport and owns every vertical drag,
+  /// so scrolling through the document works on mobile; the download
+  /// button is pinned below it and never needs scrolling to reach.
+  Widget _buildPdfViewerLayout(
+    AppPalette p,
+    Paper paper,
+    List<_ReaderTab> tabs,
+    bool narrow,
+  ) {
+    final c = p.c;
+    return Column(
+      children: [
+        _buildTabsBar(p, tabs, narrow, paper),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              narrow ? 16 : 24,
+              16,
+              narrow ? 16 : 24,
+              16,
+            ),
+            child: _buildPdfViewer(p, paper),
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: c.bg,
+            border: Border(top: BorderSide(color: c.border)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 16 : 24,
+            12,
+            narrow ? 16 : 24,
+            narrow ? 16 : 12,
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _buildDownloadButton(p, paper),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The document viewer itself: a rounded clip around [buildPdfView]
+  /// (iframe on web, pdfx in-app on mobile). No fixed height here — the
+  /// parent [Expanded] bounds it, which is what lets the viewer scroll
+  /// instead of fighting the page scroll.
+  Widget _buildPdfViewer(AppPalette p, Paper paper) {
     final c = p.c;
     final url = paper.pdfUrl ?? '';
-    final canEmbed = url.isNotEmpty;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('📄 Full Paper',
-              style: displayStyle(p, size: 18, weight: FontWeight.w600)),
-          const SizedBox(height: 12),
-          if (canEmbed)
-            // The PDF renders inline: on web in an iframe (Chrome's
-            // built-in viewer), on mobile in-app via pdfx (see
-            // lib/widgets/pdf_view_mobile.dart). A bounded height is
-            // needed because the tab scrolls; scale it to the viewport
-            // so it feels like a real document viewer instead of a
-            // fixed 640px box.
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: (MediaQuery.of(context).size.height * 0.75)
-                    .clamp(480.0, 900.0)
-                    .toDouble(),
-                child: buildPdfView(url),
-              ),
-            )
-          else ...[
-            Text(
-              'No PDF attached to this paper.',
-              style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
-            ),
-          ],
-          const SizedBox(height: 16),
-          GoldButton(
-            palette: p,
-            label: 'Download paper',
-            icon: '⬇️',
-            onPressed: () {
-              if (url.isEmpty) {
-                widget.appState
-                    .showToast('No PDF attached to this paper', '📄');
-                return;
-              }
-              downloadFile(
-                _downloadUrl(url),
-                _safeFileName(paper.title),
-              );
-              widget.appState.showToast('Download started', '⬇️');
-            },
-          ),
-        ],
-      ),
+    if (url.isEmpty) {
+      return Center(
+        child: Text(
+          'No PDF attached to this paper.',
+          style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: buildPdfView(url),
+    );
+  }
+
+  /// Gold "Download paper" action for the PDF tab footer.
+  Widget _buildDownloadButton(AppPalette p, Paper paper) {
+    final url = paper.pdfUrl ?? '';
+    return GoldButton(
+      palette: p,
+      label: 'Download paper',
+      icon: '⬇️',
+      onPressed: () {
+        if (url.isEmpty) {
+          widget.appState.showToast('No PDF attached to this paper', '📄');
+          return;
+        }
+        downloadFile(
+          _downloadUrl(url),
+          _safeFileName(paper.title),
+        );
+        widget.appState.showToast('Download started', '⬇️');
+      },
     );
   }
 }

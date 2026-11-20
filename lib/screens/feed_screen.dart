@@ -1,8 +1,8 @@
-/// News Feed tab with two inner tabs: "News for today" (admin-posted news
-/// from Firestore `news` on top, then live education/science headlines
-/// fetched from the web) and "Published papers" (the latest papers from
-/// arXiv, fetched live through the arXiv API via rss2json — same
-/// no-new-dependency path as the headlines).
+/// News Feed tab with two inner tabs: "Published papers" (the latest papers
+/// from arXiv, fetched live through the arXiv API via rss2json — same
+/// no-new-dependency path as the headlines) and "News for today"
+/// (admin-posted news from Firestore `news` on top, then live
+/// education/science headlines fetched from the web).
 ///
 /// Live headlines come from [AppState.liveNews] (rss2json JSON, cached
 /// 5 min); tapping a story opens it in the browser. Pull down to refresh.
@@ -38,7 +38,7 @@ class _FeedScreenState extends State<FeedScreen> {
   final TextEditingController _urlController = TextEditingController();
   bool _posting = false;
   String? _formError;
-  // Inner tabs: 0 = News for today, 1 = Published papers.
+  // Inner tabs: 0 = Published papers, 1 = News for today.
   int _tabIndex = 0;
 
   @override
@@ -93,8 +93,8 @@ class _FeedScreenState extends State<FeedScreen> {
       color: a.accent,
       backgroundColor: c.surface,
       onRefresh: () => _tabIndex == 0
-          ? widget.appState.fetchLiveNews(forceRefresh: true)
-          : widget.appState.fetchArxivPapers(forceRefresh: true),
+          ? widget.appState.fetchArxivPapers(forceRefresh: true)
+          : widget.appState.fetchLiveNews(forceRefresh: true),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -121,8 +121,8 @@ class _FeedScreenState extends State<FeedScreen> {
                         child: KeyedSubtree(
                           key: ValueKey(_tabIndex),
                           child: _tabIndex == 0
-                              ? _buildNewsTab(p, adminNews, liveNews, isAdmin)
-                              : _buildPapersTab(p, arxivPapers),
+                              ? _buildPapersTab(p, arxivPapers)
+                              : _buildNewsTab(p, adminNews, liveNews, isAdmin),
                         ),
                       ),
                     ],
@@ -328,8 +328,8 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
       child: Row(
         children: [
-          _tabSegment(p, 'News for today', 0),
-          _tabSegment(p, 'Published papers', 1),
+          _tabSegment(p, 'Published papers', 0),
+          _tabSegment(p, 'News for today', 1),
         ],
       ),
     );
@@ -387,7 +387,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _tabIndex == 0 ? 'NEWS FEED' : 'PUBLISHED PAPERS',
+                      _tabIndex == 0 ? 'PUBLISHED PAPERS' : 'NEWS FEED',
                       style: monoStyle(p, size: 10, color: a.accent).copyWith(
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.12,
@@ -396,21 +396,21 @@ class _FeedScreenState extends State<FeedScreen> {
                     const SizedBox(height: 6),
                     Text(
                       _tabIndex == 0
-                          ? 'Popular in education & science'
-                          : 'Latest from arXiv',
+                          ? 'Latest from arXiv'
+                          : 'Popular in education & science',
                       style: displayStyle(p, size: narrow ? 20 : 24),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       _tabIndex == 0
-                          ? 'Live headlines from the web, plus posts from Arxiv.'
-                          : 'New papers from arXiv.org, latest first.',
+                          ? 'New papers from arXiv.org, latest first.'
+                          : 'Live headlines from the web, plus posts from Arxiv.',
                       style: bodyStyle(p, size: 13, color: c.muted),
                     ),
                   ],
                 ),
               ),
-              if (isAdmin && _tabIndex == 0) ...[
+              if (isAdmin && _tabIndex == 1) ...[
                 const SizedBox(width: 12),
                 GoldButton(
                   palette: p,

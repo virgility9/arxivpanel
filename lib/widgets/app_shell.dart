@@ -45,6 +45,14 @@ class AppShell extends StatelessWidget {
     final c = palette.c;
     final isNarrow = MediaQuery.of(context).size.width < 700;
 
+    // Submit lives on a floating action button now (same upload icon as
+    // the old tab), not in the bottom nav. Hidden for admins (they
+    // cannot submit) and on the submit form and reader themselves.
+    final isAdmin = appState.user?.isAdmin == true;
+    final showSubmitFab = !isAdmin &&
+        appState.view != AppView.post &&
+        appState.view != AppView.reader;
+
     return PopScope(
       // No router in this app, so intercept the system back button: on any
       // non-library view, go back to the library instead of exiting.
@@ -117,6 +125,19 @@ class AppShell extends StatelessWidget {
                 onAuthPrompt: () => _promptAuth(context),
               )
             : null,
+        floatingActionButton: showSubmitFab
+            ? FloatingActionButton(
+                onPressed: () => _navigate(context, AppView.post),
+                backgroundColor: palette.accent.accent,
+                foregroundColor: palette.accent.accentFg,
+                tooltip: 'Submit paper',
+                child: AppIconImage(
+                  AppIcon.submit,
+                  size: 24,
+                  color: palette.accent.accentFg,
+                ),
+              )
+            : null,
       ),
     );
   }
@@ -179,18 +200,25 @@ class AppShell extends StatelessWidget {
 
   /// MotionSwitcher key: one key for all tabs, so tab-to-tab motion is
   /// owned by the PageView and the switcher does not animate it; the
-  /// reader and the submit form keep their own keys so the switcher
-  /// still fades/slides those in.
+  /// reader, the submit form and the profile keep their own keys so the
+  /// switcher still fades/slides those in.
   String get _contentKey {
     final view = appState.view;
     if (view == AppView.reader) return 'reader:${appState.selectedPaper?.id}';
     if (view == AppView.post) return 'post';
+    if (view == AppView.profile) return 'profile';
     return 'tabs';
   }
 
   Widget _buildContent(BuildContext context) {
     final view = appState.view;
-    if (view == AppView.reader || view == AppView.post) {
+    // Reader, submit form and profile are not swipe tabs: the reader
+    // must not swipe (its PDF pages use horizontal swipes), the form
+    // must never be swiped away mid-draft, and the profile is reached
+    // from the top-right avatar instead of the tab strip.
+    if (view == AppView.reader ||
+        view == AppView.post ||
+        view == AppView.profile) {
       return _buildView(context, view);
     }
     return _TabPages(
@@ -212,8 +240,10 @@ class AppShell extends StatelessWidget {
 /// the user moves between tabs (scroll position, search text, Feed tab,
 /// local likes), and bottom-nav taps animate the PageView to the tapped
 /// tab. Only the browsable tabs participate: the reader is excluded
-/// (its PDF view uses horizontal swipes to turn pages) and the submit
-/// form is excluded (a swipe must never discard a draft). A swipe over
+/// (its PDF view uses horizontal swipes to turn pages), the submit form
+/// is excluded (a swipe must never discard a draft — it opens from a
+/// floating action button instead), and the profile is excluded (it
+/// opens from the top-right avatar, not the tab strip). A swipe over
 /// a horizontally scrolling list scrolls that list instead — the inner
 /// scroller wins the gesture arena — and vertical scrolling is
 /// untouched.
@@ -254,14 +284,15 @@ class _TabPagesState extends State<_TabPages> {
   bool _userDragging = false;
 
   /// Tabs a swipe can move between, in bottom-nav order. Mirrors the
-  /// items built by [_BottomNav] (submit excluded, admin last).
+  /// items built by [_BottomNav] (submit is a floating action button
+  /// now and the profile opens from the top-right avatar, so neither
+  /// is a tab; admin last).
   List<AppView> get _tabs {
     final isAdmin = widget.appState.user?.isAdmin == true;
     return [
       AppView.library,
       AppView.feed,
       AppView.polls,
-      AppView.profile,
       AppView.settings,
       if (isAdmin) AppView.admin,
     ];
@@ -343,8 +374,8 @@ class _TabPagesState extends State<_TabPages> {
     if (widget.appState.view == view) return;
     final before = widget.appState.view;
     widget.onPageChanged(view);
-    // A refused navigation (e.g. Profile while signed out) leaves the
-    // view on the old tab: slide the PageView back to it.
+    // A refused navigation leaves the view on the old tab: slide the
+    // PageView back to it.
     if (widget.appState.view == before && before != view) {
       _goToPage(_indexOf(before));
     }
@@ -534,7 +565,8 @@ class _Navbar extends StatelessWidget {
                 navLink('Library', AppView.library, icon: AppIcon.library),
                 navLink('Feed', AppView.feed, feedIcon: true),
                 navLink('Contest', AppView.polls, icon: AppIcon.contest),
-                navLink('Submit', AppView.post, icon: AppIcon.submit),
+                // No Submit link here: submit opens from the floating
+                // action button (same icon) on every screen size.
                 if (user?.isAdmin == true)
                   navLink(
                     'Admin',
@@ -575,21 +607,37 @@ class _Navbar extends StatelessWidget {
               ] else ...[
                 const Spacer(),
                 if (user != null)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AvatarImage(
-                        url: user.avatar,
-                        size: 30,
-                        borderColor: a.accent,
-                        borderWidth: 2,
+                  // The profile tab is gone: the avatar + name up here is
+                  // the way into the profile on mobile.
+                  InkWell(
+                    onTap: () => onNavigate(AppView.profile),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 4,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        user.username,
-                        style: bodyStyle(palette, size: 12, color: c.textSub),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AvatarImage(
+                            url: user.avatar,
+                            size: 30,
+                            borderColor: a.accent,
+                            borderWidth: 2,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            user.username,
+                            style: bodyStyle(
+                              palette,
+                              size: 12,
+                              color: c.textSub,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   )
                 else
                   Row(
@@ -820,22 +868,9 @@ class _BottomNav extends StatelessWidget {
             requiresAuth: false,
             badge: null,
           ),
-          // Admins do admin tasks only — paper submission is hidden for them.
-          if (!isAdmin)
-            (
-              view: AppView.post,
-              icon: AppIcon.submit,
-              label: 'Submit',
-              requiresAuth: false,
-              badge: null,
-            ),
-          (
-            view: AppView.profile,
-            icon: AppIcon.profile,
-            label: 'Profile',
-            requiresAuth: true,
-            badge: null,
-          ),
+          // No Submit tab: submit opens from the floating action button
+          // (same upload icon). No Profile tab either: the profile opens
+          // from the top-right avatar + name in the navbar.
           (
             view: AppView.settings,
             icon: AppIcon.settings,

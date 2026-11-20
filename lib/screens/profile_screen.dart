@@ -158,12 +158,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Row(
                             children: [
                               if (avatarBytes != null)
-                                ClipOval(
-                                  child: Image.memory(
-                                    avatarBytes!,
+                                // Show the whole picked photo, not a
+                                // circle-cropped slice of it: what he sees
+                                // here is what gets saved.
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
                                     width: 52,
                                     height: 52,
-                                    fit: BoxFit.cover,
+                                    color: c.surface2,
+                                    child: Image.memory(
+                                      avatarBytes!,
+                                      fit: BoxFit.contain,
+                                    ),
                                   ),
                                 )
                               else
