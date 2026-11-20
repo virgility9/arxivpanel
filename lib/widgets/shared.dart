@@ -436,7 +436,7 @@ class GoldButton extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (loading)
+                  if (loading) ...[
                     SizedBox(
                       width: 14,
                       height: 14,
@@ -444,8 +444,11 @@ class GoldButton extends StatelessWidget {
                         strokeWidth: 2,
                         color: palette.c.muted,
                       ),
-                    )
-                  else if (icon != null) ...[
+                    ),
+                    // The spinner sat flush against "Please wait…" with
+                    // no gap — same 8px the icon branch already uses.
+                    const SizedBox(width: 8),
+                  ] else if (icon != null) ...[
                     Text(icon!, style: const TextStyle(fontSize: 16)),
                     const SizedBox(width: 8),
                   ],

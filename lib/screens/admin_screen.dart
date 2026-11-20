@@ -963,8 +963,12 @@ class _AdminScreenState extends State<AdminScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 _legendDot(p, p.accent.accent, 'Papers'),
-                const SizedBox(width: 16),
-                _legendDot(p, const Color(0xFFE8913A), 'Users'),
+                // The Users line is skipped when it is all zeros (see
+                // the painter), so its legend goes with it.
+                if (totalUsers > 0) ...[
+                  const SizedBox(width: 16),
+                  _legendDot(p, const Color(0xFFE8913A), 'Users'),
+                ],
               ],
             ),
             if (totalPapers == 0 && totalUsers == 0)
@@ -1226,35 +1230,46 @@ class _AdminScreenState extends State<AdminScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        // Title and count share one top-aligned row; the subtitle gets
+        // the full width below. Before, the count sat mid-height
+        // against the two-line title block and crowded the subtitle.
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
                     'Research repository',
                     style: displayStyle(p, size: 22, weight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Review, organize, and manage all student submissions.',
-                    style: bodyStyle(p, size: 13, color: p.c.muted),
-                  ),
-                ],
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  formatCount(filtered.length),
-                  style: displayStyle(p, size: 18, weight: FontWeight.w700),
                 ),
-                const SizedBox(width: 6),
-                Text('papers found', style: monoStyle(p, size: 11)),
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatCount(filtered.length),
+                        style: displayStyle(
+                          p,
+                          size: 18,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('papers found', style: monoStyle(p, size: 11)),
+                    ],
+                  ),
+                ),
               ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Review, organize, and manage all student submissions.',
+              style: bodyStyle(p, size: 13, color: p.c.muted),
             ),
           ],
         ),
@@ -1531,12 +1546,6 @@ class _AdminScreenState extends State<AdminScreen> {
           )
         else
           ...users.map((u) => _buildUserRow(p, u)),
-        const SizedBox(height: 16),
-        Text(
-          'Admin access is granted in the Firebase console (admins collection) — '
-          'it cannot be changed from inside the app.',
-          style: monoStyle(p, size: 10, color: p.c.faint),
-        ),
       ],
     );
   }
@@ -2223,7 +2232,10 @@ class _StatsChartPainter extends CustomPainter {
     }
 
     void drawSeries(List<int> values, Color color) {
-      if (values.isEmpty) return;
+      // A series that is zero every day draws a flat line along the
+      // bottom of the chart — on 30D that read as a stray line under
+      // the rising Papers line, so it is skipped entirely.
+      if (values.isEmpty || values.every((v) => v == 0)) return;
       final path = Path();
       for (var i = 0; i < values.length; i++) {
         final px = x(i);
@@ -2253,8 +2265,9 @@ class _StatsChartPainter extends CustomPainter {
     drawSeries(paperCounts, paperColor);
     drawSeries(userCounts, userColor);
 
-    // X labels: every day for a week, weekly ticks for longer ranges.
-    final step = days.length <= 7 ? 1 : 7;
+    // X labels: every day for a week, weekly ticks at 30D, every 15
+    // days at 90D — 13 weekly labels crowd a phone-width chart.
+    final step = days.length <= 7 ? 1 : days.length <= 31 ? 7 : 15;
     for (var i = 0; i < days.length; i++) {
       if (i % step != 0 && i != days.length - 1) continue;
       final d = days[i];
@@ -2264,7 +2277,10 @@ class _StatsChartPainter extends CustomPainter {
         text: TextSpan(text: text, style: labelStyle),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(x(i) - tp.width / 2, top + plotH + 8));
+      // Keep the first and last labels inside the canvas instead of
+      // letting them clip at the edges.
+      final lx = (x(i) - tp.width / 2).clamp(0.0, size.width - tp.width);
+      tp.paint(canvas, Offset(lx, top + plotH + 8));
     }
   }
 

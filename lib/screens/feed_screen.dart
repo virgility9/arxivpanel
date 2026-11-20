@@ -396,16 +396,9 @@ class _FeedScreenState extends State<FeedScreen> {
                     const SizedBox(height: 6),
                     Text(
                       _tabIndex == 0
-                          ? 'Latest from arXiv'
+                          ? 'Latest Papers'
                           : 'Popular in education & science',
                       style: displayStyle(p, size: narrow ? 20 : 24),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _tabIndex == 0
-                          ? 'New papers from arXiv.org, latest first.'
-                          : 'Live headlines from the web, plus posts from Arxiv.',
-                      style: bodyStyle(p, size: 13, color: c.muted),
                     ),
                   ],
                 ),
