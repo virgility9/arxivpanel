@@ -358,38 +358,86 @@ class FirestoreRepository {
     return _firestore.collection('papers').doc(paperId).update(data);
   }
 
-  /// Deletes the paper document and every doc in its `comments` and
-  /// `reactions` subcollections in a single batch.
-  Future<void> deletePaper(String paperId) async {
+  /// Best-effort delete of every doc in [snap]. A batch is atomic, so
+  /// one doc the deleter may not delete rejects the whole batch — that
+  /// is exactly what used to spam `permission-denied` in the console
+  /// whenever a paper had comments or likes from other users.
+  /// On a denied batch, retry with only the deleter's own docs (a
+  /// comment is theirs when its `userId` matches; a reaction doc id is
+  /// the reactor's uid). Anything still left is orphaned under an
+  /// already deleted parent and never read by the app, so a denied
+  /// cleanup is swallowed silently; only unexpected errors are logged.
+  Future<void> _deleteDocsBestEffort(
+    QuerySnapshot<Map<String, dynamic>> snap,
+    bool Function(QueryDocumentSnapshot<Map<String, dynamic>> doc) isOwn,
+    bool tryAll,
+  ) async {
+    if (snap.docs.isEmpty) return;
+    final targets = tryAll ? snap.docs : snap.docs.where(isOwn).toList();
+    if (targets.isEmpty) return;
+    try {
+      final batch = _firestore.batch();
+      for (final doc in targets) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      return;
+    } catch (e) {
+      // Cleanup must never throw — the parent doc is already gone.
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        // Fall through to the own-docs retry below.
+      } else {
+        debugPrint('subcollection cleanup failed: $e');
+        return;
+      }
+    }
+    final own = snap.docs.where(isOwn).toList();
+    if (own.isEmpty) return;
+    try {
+      final batch = _firestore.batch();
+      for (final doc in own) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (_) {
+      // Best-effort only: the parent doc is already gone, so a failed
+      // orphan cleanup must never surface as an error.
+    }
+  }
+
+  /// Deletes the paper document, then best-effort deletes its `comments`
+  /// and `reactions` subcollections. Docs the deleter may not delete are
+  /// left orphaned under the deleted paper and are never read by the app.
+  Future<void> deletePaper(
+    String paperId, {
+    required String deleterUid,
+    required bool deleterIsAdmin,
+  }) async {
     final docRef = _firestore.collection('papers').doc(paperId);
     // Snapshot the subcollections first: once the paper doc is gone, the
     // rules can no longer evaluate paperVisible() for these reads.
     final comments = await docRef.collection('comments').get();
     final reactions = await docRef.collection('reactions').get();
-    // Delete the paper document on its own. The old all-in-one batch
-    // failed atomically whenever the paper had reactions from other
-    // users — the reactions rule only lets each user write their own
-    // reaction doc (no admin branch) — so the delete was rejected and
-    // the paper stayed in the library and the Contest rankings.
+    // Delete the paper document on its own. A single batch covering the
+    // paper plus its subcollections is atomic, so one subcollection doc
+    // the deleter may not delete (e.g. another user's reaction when the
+    // published rules don't recognise the deleter as an admin) would
+    // reject the whole delete and the paper would stay in the library
+    // and the Contest rankings.
     await docRef.delete();
-    // Best-effort subcollection cleanup, one batch per subcollection so
-    // a denied group can't block the other. Orphaned docs under a
-    // deleted paper are never read by the app.
-    Future<void> cleanup(QuerySnapshot<Map<String, dynamic>> snap) async {
-      if (snap.docs.isEmpty) return;
-      try {
-        final batch = _firestore.batch();
-        for (final doc in snap.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-      } catch (e) {
-        debugPrint('deletePaper cleanup failed for $paperId: $e');
-      }
-    }
-
-    await cleanup(comments);
-    await cleanup(reactions);
+    // An admin tries the whole batch (the repo rules have an admin
+    // branch for both subcollections); a non-admin only attempts their
+    // own docs.
+    await _deleteDocsBestEffort(
+      comments,
+      (doc) => doc.data()['userId'] == deleterUid,
+      deleterIsAdmin,
+    );
+    await _deleteDocsBestEffort(
+      reactions,
+      (doc) => doc.id == deleterUid,
+      deleterIsAdmin,
+    );
   }
 
   // ------------------------------------------------------------------
@@ -518,30 +566,22 @@ class FirestoreRepository {
   /// Papers they authored are kept (author info is denormalized onto the
   /// paper documents); the `bookmarks` and `history` subcollections are
   /// cleaned up best-effort afterwards.
-  Future<void> deleteUser(String uid) async {
+  Future<void> deleteUser(
+    String uid, {
+    required bool deleterIsAdmin,
+  }) async {
     final docRef = _firestore.collection('users').doc(uid);
-    // Snapshot the subcollections first: the bookmarks/history rules are
-    // owner-only (no admin branch), so the old all-in-one batch was
-    // rejected whenever the user had any bookmarks or history entries —
-    // the same failure mode as deletePaper.
+    // Snapshot the subcollections first, then delete the user document
+    // on its own (same atomic-batch failure mode as deletePaper: one
+    // denied subcollection doc would reject the whole delete).
+    // Cleanup afterwards is best-effort — see _deleteDocsBestEffort.
+    // Only a rules-admin may delete someone else's bookmarks/history,
+    // so a non-admin deleter attempts nothing and logs nothing.
     final bookmarks = await docRef.collection('bookmarks').get();
     final history = await docRef.collection('history').get();
     await docRef.delete();
-    Future<void> cleanup(QuerySnapshot<Map<String, dynamic>> snap) async {
-      if (snap.docs.isEmpty) return;
-      try {
-        final batch = _firestore.batch();
-        for (final doc in snap.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-      } catch (e) {
-        debugPrint('deleteUser cleanup failed for $uid: $e');
-      }
-    }
-
-    await cleanup(bookmarks);
-    await cleanup(history);
+    await _deleteDocsBestEffort(bookmarks, (_) => false, deleterIsAdmin);
+    await _deleteDocsBestEffort(history, (_) => false, deleterIsAdmin);
   }
 
   // ------------------------------------------------------------------

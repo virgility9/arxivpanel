@@ -21,6 +21,8 @@ rules_version = '2';
 //   admins/{uid}                          presence of a doc marks the user as admin
 //                                         (create the first one manually in the
 //                                         console — see FIREBASE_SETUP.md step 8)
+//                                         — or set isAdmin: true on the user
+//                                         profile in the console; either works
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -29,9 +31,24 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // An admin is either listed in the admins collection OR flagged on
+    // their user profile (`users/{uid}.isAdmin == true`). The profile
+    // flag is safe to trust: the users rules forbid anyone granting it
+    // to themselves through the app (create requires it false/absent,
+    // update requires it unchanged), so only the Firebase console can
+    // set it — the same trust root as the admins collection. This is
+    // what makes an account the app already treats as admin (isAdmin on
+    // the profile) a real admin in the rules too, without a separate
+    // admins doc.
     function isAdmin() {
       return signedIn()
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        && (exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+          || profileIsAdmin());
+    }
+
+    function profileIsAdmin() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
     function isAuthor(paperData) {

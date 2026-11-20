@@ -1113,8 +1113,14 @@ class AppState extends ChangeNotifier {
   /// (acceptable — bookmarks stream only id lists and UI guards missing papers).
   Future<bool> deletePaper(String paperId) async {
     if (!_firebaseReady) return false;
+    final user = _user;
+    if (user == null) return false;
     try {
-      await _repo!.deletePaper(paperId);
+      await _repo!.deletePaper(
+        paperId,
+        deleterUid: user.id,
+        deleterIsAdmin: user.isAdmin,
+      );
       showToast('Paper deleted', '🗑');
       return true;
     } catch (e) {
@@ -1129,8 +1135,10 @@ class AppState extends ChangeNotifier {
   /// rejected.
   Future<bool> deleteUser(String uid) async {
     if (!_firebaseReady) return false;
+    final user = _user;
+    if (user == null) return false;
     try {
-      await _repo!.deleteUser(uid);
+      await _repo!.deleteUser(uid, deleterIsAdmin: user.isAdmin);
       showToast('User deleted', '🗑');
       return true;
     } catch (e) {
