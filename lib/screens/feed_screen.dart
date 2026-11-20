@@ -33,11 +33,6 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _summaryController = TextEditingController();
-  final TextEditingController _urlController = TextEditingController();
-  bool _posting = false;
-  String? _formError;
   // Inner tabs: 0 = Published papers, 1 = News for today.
   int _tabIndex = 0;
 
@@ -51,14 +46,6 @@ class _FeedScreenState extends State<FeedScreen> {
       widget.appState.fetchLiveNews();
       widget.appState.fetchArxivPapers();
     });
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _summaryController.dispose();
-    _urlController.dispose();
-    super.dispose();
   }
 
   Future<void> _openUrl(String url) async {
@@ -100,7 +87,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(p, isNarrow, isAdmin),
+            _buildHeader(p, isNarrow),
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 900),
@@ -363,7 +350,7 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  Widget _buildHeader(AppPalette p, bool narrow, bool isAdmin) {
+  Widget _buildHeader(AppPalette p, bool narrow) {
     final c = p.c;
     final a = p.accent;
     return Container(
@@ -403,15 +390,6 @@ class _FeedScreenState extends State<FeedScreen> {
                   ],
                 ),
               ),
-              if (isAdmin && _tabIndex == 1) ...[
-                const SizedBox(width: 12),
-                GoldButton(
-                  palette: p,
-                  label: 'Post news',
-                  minHeight: 44,
-                  onPressed: _openPostNews,
-                ),
-              ],
             ],
           ),
         ),
@@ -463,121 +441,6 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  void _openPostNews() {
-    final p = widget.theme.palette;
-    _titleController.clear();
-    _summaryController.clear();
-    _urlController.clear();
-    _formError = null;
-    _posting = false;
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return AlertDialog(
-            backgroundColor: p.c.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: p.c.border),
-            ),
-            title: Text('Post news', style: displayStyle(p, size: 17)),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Headline',
-                      hintText: 'What happened?',
-                    ),
-                    maxLines: 2,
-                    textCapitalization: TextCapitalization.sentences,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _summaryController,
-                    decoration: const InputDecoration(
-                      labelText: 'Summary',
-                      hintText: 'One or two sentences (optional)',
-                    ),
-                    maxLines: 3,
-                    textCapitalization: TextCapitalization.sentences,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _urlController,
-                    decoration: const InputDecoration(
-                      labelText: 'Link',
-                      hintText: 'https://… (optional)',
-                    ),
-                    keyboardType: TextInputType.url,
-                  ),
-                  if (_formError != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _formError!,
-                      style: bodyStyle(p, size: 12, color: p.danger),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: Text(
-                  AppConstants.cancelLabel,
-                  style: bodyStyle(p, size: 13, color: p.accent.accent),
-                ),
-              ),
-              TextButton(
-                onPressed: _posting
-                    ? null
-                    : () async {
-                        final title = _titleController.text.trim();
-                        if (title.isEmpty) {
-                          setDialogState(
-                            () => _formError = 'Add a headline first.',
-                          );
-                          return;
-                        }
-                        setDialogState(() {
-                          _posting = true;
-                          _formError = null;
-                        });
-                        final ok = await widget.appState.postNews(
-                          title: title,
-                          summary: _summaryController.text,
-                          url: _urlController.text,
-                        );
-                        // `mounted` guards the Feed screen's own State,
-                        // but `ctx` is the dialog's context — it needs
-                        // its own check. Without it, popping (or
-                        // setDialogState below) after the dialog was
-                        // already dismissed uses a dead context.
-                        if (!mounted || !ctx.mounted) return;
-                        if (ok) {
-                          Navigator.of(ctx).pop();
-                        } else {
-                          setDialogState(() {
-                            _posting = false;
-                            _formError = 'Could not post the news.';
-                          });
-                        }
-                      },
-                child: Text(
-                  _posting ? 'Posting…' : 'Post',
-                  style: bodyStyle(p, size: 13, color: p.accent.accent),
-                ),
-              ),
-            ],
-          );
-        },
       ),
     );
   }

@@ -165,14 +165,12 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------- news
-    // Admin-posted news items for the Feed tab. Public to read; only
-    // admins can post or delete (live headlines come from the web and
-    // never touch Firestore).
+    // News items posted before posting was removed. Public to read;
+    // only admins can delete (live headlines come from the web and
+    // never touch Firestore). Nothing can create or update news now.
     match /news/{newsId} {
       allow read: if true;
-      allow create: if isAdmin()
-        && request.resource.data.keys().hasAll(['title', 'createdBy']);
-      allow update, delete: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // ------------------------------------------------------- announcements

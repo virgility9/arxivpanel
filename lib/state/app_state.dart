@@ -823,33 +823,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Posts a news item to the Feed (admin only). Returns true when
-  /// Firestore accepted the write; surfaces a toast either way.
-  Future<bool> postNews({
-    required String title,
-    required String summary,
-    required String url,
-  }) async {
-    if (!_firebaseReady) return false;
-    final user = _user;
-    if (user == null || !user.isAdmin) return false;
-    if (title.trim().isEmpty) return false;
-    try {
-      await _repo!.postNews(
-        title: title.trim(),
-        summary: summary.trim(),
-        url: url.trim(),
-        createdBy: user.id,
-      );
-      showToast('News posted!', '📰');
-      return true;
-    } catch (e) {
-      debugPrint('postNews failed: $e');
-      showToast('Could not post the news.', '⚠️');
-      return false;
-    }
-  }
-
   /// Deletes an admin-posted news item. Returns false — and toasts —
   /// when the write is rejected.
   Future<bool> deleteNews(String newsId) async {
