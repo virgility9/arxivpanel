@@ -15,6 +15,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/auth_repository.dart';
 import '../data/cloudinary_config.dart';
@@ -24,6 +25,7 @@ import '../data/firestore_repository.dart';
 import '../data/news_repository.dart';
 import '../firebase/firebase_config.dart';
 import '../models/models.dart';
+import '../services/app_updater.dart';
 
 /// The app's connection health, derived from the papers stream: `online`
 /// once data flows, `slow` when the first emission takes over 8 seconds,
@@ -317,6 +319,7 @@ class AppState extends ChangeNotifier {
   AppUpdateInfo? _updateInfo;
   bool _updateChecked = false;
   bool _updateDismissed = false;
+  bool _updateDownloading = false;
 
   AppUser? _user;
   AppView _view = AppView.library;
@@ -899,6 +902,54 @@ class AppState extends ChangeNotifier {
   void dismissUpdate() {
     _updateDismissed = true;
     notifyListeners();
+  }
+
+  /// Starts the in-app update download for the published version.
+  /// Returns true when the download started (or the link was opened on
+  /// web) — the caller should dismiss the prompt then. Returns false when
+  /// nothing started, so the caller keeps the dialog open for a retry.
+  /// Android: the APK downloads via DownloadManager with progress in the
+  /// notification shade, then the system installer opens. Web: falls back
+  /// to opening the download link in the browser.
+  Future<bool> startUpdateDownload() async {
+    final info = _updateInfo;
+    if (info == null || info.downloadUrl.isEmpty) return false;
+    if (kIsWeb) {
+      final url = Uri.tryParse(info.downloadUrl);
+      if (url == null) return false;
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+      return true;
+    }
+    if (_updateDownloading) {
+      showToast('Update is already downloading — check the notification.', '⬇️');
+      return true;
+    }
+    _updateDownloading = true;
+    final result = await AppUpdater.downloadAndInstall(
+      url: info.downloadUrl,
+      version: info.latestVersion,
+    );
+    _updateDownloading = false;
+    switch (result) {
+      case 'started':
+        showToast('Downloading update — watch the notification.', '⬇️');
+        return true;
+      case 'already_downloading':
+        showToast('Update is already downloading — check the notification.', '⬇️');
+        return true;
+      case 'needs_unknown_sources':
+        showToast(
+          'Allow Arxiv to install apps in Settings, then tap Update again.',
+          '⚠️',
+        );
+        return false;
+      default:
+        showToast(
+          'Could not start the download. Check your connection and try again.',
+          '⚠️',
+        );
+        return false;
+    }
   }
 
   /// Publishes a new latest version (admin only). Returns true when

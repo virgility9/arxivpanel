@@ -7,7 +7,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../data/constants.dart';
 import '../models/models.dart';
@@ -1020,8 +1019,9 @@ class _BottomNav extends StatelessWidget {
 /// prompt once per version, when the app opens. Renders nothing itself —
 /// the dialog is the UI. "Later" dismisses for this session only; the
 /// prompt returns on the next app open while a newer version exists.
-/// "Download" opens the APK link the admin published (browser / Drive),
-/// so no Play Store account is needed.
+/// "Update" downloads the APK inside the app (Android DownloadManager,
+/// progress in the notification shade, then the system installer) — no
+/// browser, no Play Store account needed. On web it opens the link.
 class _UpdatePrompt extends StatefulWidget {
   const _UpdatePrompt({required this.appState, required this.theme});
 
@@ -1035,6 +1035,9 @@ class _UpdatePrompt extends StatefulWidget {
 class _UpdatePromptState extends State<_UpdatePrompt> {
   /// Latest version the dialog was already shown for this session.
   String? _shownForVersion;
+
+  /// True while the update download is being started (button disabled).
+  bool _startingUpdate = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1101,21 +1104,20 @@ class _UpdatePromptState extends State<_UpdatePrompt> {
             child: Text('Later', style: TextStyle(color: c.muted)),
           ),
           TextButton(
-            onPressed: info.downloadUrl.isEmpty
+            onPressed: info.downloadUrl.isEmpty || _startingUpdate
                 ? null
                 : () async {
-                    final url = Uri.tryParse(info.downloadUrl);
-                    if (url != null) {
-                      await launchUrl(
-                        url,
-                        mode: LaunchMode.externalApplication,
-                      );
+                    setState(() => _startingUpdate = true);
+                    final started = await appState.startUpdateDownload();
+                    if (!mounted) return;
+                    setState(() => _startingUpdate = false);
+                    if (started) {
+                      appState.dismissUpdate();
+                      if (ctx.mounted) Navigator.of(ctx).pop();
                     }
-                    appState.dismissUpdate();
-                    if (ctx.mounted) Navigator.of(ctx).pop();
                   },
             child: Text(
-              'Download',
+              'Update',
               style: TextStyle(
                 color: palette.accent.accent,
                 fontWeight: FontWeight.w700,
