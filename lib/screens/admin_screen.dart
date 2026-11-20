@@ -413,6 +413,13 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildSegmented(AppPalette p) {
     final c = p.c;
+    // Phones (<700) get text-only tabs. Four icon + label tabs don't fit
+    // ~360dp: each tab gets a quarter of ~80dp, but "Dashboard" and
+    // "Announce" with their icons are ~90dp, so the Row overflows with
+    // the red stripes. Text alone fits with room to spare, and the
+    // Flexible + ellipsis below is a safety net so it can never
+    // overflow again on any width.
+    final narrow = _isPhone;
     Widget tab(IconData icon, String label, int index) {
       final active = _section == index;
       return Expanded(
@@ -428,15 +435,22 @@ class _AdminScreenState extends State<AdminScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 16, color: active ? p.accent.accent : c.muted),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: bodyStyle(
-                    p,
-                    size: 13,
-                    weight: active ? FontWeight.w700 : FontWeight.w400,
-                    color: active ? p.accent.accent : c.muted,
+                if (!narrow) ...[
+                  Icon(icon, size: 16,
+                      color: active ? p.accent.accent : c.muted),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: bodyStyle(
+                      p,
+                      size: 13,
+                      weight: active ? FontWeight.w700 : FontWeight.w400,
+                      color: active ? p.accent.accent : c.muted,
+                    ),
                   ),
                 ),
               ],
