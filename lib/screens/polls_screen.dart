@@ -499,92 +499,100 @@ class _AnnouncementCard extends StatelessWidget {
         border: Border.all(color: c.border),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 4,
-            decoration: BoxDecoration(
-              color: accent,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                bottomLeft: Radius.circular(12),
+      // IntrinsicHeight gives the Row a bounded height — it lives inside
+      // a vertically scrolling Column, so its height constraint is
+      // infinite, which is what CrossAxisAlignment.stretch needs. Without
+      // it the 4px accent bar tries to stretch to infinity, layout throws
+      // an assertion, and the whole Contest tab goes blank whenever an
+      // announcement exists.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: c.text,
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                      if (statusLabel != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(9),
-                            border: Border.all(
-                              color: accent.withValues(alpha: 0.4),
-                            ),
-                          ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
                           child: Text(
-                            statusLabel,
+                            item.title,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              color: accent,
+                              color: c.text,
+                              height: 1.3,
                             ),
                           ),
                         ),
+                        if (statusLabel != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(
+                                color: accent.withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Text(
+                              statusLabel,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: accent,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                  if (item.body.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      item.body,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: c.muted,
-                        height: 1.45,
+                    ),
+                    if (item.body.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        item.body,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: c.muted,
+                          height: 1.45,
+                        ),
                       ),
+                    ],
+                    const SizedBox(height: 6),
+                    Text(
+                      timeAgo(item.createdAt),
+                      style: TextStyle(fontSize: 11, color: c.faint),
                     ),
                   ],
-                  const SizedBox(height: 6),
-                  Text(
-                    timeAgo(item.createdAt),
-                    style: TextStyle(fontSize: 11, color: c.faint),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-          if (onTap != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                child: Text('›', style: TextStyle(color: c.faint, fontSize: 18)),
+            if (onTap != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Center(
+                  child: Text('›', style: TextStyle(color: c.faint, fontSize: 18)),
+                ),
               ),
-            ),
-        ],
+            ],
+        ),
       ),
     );
     if (onTap == null) return card;
