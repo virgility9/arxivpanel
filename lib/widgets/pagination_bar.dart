@@ -56,57 +56,75 @@ class PaginationBar extends StatelessWidget {
     final atStart = page <= 0;
     final atEnd = page >= pageCount - 1;
 
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: narrow ? 2 : 6,
-      runSpacing: 6,
-      children: [
-        _arrow(Icons.keyboard_double_arrow_left, 'First page',
-            atStart ? null : () => onPageChanged(0)),
-        _arrow(Icons.chevron_left, 'Previous page',
-            atStart ? null : () => onPageChanged(page - 1)),
-        for (final n in items)
-          if (n == null)
-            SizedBox(
-              width: 28,
-              child: Center(
-                child: Text('…',
-                    style: bodyStyle(palette, size: 14, color: palette.c.faint)),
-              ),
-            )
-          else
-            _number(n),
-        _arrow(Icons.chevron_right, 'Next page',
-            atEnd ? null : () => onPageChanged(page + 1)),
-        _arrow(Icons.keyboard_double_arrow_right, 'Last page',
-            atEnd ? null : () => onPageChanged(pageCount - 1)),
-      ],
+    // A Row, not a Wrap: a pager is one row by definition. The Wrap
+    // shrank to its content width under the Library's Center and laid
+    // the buttons out as a vertical column — the « ‹ pair on one line,
+    // one page number per line, then the › » pair. A Row with
+    // MainAxisSize.max takes the full width the stretch Column offers
+    // and centers the buttons in a single line. Buttons shrink on
+    // narrow screens so a many-page bar still fits a 320dp phone
+    // (4 arrows + 3 numbers + 2 ellipses is about 280px at 32px).
+    final gap = SizedBox(width: narrow ? 2 : 6);
+    final children = <Widget>[];
+    void add(Widget w) {
+      if (children.isNotEmpty) children.add(gap);
+      children.add(w);
+    }
+
+    add(_arrow(Icons.keyboard_double_arrow_left, 'First page',
+        atStart ? null : () => onPageChanged(0), narrow));
+    add(_arrow(Icons.chevron_left, 'Previous page',
+        atStart ? null : () => onPageChanged(page - 1), narrow));
+    for (final n in items) {
+      add(n == null ? _ellipsis(narrow) : _number(n, narrow));
+    }
+    add(_arrow(Icons.chevron_right, 'Next page',
+        atEnd ? null : () => onPageChanged(page + 1), narrow));
+    add(_arrow(Icons.keyboard_double_arrow_right, 'Last page',
+        atEnd ? null : () => onPageChanged(pageCount - 1), narrow));
+
+    return Row(
+      mainAxisSize: MainAxisSize.max,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: children,
     );
   }
 
-  Widget _arrow(IconData icon, String tooltip, VoidCallback? onTap) {
+  Widget _ellipsis(bool narrow) {
+    return SizedBox(
+      width: narrow ? 20 : 28,
+      child: Center(
+        child: Text('…',
+            style: bodyStyle(palette, size: 14, color: palette.c.faint)),
+      ),
+    );
+  }
+
+  Widget _arrow(IconData icon, String tooltip, VoidCallback? onTap,
+      bool narrow) {
     final c = palette.c;
+    final size = narrow ? 32.0 : 40.0;
     return IconButton(
       onPressed: onTap,
       tooltip: tooltip,
-      icon: Icon(icon, size: 22),
+      icon: Icon(icon, size: narrow ? 18 : 22),
       color: c.text,
       disabledColor: c.fainter,
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      constraints: BoxConstraints(minWidth: size, minHeight: size),
       padding: EdgeInsets.zero,
     );
   }
 
-  Widget _number(int n) {
+  Widget _number(int n, bool narrow) {
     final c = palette.c;
     final a = palette.accent;
     final selected = n == page + 1;
+    final size = narrow ? 32.0 : 40.0;
     return InkWell(
       onTap: selected ? null : () => onPageChanged(n - 1),
       customBorder: const CircleBorder(),
       child: Container(
-        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        constraints: BoxConstraints(minWidth: size, minHeight: size),
         padding: const EdgeInsets.symmetric(horizontal: 6),
         alignment: Alignment.center,
         decoration: BoxDecoration(

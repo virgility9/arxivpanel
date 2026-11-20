@@ -11,6 +11,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/pagination_bar.dart';
 import '../widgets/shared.dart';
 
 /// Hardcoded contest accent (matches `#7c6af7` in PollsView.tsx).
@@ -54,6 +55,12 @@ enum _Metric { reactions, views, comments }
 class _PollsScreenState extends State<PollsScreen> {
   _Metric _metric = _Metric.reactions;
   bool _showPastAnnouncements = false;
+
+  /// Full-rankings page (0-based). The podium always shows the top 3;
+  /// the list below it pages at 10 papers per page, with the pager
+  /// appearing once there are more than 10 ranked papers.
+  static const int _rankPageSize = 10;
+  int _rankPage = 0;
 
   AppPalette get p => widget.theme.palette;
   AppColors get c => p.c;
@@ -226,7 +233,10 @@ class _PollsScreenState extends State<PollsScreen> {
                     label: tab.label,
                     active: _metric == tab.key,
                     activeColor: _violet,
-                    onTap: () => setState(() => _metric = tab.key),
+                    onTap: () => setState(() {
+                      _metric = tab.key;
+                      _rankPage = 0;
+                    }),
                   ),
               ],
             ),
@@ -416,6 +426,17 @@ class _PollsScreenState extends State<PollsScreen> {
   // ------------------------------------------------------------- ranked list
 
   Widget _buildRankingsList(List<Paper> ranked, int maxScore, bool wide) {
+    // Paged at 10 per page; the pager only appears past one page.
+    // The page is clamped (never setState during build) so a metric
+    // switch or a shrinking list can never strand the view on a page
+    // that no longer exists.
+    final pageCount = (ranked.length / _rankPageSize).ceil();
+    var page = _rankPage;
+    if (page < 0) page = 0;
+    if (pageCount > 0 && page > pageCount - 1) page = pageCount - 1;
+    final pageItems =
+        ranked.skip(page * _rankPageSize).take(_rankPageSize).toList();
+    final startRank = page * _rankPageSize;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -431,16 +452,25 @@ class _PollsScreenState extends State<PollsScreen> {
             ),
           ),
         ),
-        for (var i = 0; i < ranked.length; i++)
+        for (var i = 0; i < pageItems.length; i++)
           _RankingRow(
             palette: p,
-            paper: ranked[i],
-            index: i,
+            paper: pageItems[i],
+            index: startRank + i,
             wide: wide,
-            score: _score(ranked[i]),
+            score: _score(pageItems[i]),
             maxScore: maxScore,
-            onTap: () => widget.appState.openPaper(ranked[i]),
+            onTap: () => widget.appState.openPaper(pageItems[i]),
           ),
+        if (pageCount > 1) ...[
+          const SizedBox(height: 20),
+          PaginationBar(
+            palette: p,
+            page: page,
+            pageCount: pageCount,
+            onPageChanged: (n) => setState(() => _rankPage = n),
+          ),
+        ],
       ],
     );
   }
@@ -764,7 +794,15 @@ class _PodiumCard extends StatelessWidget {
     );
   }
 
-  Widget _info(Color medalColor) {
+  // Compact (phone, horizontal card): no Spacer — the card has no fixed
+  // height to space against, so the info column sizes to its content
+  // and a fixed gap sits between the author line and the score row.
+  // The Spacer version needs the bounded height the wide layout's
+  // fixed 170px box provides; on phones that same fixed height was
+  // 82px, and a 3-line title (about 61px) plus author plus score
+  // needs about 100px — it overflowed by 18px and Flutter painted
+  // the yellow "BOTTOM OVERFLOWED" tape over the card.
+  Widget _info(Color medalColor, {bool compact = false}) {
     final c = palette.c;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -786,7 +824,10 @@ class _PodiumCard extends StatelessWidget {
           '${paper.author} · ${paper.year}',
           style: TextStyle(fontSize: 11, color: c.muted),
         ),
-        const Spacer(),
+        if (compact)
+          const SizedBox(height: 10)
+        else
+          const Spacer(),
         Row(
           children: [
             Text(
@@ -839,8 +880,11 @@ class _PodiumCard extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(14),
-              // Fixed height so _info's Spacer has a bounded constraint.
-              child: SizedBox(height: 82, child: _info(medalColor)),
+              // No fixed height here: the card grows to fit the title
+              // (see _info, compact), so a 3-line title no longer
+              // overflows. The row is at least as tall as the 110px
+              // cover, taller when the title needs the room.
+              child: _info(medalColor, compact: true),
             ),
           ),
         ],
