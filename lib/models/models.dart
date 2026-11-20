@@ -18,6 +18,7 @@ class AppUser {
     this.institution,
     this.website,
     this.isAdmin = false,
+    this.lastSeenAnnouncementAt,
   });
 
   final String id;
@@ -30,6 +31,11 @@ class AppUser {
   final String? website;
   final bool isAdmin;
 
+  /// When this user last opened the Contest tab. Announcements newer
+  /// than this timestamp count as unread and ping the Contest tab.
+  /// Null means never — everything counts as unread.
+  final DateTime? lastSeenAnnouncementAt;
+
   AppUser copyWith({
     String? username,
     String? email,
@@ -39,6 +45,7 @@ class AppUser {
     String? institution,
     String? website,
     bool? isAdmin,
+    DateTime? lastSeenAnnouncementAt,
   }) {
     return AppUser(
       id: id,
@@ -50,12 +57,14 @@ class AppUser {
       institution: institution ?? this.institution,
       website: website ?? this.website,
       isAdmin: isAdmin ?? this.isAdmin,
+      lastSeenAnnouncementAt:
+          lastSeenAnnouncementAt ?? this.lastSeenAnnouncementAt,
     );
   }
 
   /// Firestore document data (id is the document id, excluded here).
   Map<String, dynamic> toJson() {
-    return {
+    final data = <String, dynamic>{
       'username': username,
       'email': email,
       'avatar': avatar,
@@ -65,6 +74,13 @@ class AppUser {
       'website': website,
       'isAdmin': isAdmin,
     };
+    // Only write the timestamp when known: a null here would clear the
+    // stored value on every profile save.
+    if (lastSeenAnnouncementAt != null) {
+      data['lastSeenAnnouncementAt'] =
+          Timestamp.fromDate(lastSeenAnnouncementAt!);
+    }
+    return data;
   }
 
   /// Builds an [AppUser] from a Firestore user document.
@@ -72,6 +88,15 @@ class AppUser {
   /// Tolerates missing keys with sensible defaults so legacy or partial
   /// documents never crash the app.
   static AppUser fromJson(String id, Map<String, dynamic> json) {
+    final lastSeen = json['lastSeenAnnouncementAt'];
+    DateTime? parsedLastSeen;
+    if (lastSeen is Timestamp) {
+      parsedLastSeen = lastSeen.toDate();
+    } else if (lastSeen is DateTime) {
+      parsedLastSeen = lastSeen;
+    } else if (lastSeen is String && lastSeen.isNotEmpty) {
+      parsedLastSeen = DateTime.tryParse(lastSeen);
+    }
     return AppUser(
       id: id,
       username: json['username'] as String? ?? '',
@@ -82,6 +107,7 @@ class AppUser {
       institution: json['institution'] as String?,
       website: json['website'] as String?,
       isAdmin: json['isAdmin'] as bool? ?? false,
+      lastSeenAnnouncementAt: parsedLastSeen,
     );
   }
 }
@@ -652,5 +678,156 @@ class NewsItem {
         .replaceAll('&gt;', '>')
         .replaceAll('&nbsp;', ' ');
     return text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+}
+
+/// An announcement shown at the top of the Contest tab.
+///
+/// Two kinds share this shape:
+/// * `general` — posted by an admin to `announcements`, seen by everyone.
+/// * `paper` — a paper-status notice for one author, stored under
+///   `users/{uid}/notifications` so only that author (and admins) can
+///   read it. `paperStatus` is `approved`, `rejected` or `revision`.
+class Announcement {
+  const Announcement({
+    required this.id,
+    required this.title,
+    this.body = '',
+    required this.createdAt,
+    this.createdBy = '',
+    this.kind = 'general',
+    this.paperId,
+    this.paperTitle,
+    this.paperStatus,
+    this.targetUserId,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final DateTime createdAt;
+  final String createdBy;
+
+  /// `general` or `paper`.
+  final String kind;
+  final String? paperId;
+  final String? paperTitle;
+  final String? paperStatus;
+  final String? targetUserId;
+
+  bool get isPaperStatus => kind == 'paper';
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'body': body,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'createdBy': createdBy,
+      'kind': kind,
+      'paperId': paperId,
+      'paperTitle': paperTitle,
+      'paperStatus': paperStatus,
+      'targetUserId': targetUserId,
+    };
+  }
+
+  static Announcement fromJson(String id, Map<String, dynamic> json) {
+    final createdAt = json['createdAt'];
+    DateTime parsed;
+    if (createdAt is Timestamp) {
+      parsed = createdAt.toDate();
+    } else if (createdAt is DateTime) {
+      parsed = createdAt;
+    } else if (createdAt is String && createdAt.isNotEmpty) {
+      parsed = DateTime.tryParse(createdAt) ?? DateTime.now();
+    } else {
+      parsed = DateTime.now();
+    }
+    return Announcement(
+      id: id,
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      createdAt: parsed,
+      createdBy: json['createdBy'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'general',
+      paperId: json['paperId'] as String?,
+      paperTitle: json['paperTitle'] as String?,
+      paperStatus: json['paperStatus'] as String?,
+      targetUserId: json['targetUserId'] as String?,
+    );
+  }
+}
+
+/// The latest app version the devs published, stored in Firestore at
+/// `app_config/update` so no Play Store is needed.
+///
+/// The admin sets it from the Admin console (or the Firebase console).
+/// The app compares [latestVersion] with the version it was built with
+/// and shows a Download / Later prompt when a newer one exists.
+class AppUpdateInfo {
+  const AppUpdateInfo({
+    required this.latestVersion,
+    this.downloadUrl = '',
+    this.notes = '',
+    required this.updatedAt,
+  });
+
+  final String latestVersion;
+  final String downloadUrl;
+  final String notes;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'latestVersion': latestVersion,
+      'downloadUrl': downloadUrl,
+      'notes': notes,
+      'updatedAt': Timestamp.fromDate(updatedAt),
+    };
+  }
+
+  static AppUpdateInfo fromJson(String id, Map<String, dynamic> json) {
+    final updatedAt = json['updatedAt'];
+    DateTime parsed;
+    if (updatedAt is Timestamp) {
+      parsed = updatedAt.toDate();
+    } else if (updatedAt is DateTime) {
+      parsed = updatedAt;
+    } else if (updatedAt is String && updatedAt.isNotEmpty) {
+      parsed = DateTime.tryParse(updatedAt) ?? DateTime.now();
+    } else {
+      parsed = DateTime.now();
+    }
+    return AppUpdateInfo(
+      latestVersion: json['latestVersion'] as String? ?? '',
+      downloadUrl: json['downloadUrl'] as String? ?? '',
+      notes: json['notes'] as String? ?? '',
+      updatedAt: parsed,
+    );
+  }
+
+  /// True when [latestVersion] is newer than [current] (`1.2.0` beats
+  /// `1.1.9`; missing parts count as 0; build numbers after `+` are
+  /// ignored). Non-numeric parts compare as 0 so a bad value can never
+  /// crash the check.
+  bool isNewerThan(String current) {
+    if (latestVersion.trim().isEmpty) return false;
+    List<int> parse(String v) {
+      final core = v.trim().split('+').first;
+      return core
+          .split('.')
+          .map((p) => int.tryParse(p.trim()) ?? 0)
+          .toList();
+    }
+
+    final latest = parse(latestVersion);
+    final cur = parse(current);
+    final len = latest.length > cur.length ? latest.length : cur.length;
+    for (var i = 0; i < len; i++) {
+      final l = i < latest.length ? latest[i] : 0;
+      final c = i < cur.length ? cur[i] : 0;
+      if (l != c) return l > c;
+    }
+    return false;
   }
 }

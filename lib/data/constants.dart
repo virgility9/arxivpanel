@@ -33,6 +33,12 @@ class AppConstants {
   static const String cancelLabel = 'Cancel';
   static const String signInLabel = 'Sign In';
 
+  /// Version this build was released as (must match `version:` in
+  /// pubspec.yaml, without the `+build` part). The in-app update check
+  /// compares it with `app_config/update.latestVersion` in Firestore.
+  /// Bump both together on every release.
+  static const String currentVersion = '1.0.0';
+
   /// Cartoonish preset avatars (DiceBear, PNG). Shown in the Edit Profile
   /// dialog and assigned to new signups.
   static const List<String> randomAvatars = [

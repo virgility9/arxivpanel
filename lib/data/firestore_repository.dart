@@ -643,6 +643,138 @@ class FirestoreRepository {
   }
 
   // ------------------------------------------------------------------
+  // Announcements + paper-status notifications
+  // ------------------------------------------------------------------
+
+  /// Streams admin announcements for the Contest tab, newest first.
+  /// Public to read; only admins can post or delete (see rules).
+  Stream<List<Announcement>> watchAnnouncements() {
+    return _firestore
+        .collection('announcements')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snap) => [
+            for (final d in snap.docs)
+              Announcement.fromJson(d.id, d.data()),
+          ],
+        );
+  }
+
+  /// Posts a general announcement (admin only per `firestore.rules`).
+  /// Returns the new document id.
+  Future<String> postAnnouncement({
+    required String title,
+    required String body,
+    required String createdBy,
+  }) async {
+    final data = Announcement(
+      id: '',
+      title: title,
+      body: body,
+      createdAt: DateTime.now(),
+      createdBy: createdBy,
+      kind: 'general',
+    ).toJson()
+      ..['createdAt'] = FieldValue.serverTimestamp();
+    final ref = await _firestore.collection('announcements').add(data);
+    return ref.id;
+  }
+
+  /// Deletes a general announcement (admin only per `firestore.rules`).
+  Future<void> deleteAnnouncement(String announcementId) {
+    return _firestore
+        .collection('announcements')
+        .doc(announcementId)
+        .delete();
+  }
+
+  /// Streams one user's paper-status notifications, newest first.
+  /// Stored under `users/{uid}/notifications` so only that user (and
+  /// admins) can read them — a rejected paper's title never leaks to
+  /// other users through the public announcements feed.
+  Stream<List<Announcement>> watchMyNotifications(String uid) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('notifications')
+        .orderBy('createdAt', descending: true)
+        .limit(50)
+        .snapshots()
+        .map(
+          (snap) => [
+            for (final d in snap.docs)
+              Announcement.fromJson(d.id, d.data()),
+          ],
+        );
+  }
+
+  /// Creates a paper-status notification for one author (admin only in
+  /// practice — called from AppState right after a status change).
+  Future<void> createNotification({
+    required String uid,
+    required String title,
+    required String body,
+    required String paperId,
+    required String paperTitle,
+    required String paperStatus,
+    required String createdBy,
+  }) {
+    final data = Announcement(
+      id: '',
+      title: title,
+      body: body,
+      createdAt: DateTime.now(),
+      createdBy: createdBy,
+      kind: 'paper',
+      paperId: paperId,
+      paperTitle: paperTitle,
+      paperStatus: paperStatus,
+      targetUserId: uid,
+    ).toJson()
+      ..['createdAt'] = FieldValue.serverTimestamp();
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('notifications')
+        .add(data);
+  }
+
+  /// Marks announcements as seen for one user: stamps
+  /// `users/{uid}.lastSeenAnnouncementAt` with the server time. The
+  /// Contest-tab badge counts announcements newer than this stamp.
+  Future<void> markAnnouncementsSeen(String uid) {
+    return _firestore.collection('users').doc(uid).update({
+      'lastSeenAnnouncementAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // App update
+  // ------------------------------------------------------------------
+
+  /// Reads the published latest version once (`app_config/update`).
+  /// Returns null when the devs have never published one — then no
+  /// update prompt is shown.
+  Future<AppUpdateInfo?> fetchAppUpdate() async {
+    final doc = await _firestore.collection('app_config').doc('update').get();
+    final data = doc.data();
+    if (data == null) return null;
+    return AppUpdateInfo.fromJson(doc.id, data);
+  }
+
+  /// Publishes a new latest version (admin only per `firestore.rules`).
+  Future<void> saveAppUpdate(AppUpdateInfo info) {
+    return _firestore
+        .collection('app_config')
+        .doc('update')
+        .set(
+          info.toJson()..['updatedAt'] = FieldValue.serverTimestamp(),
+          SetOptions(merge: true),
+        );
+  }
+
+  // ------------------------------------------------------------------
   // Lifecycle
   // ------------------------------------------------------------------
 

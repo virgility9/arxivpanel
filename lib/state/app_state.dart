@@ -54,6 +54,52 @@ class AppState extends ChangeNotifier {
     }, onError: (Object e) {
       debugPrint('[AppState] news stream error: $e');
     });
+    _subscribeAnnouncements();
+    unawaited(checkForUpdate());
+  }
+
+  /// Subscribes to the public announcements feed (Contest tab).
+  void _subscribeAnnouncements() {
+    if (_repo == null) return;
+    _announcementsSub = _repo!.watchAnnouncements().listen((items) {
+      _announcements = items;
+      _announcementsLoaded = true;
+      notifyListeners();
+    }, onError: (Object e) {
+      debugPrint('[AppState] announcements stream error: $e');
+    });
+  }
+
+  /// Subscribes to one user's paper-status notifications. A notice that
+  /// arrives after the first emission — i.e. while the app is open —
+  /// also shows as a toast, so the author sees it without opening the
+  /// Contest tab. The first emission is the backlog, never toasted.
+  void _subscribeMyNotifications(String uid) {
+    _notificationsSub?.cancel();
+    _notificationsSub = null;
+    _notificationsFirstEmission = true;
+    _notificationsSub = _repo!.watchMyNotifications(uid).listen((items) {
+      if (!_notificationsFirstEmission) {
+        final known = _myNotifications.map((n) => n.id).toSet();
+        for (final n in items) {
+          if (!known.contains(n.id)) {
+            showToast(n.title, '📬');
+          }
+        }
+      }
+      _notificationsFirstEmission = false;
+      _myNotifications = items;
+      notifyListeners();
+    }, onError: (Object e) {
+      debugPrint('[AppState] notifications stream error: $e');
+    });
+  }
+
+  void _cancelNotificationSub() {
+    _notificationsSub?.cancel();
+    _notificationsSub = null;
+    _myNotifications = <Announcement>[];
+    _notificationsFirstEmission = true;
   }
 
   /// Subscribes to the auth stream, resubscribing on error. If this stream
@@ -236,6 +282,8 @@ class AppState extends ChangeNotifier {
   StreamSubscription<Set<String>>? _bookmarksSub;
   StreamSubscription<List<ReadEntry>>? _historySub;
   StreamSubscription<List<NewsItem>>? _newsSub;
+  StreamSubscription<List<Announcement>>? _announcementsSub;
+  StreamSubscription<List<Announcement>>? _notificationsSub;
 
   /// Connection health (see [ConnectionStatus]). Starts `online`; the
   /// slow timer in [_subscribePapers] flips it to `slow`, and a network
@@ -252,6 +300,23 @@ class AppState extends ChangeNotifier {
   List<NewsItem> _arxivPapers = <NewsItem>[];
   bool _arxivPapersLoading = false;
   bool _arxivPapersError = false;
+
+  /// Admin announcements (public) + the signed-in user's paper-status
+  /// notices (private). Merged in [allAnnouncements], newest first.
+  List<Announcement> _announcements = <Announcement>[];
+  bool _announcementsLoaded = false;
+  List<Announcement> _myNotifications = <Announcement>[];
+  bool _notificationsFirstEmission = true;
+
+  /// Local "seen" stamp: set the moment the Contest tab is opened, so
+  /// the badge clears at once instead of waiting for the server-timestamp
+  /// write to round-trip through the profile stream.
+  DateTime? _seenOverride;
+
+  /// Published latest version (null = the devs never published one).
+  AppUpdateInfo? _updateInfo;
+  bool _updateChecked = false;
+  bool _updateDismissed = false;
 
   AppUser? _user;
   AppView _view = AppView.library;
@@ -298,6 +363,50 @@ class AppState extends ChangeNotifier {
   List<NewsItem> get arxivPapers => _arxivPapers;
   bool get arxivPapersLoading => _arxivPapersLoading;
   bool get arxivPapersError => _arxivPapersError;
+
+  /// Admin announcements (Contest tab), newest first.
+  List<Announcement> get announcements => _announcements;
+  bool get announcementsResolved => _announcementsLoaded || !_firebaseReady;
+
+  /// The signed-in user's paper-status notices, newest first.
+  List<Announcement> get myNotifications => _myNotifications;
+
+  /// General announcements + personal notices merged, newest first.
+  /// This is what the Contest tab lists.
+  List<Announcement> get allAnnouncements {
+    final list = [..._announcements, ..._myNotifications];
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  /// Timestamp announcements are "seen" up to: the local override when
+  /// the Contest tab was just opened, else the profile's stored stamp.
+  DateTime? get _lastSeenAnnouncementAt {
+    final stored = _user?.lastSeenAnnouncementAt;
+    if (_seenOverride == null) return stored;
+    if (stored == null) return _seenOverride;
+    return _seenOverride!.isAfter(stored) ? _seenOverride : stored;
+  }
+
+  /// Announcements newer than the last-seen stamp. Drives the ping
+  /// (badge) on the Contest tab.
+  int get unreadAnnouncementCount {
+    final seen = _lastSeenAnnouncementAt;
+    if (seen == null) return allAnnouncements.length;
+    return allAnnouncements.where((a) => a.createdAt.isAfter(seen)).length;
+  }
+
+  bool get hasUnreadAnnouncements => unreadAnnouncementCount > 0;
+
+  /// Published latest version, if the devs ever published one.
+  AppUpdateInfo? get updateInfo => _updateInfo;
+
+  /// True when a newer version is published and the user hasn't tapped
+  /// "Later" this session.
+  bool get updateAvailable =>
+      !_updateDismissed &&
+      _updateInfo != null &&
+      _updateInfo!.isNewerThan(AppConstants.currentVersion);
 
   /// Resolves the selected paper id against the live [_papers] list so the
   /// returned object is always fresh (streams keep it up to date).
@@ -350,6 +459,8 @@ class AppState extends ChangeNotifier {
     final accountChanged = _user?.id != user?.id;
     _user = user;
     _cancelUserSubs();
+    _cancelNotificationSub();
+    if (accountChanged) _seenOverride = null;
     _userDataRetries = 0;
     // Re-probe admin query access for a new account: a console fix made
     // after a fallback should take effect on next sign-in.
@@ -358,6 +469,7 @@ class AppState extends ChangeNotifier {
     _subscribePapers();
     if (user != null) {
       _subscribeUserData(user);
+      _subscribeMyNotifications(user.id);
     } else {
       _bookmarks = <String>{};
       _readingHistory = <ReadEntry>[];
@@ -458,6 +570,8 @@ class AppState extends ChangeNotifier {
     }
     _user = null;
     _cancelUserSubs();
+    _cancelNotificationSub();
+    _seenOverride = null;
     _bookmarks = <String>{};
     _readingHistory = <ReadEntry>[];
     _subscribePapers();
@@ -514,7 +628,32 @@ class AppState extends ChangeNotifier {
       unawaited(fetchLiveNews());
       unawaited(fetchArxivPapers());
     }
+    // Opening the Contest tab means the user has seen the announcements:
+    // clear the ping after a short beat, so a fast swipe-through does
+    // not clear it before they could read anything.
+    if (v == AppView.polls) {
+      Future.delayed(const Duration(seconds: 1), () {
+        if (!_disposed && _view == AppView.polls) markAnnouncementsSeen();
+      });
+    }
     notifyListeners();
+  }
+
+  /// Marks every announcement as seen: clears the Contest badge at once
+  /// (local override) and stamps the profile so it stays cleared after
+  /// a restart. Signed-out users still clear the badge locally; there
+  /// is just no profile to stamp.
+  void markAnnouncementsSeen() {
+    if (unreadAnnouncementCount == 0 && _seenOverride != null) return;
+    _seenOverride = DateTime.now();
+    notifyListeners();
+    final user = _user;
+    if (user == null || !_firebaseReady) return;
+    unawaited(
+      _repo!.markAnnouncementsSeen(user.id).catchError((Object e) {
+        debugPrint('[AppState] markAnnouncementsSeen failed: $e');
+      }),
+    );
   }
 
   /// Mirrors `openPaper(paper)` — bumps views (fire-and-forget) and starts
@@ -700,6 +839,102 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ---------------------------------------------------------- announcements
+
+  /// Posts a general announcement to the Contest tab (admin only).
+  /// Returns true when Firestore accepted the write.
+  Future<bool> postAnnouncement({
+    required String title,
+    required String body,
+  }) async {
+    if (!_firebaseReady) return false;
+    final user = _user;
+    if (user == null || !user.isAdmin) return false;
+    if (title.trim().isEmpty) return false;
+    try {
+      await _repo!.postAnnouncement(
+        title: title.trim(),
+        body: body.trim(),
+        createdBy: user.id,
+      );
+      showToast('Announcement posted!', '📢');
+      return true;
+    } catch (e) {
+      debugPrint('postAnnouncement failed: $e');
+      showToast('Could not post the announcement.', '⚠️');
+      return false;
+    }
+  }
+
+  /// Deletes a general announcement (admin only).
+  Future<bool> deleteAnnouncement(String announcementId) async {
+    if (!_firebaseReady) return false;
+    try {
+      await _repo!.deleteAnnouncement(announcementId);
+      showToast('Announcement removed', '🗑');
+      return true;
+    } catch (e) {
+      debugPrint('deleteAnnouncement failed: $e');
+      showToast('Could not remove the announcement.', '⚠️');
+      return false;
+    }
+  }
+
+  // -------------------------------------------------------------- app update
+
+  /// Fetches the published latest version once. Silent when nothing was
+  /// ever published or the fetch fails — then no prompt is shown.
+  Future<void> checkForUpdate() async {
+    if (!_firebaseReady || _updateChecked) return;
+    _updateChecked = true;
+    try {
+      _updateInfo = await _repo!.fetchAppUpdate();
+      if (updateAvailable) notifyListeners();
+    } catch (e) {
+      debugPrint('[AppState] update check failed: $e');
+    }
+  }
+
+  /// Hides the update prompt for the rest of this session ("Later").
+  /// It shows again on the next app open while a newer version exists.
+  void dismissUpdate() {
+    _updateDismissed = true;
+    notifyListeners();
+  }
+
+  /// Publishes a new latest version (admin only). Returns true when
+  /// Firestore accepted the write.
+  Future<bool> saveAppUpdate({
+    required String latestVersion,
+    required String downloadUrl,
+    required String notes,
+  }) async {
+    if (!_firebaseReady) return false;
+    final user = _user;
+    if (user == null || !user.isAdmin) return false;
+    if (latestVersion.trim().isEmpty || downloadUrl.trim().isEmpty) {
+      return false;
+    }
+    try {
+      final info = AppUpdateInfo(
+        latestVersion: latestVersion.trim(),
+        downloadUrl: downloadUrl.trim(),
+        notes: notes.trim(),
+        updatedAt: DateTime.now(),
+      );
+      await _repo!.saveAppUpdate(info);
+      _updateInfo = info;
+      _updateDismissed = false;
+      showToast('New version published!', '⬆️');
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('saveAppUpdate failed: $e');
+      showToast('Could not publish the new version.', '⚠️');
+      return false;
+    }
+  }
+
   // ------------------------------------------------------------- submissions
 
   /// Submits a paper for review. The passed paper's `id` is ignored —
@@ -764,14 +999,54 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------------------- admin
 
+  /// Sends the author a private paper-status notice. Best-effort: a
+  /// failed notice never fails the status change itself, and the notice
+  /// is only written after the status write succeeded.
+  Future<void> _notifyPaperStatus(
+    Paper paper,
+    PaperStatus status, {
+    String? reason,
+  }) async {
+    final adminId = _user?.id ?? '';
+    final title = switch (status) {
+      PaperStatus.approved => 'Your paper was approved',
+      PaperStatus.rejected => 'Your paper was not approved',
+      PaperStatus.revision => 'Revision requested for your paper',
+      _ => 'Update on your paper',
+    };
+    var body = '“${paper.title}”';
+    if (reason != null && reason.trim().isNotEmpty) {
+      body += ' — ${reason.trim()}';
+    } else if (status == PaperStatus.approved) {
+      body += ' is now published in the Library.';
+    }
+    try {
+      await _repo!.createNotification(
+        uid: paper.authorId,
+        title: title,
+        body: body,
+        paperId: paper.id,
+        paperTitle: paper.title,
+        paperStatus: status.name,
+        createdBy: adminId,
+      );
+    } catch (e) {
+      debugPrint('[AppState] paper-status notice failed: $e');
+    }
+  }
+
   /// Approves a paper. Returns true when Firestore accepted the write;
   /// surfaces a toast either way so a rejected write (e.g. unpublished
   /// rules) can never look like a success.
   Future<bool> approvePaper(String paperId) async {
     if (!_firebaseReady) return false;
+    final paper = paperById(paperId);
     try {
       await _repo!.updatePaperStatus(paperId, PaperStatus.approved);
       showToast('Paper approved and published!', '✅');
+      if (paper != null) {
+        unawaited(_notifyPaperStatus(paper, PaperStatus.approved));
+      }
       return true;
     } catch (e) {
       debugPrint('approvePaper failed: $e');
@@ -782,10 +1057,16 @@ class AppState extends ChangeNotifier {
 
   Future<bool> rejectPaper(String paperId, String reason) async {
     if (!_firebaseReady) return false;
+    final paper = paperById(paperId);
     try {
       await _repo!.updatePaperStatus(paperId, PaperStatus.rejected,
           reason: reason);
       showToast('Paper rejected.', '❌');
+      if (paper != null) {
+        unawaited(
+          _notifyPaperStatus(paper, PaperStatus.rejected, reason: reason),
+        );
+      }
       return true;
     } catch (e) {
       debugPrint('rejectPaper failed: $e');
@@ -796,10 +1077,16 @@ class AppState extends ChangeNotifier {
 
   Future<bool> requestRevision(String paperId, String reason) async {
     if (!_firebaseReady) return false;
+    final paper = paperById(paperId);
     try {
       await _repo!.updatePaperStatus(paperId, PaperStatus.revision,
           reason: reason);
       showToast('Revision request sent.');
+      if (paper != null) {
+        unawaited(
+          _notifyPaperStatus(paper, PaperStatus.revision, reason: reason),
+        );
+      }
       return true;
     } catch (e) {
       debugPrint('requestRevision failed: $e');
@@ -864,6 +1151,8 @@ class AppState extends ChangeNotifier {
     _usersSub?.cancel();
     _authSub?.cancel();
     _newsSub?.cancel();
+    _announcementsSub?.cancel();
+    _notificationsSub?.cancel();
     _slowTimer?.cancel();
     _cancelUserSubs();
     _repo?.dispose();

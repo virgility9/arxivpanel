@@ -15,6 +15,9 @@ rules_version = '2';
 //   polls/{pollId}/options/{optionId}     poll options
 //   polls/{pollId}/votes/{uid}            one vote per user (doc id = uid)
 //   news/{newsId}                        admin-posted news items
+//   announcements/{id}                  admin announcements (Contest tab)
+//   users/{uid}/notifications/{id}      paper-status notices, one author only
+//   app_config/update                   latest published app version
 //   admins/{uid}                          presence of a doc marks the user as admin
 //                                         (create the first one manually in the
 //                                         console — see FIREBASE_SETUP.md step 8)
@@ -152,6 +155,37 @@ service cloud.firestore {
       allow create: if isAdmin()
         && request.resource.data.keys().hasAll(['title', 'createdBy']);
       allow update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------- announcements
+    // Admin announcements for the Contest tab. Public to read; only
+    // admins can post or delete.
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['title', 'createdBy']);
+      allow update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------- paper notifications
+    // Paper-status notices live under the author's own user doc so a
+    // rejected paper's title never leaks through the public feed.
+    // Only admins create them (right after a status change); the owner
+    // (or an admin) can read and delete them.
+    match /users/{uid}/notifications/{notificationId} {
+      allow read, delete: if isAdmin()
+        || (signedIn() && uid == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+        || (signedIn() && uid == request.auth.uid);
+    }
+
+    // ------------------------------------------------------------ app_config
+    // Latest published app version. Public to read (the update check
+    // runs signed-out too); only admins can publish a new version.
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // ------------------------------------------------------------- admins

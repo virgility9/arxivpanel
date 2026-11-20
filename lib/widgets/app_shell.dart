@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/constants.dart';
 import '../models/models.dart';
@@ -92,6 +93,8 @@ class AppShell extends StatelessWidget {
             ),
             // Faint paper grain over the whole page (ignores touches).
             Positioned.fill(child: GrainTexture(palette: palette)),
+            // Shows the "new version available" prompt once per session.
+            _UpdatePrompt(appState: appState, theme: theme),
             // Toast stack
             Positioned(
               left: 16,
@@ -466,6 +469,7 @@ class _Navbar extends StatelessWidget {
     final user = appState.user;
     final view = appState.view;
     final pendingCount = appState.pendingPapers.length;
+    final unreadCount = appState.unreadAnnouncementCount;
 
     Widget navLink(String label, AppView v,
         {AppIcon? icon, bool feedIcon = false, int? badge}) {
@@ -564,7 +568,12 @@ class _Navbar extends StatelessWidget {
                 const SizedBox(width: 12),
                 navLink('Library', AppView.library, icon: AppIcon.library),
                 navLink('Feed', AppView.feed, feedIcon: true),
-                navLink('Contest', AppView.polls, icon: AppIcon.contest),
+                navLink(
+                  'Contest',
+                  AppView.polls,
+                  icon: AppIcon.contest,
+                  badge: unreadCount > 0 ? unreadCount : null,
+                ),
                 // No Submit link here: submit opens from the floating
                 // action button (same icon) on every screen size.
                 if (user?.isAdmin == true)
@@ -835,6 +844,7 @@ class _BottomNav extends StatelessWidget {
     final view = appState.view;
     final hasUser = appState.user != null;
     final isAdmin = appState.user?.isAdmin == true;
+    final unreadCount = appState.unreadAnnouncementCount;
 
     final items =
         <
@@ -866,7 +876,7 @@ class _BottomNav extends StatelessWidget {
             icon: AppIcon.contest,
             label: 'Contest',
             requiresAuth: false,
-            badge: null,
+            badge: unreadCount > 0 ? unreadCount : null,
           ),
           // No Submit tab: submit opens from the floating action button
           // (same upload icon). No Profile tab either: the profile opens
@@ -997,6 +1007,122 @@ class _BottomNav extends StatelessWidget {
             );
           }).toList(),
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// App-update prompt
+// ---------------------------------------------------------------------------
+
+/// Watches for a published newer version and shows the Download / Later
+/// prompt once per version, when the app opens. Renders nothing itself —
+/// the dialog is the UI. "Later" dismisses for this session only; the
+/// prompt returns on the next app open while a newer version exists.
+/// "Download" opens the APK link the admin published (browser / Drive),
+/// so no Play Store account is needed.
+class _UpdatePrompt extends StatefulWidget {
+  const _UpdatePrompt({required this.appState, required this.theme});
+
+  final AppState appState;
+  final ThemeProvider theme;
+
+  @override
+  State<_UpdatePrompt> createState() => _UpdatePromptState();
+}
+
+class _UpdatePromptState extends State<_UpdatePrompt> {
+  /// Latest version the dialog was already shown for this session.
+  String? _shownForVersion;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = widget.appState;
+    if (appState.updateAvailable) {
+      final version = appState.updateInfo!.latestVersion;
+      if (_shownForVersion != version) {
+        _shownForVersion = version;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showDialog(context);
+        });
+      }
+    }
+    return const SizedBox.shrink();
+  }
+
+  Future<void> _showDialog(BuildContext context) async {
+    final appState = widget.appState;
+    final info = appState.updateInfo;
+    if (info == null || !appState.updateAvailable) return;
+    final palette = widget.theme.palette;
+    final c = palette.c;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: c.border),
+        ),
+        title: Text(
+          'New version available',
+          style: TextStyle(
+            color: c.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Version ${info.latestVersion} is available '
+              '(you have ${AppConstants.currentVersion}).',
+              style: TextStyle(color: c.textSub, fontSize: 14, height: 1.5),
+            ),
+            if (info.notes.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                info.notes,
+                style: TextStyle(color: c.muted, fontSize: 13, height: 1.5),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              appState.dismissUpdate();
+              Navigator.of(ctx).pop();
+            },
+            child: Text('Later', style: TextStyle(color: c.muted)),
+          ),
+          TextButton(
+            onPressed: info.downloadUrl.isEmpty
+                ? null
+                : () async {
+                    final url = Uri.tryParse(info.downloadUrl);
+                    if (url != null) {
+                      await launchUrl(
+                        url,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                    appState.dismissUpdate();
+                    if (ctx.mounted) Navigator.of(ctx).pop();
+                  },
+            child: Text(
+              'Download',
+              style: TextStyle(
+                color: palette.accent.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

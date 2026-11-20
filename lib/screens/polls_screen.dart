@@ -116,6 +116,7 @@ class _PollsScreenState extends State<PollsScreen> {
                         ),
                       )
                     else ...[
+                      _buildAnnouncements(),
                       _buildPodium(ranked, wide),
                       _buildRankingsList(ranked, maxScore, wide),
                     ],
@@ -234,6 +235,88 @@ class _PollsScreenState extends State<PollsScreen> {
     );
   }
 
+  // ----------------------------------------------------------- announcements
+
+  /// Admin announcements + the user's own paper-status notices, newest
+  /// first. General posts are from the admins; paper notices tell the
+  /// author their paper was approved, rejected, or needs revision.
+  /// Tapping a paper notice opens that paper when it can be found.
+  Widget _buildAnnouncements() {
+    final items = widget.appState.allAnnouncements;
+    final unread = widget.appState.unreadAnnouncementCount;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('📢', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Text(
+                'ANNOUNCEMENTS',
+                style: monoStyle(
+                  p,
+                  size: 10,
+                  color: c.faint,
+                  letterSpacing: 0.1,
+                ),
+              ),
+              if (unread > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: p.accent.accent,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    '$unread new',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: p.accent.accentFg,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (items.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: c.surface,
+                border: Border.all(color: c.border),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'No announcements yet — check back here for updates from the admins.',
+                style: bodyStyle(p, size: 13, color: c.muted),
+              ),
+            )
+          else
+            for (final item in items) _AnnouncementCard(
+              palette: p,
+              item: item,
+              onTap: item.paperId == null
+                  ? null
+                  : () {
+                      final paper =
+                          widget.appState.paperById(item.paperId!);
+                      if (paper != null) widget.appState.openPaper(paper);
+                    },
+            ),
+        ],
+      ),
+    );
+  }
+
   // ------------------------------------------------------------------ podium
 
   Widget _buildPodium(List<Paper> ranked, bool wide) {
@@ -312,7 +395,159 @@ class _PollsScreenState extends State<PollsScreen> {
       ],
     );
   }
+}
 
+// ---------------------------------------------------------------------------
+// Announcement card
+// ---------------------------------------------------------------------------
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard({
+    required this.palette,
+    required this.item,
+    required this.onTap,
+  });
+
+  final AppPalette palette;
+  final Announcement item;
+  final VoidCallback? onTap;
+
+  Color _statusColor() {
+    switch (item.paperStatus) {
+      case 'approved':
+        return const Color(0xFF4ADE80);
+      case 'rejected':
+        return const Color(0xFFE06B6B);
+      case 'revision':
+        return const Color(0xFFE8913A);
+      default:
+        return palette.accent.accent;
+    }
+  }
+
+  String? _statusLabel() {
+    switch (item.paperStatus) {
+      case 'approved':
+        return 'Approved';
+      case 'rejected':
+        return 'Not approved';
+      case 'revision':
+        return 'Needs revision';
+      default:
+        return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = palette.c;
+    final accent = _statusColor();
+    final statusLabel = _statusLabel();
+    final card = Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 4,
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                bottomLeft: Radius.circular(12),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: c.text,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                      if (statusLabel != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(
+                              color: accent.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Text(
+                            statusLabel,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: accent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (item.body.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      item.body,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: c.muted,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Text(
+                    timeAgo(item.createdAt),
+                    style: TextStyle(fontSize: 11, color: c.faint),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (onTap != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: Text('›', style: TextStyle(color: c.faint, fontSize: 18)),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: card,
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

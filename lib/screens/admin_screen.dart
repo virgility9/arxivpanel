@@ -66,10 +66,15 @@ class AdminScreen extends StatefulWidget {
 }
 
 class _AdminScreenState extends State<AdminScreen> {
-  int _section = 0; // 0 = dashboard, 1 = papers, 2 = users
+  int _section = 0; // 0 = dashboard, 1 = papers, 2 = users, 3 = announcements
   int _statsRange = 7; // days shown in the Library Statistics chart: 7, 30, 90
   final _searchController = TextEditingController();
   final _userSearchController = TextEditingController();
+  final _annTitleController = TextEditingController();
+  final _annBodyController = TextEditingController();
+  final _updVersionController = TextEditingController();
+  final _updUrlController = TextEditingController();
+  final _updNotesController = TextEditingController();
   String _search = '';
   String _userSearch = '';
   String _statusFilter = 'all';
@@ -87,6 +92,11 @@ class _AdminScreenState extends State<AdminScreen> {
     widget.appState.removeListener(_onAppState);
     _searchController.dispose();
     _userSearchController.dispose();
+    _annTitleController.dispose();
+    _annBodyController.dispose();
+    _updVersionController.dispose();
+    _updUrlController.dispose();
+    _updNotesController.dispose();
     super.dispose();
   }
 
@@ -270,6 +280,14 @@ class _AdminScreenState extends State<AdminScreen> {
             badge: userCount,
             onTap: _openUsers,
           ),
+          const SizedBox(height: 4),
+          _railNav(
+            p,
+            icon: Icons.campaign,
+            label: 'Announcements',
+            active: _section == 3,
+            onTap: () => setState(() => _section = 3),
+          ),
           const Spacer(),
           const Divider(height: 1),
           const SizedBox(height: 14),
@@ -441,6 +459,7 @@ class _AdminScreenState extends State<AdminScreen> {
           tab(Icons.dashboard, 'Dashboard', 0),
           tab(Icons.description, 'Papers', 1),
           tab(Icons.people, 'Users', 2),
+          tab(Icons.campaign, 'Announce', 3),
         ],
       ),
     );
@@ -464,8 +483,10 @@ class _AdminScreenState extends State<AdminScreen> {
             _buildDashboard(p, wide)
           else if (_section == 1)
             _buildPapers(p, wide)
+          else if (_section == 2)
+            _buildUsers(p)
           else
-            _buildUsers(p),
+            _buildAnnouncementsSection(p),
         ],
       ),
     );
@@ -473,7 +494,12 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildTopbar(AppPalette p) {
     final c = p.c;
-    final titles = ['Dashboard', 'Paper & Thesis Management', 'User Management'];
+    final titles = [
+      'Dashboard',
+      'Paper & Thesis Management',
+      'User Management',
+      'Announcements & Updates',
+    ];
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -1546,6 +1572,214 @@ class _AdminScreenState extends State<AdminScreen> {
           )
         else
           ...users.map((u) => _buildUserRow(p, u)),
+      ],
+    );
+  }
+
+  // --------------------------------------------- announcements + app update
+
+  /// Admin-only section: post a general announcement (lands at the top
+  /// of the Contest tab and pings its tab badge), list + delete past
+  /// announcements, and publish the latest app version (users get a
+  /// Download / Later prompt when they open the app).
+  Widget _buildAnnouncementsSection(AppPalette p) {
+    final c = p.c;
+    final appState = widget.appState;
+    final announcements = appState.announcements;
+    final updateInfo = appState.updateInfo;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Post an announcement',
+          style: displayStyle(p, size: 22, weight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'It appears at the top of the Contest tab and pings the Contest tab for everyone.',
+          style: bodyStyle(p, size: 13, color: c.muted),
+        ),
+        const SizedBox(height: 16),
+        _card(
+          p,
+          Padding(
+            padding: EdgeInsets.all(_isPhone ? 16 : 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _annTitleController,
+                  decoration: const InputDecoration(
+                    hintText: 'Announcement title',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _annBodyController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'What should everyone know?',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GoldButton(
+                    palette: p,
+                    label: 'Post announcement',
+                    minHeight: 44,
+                    onPressed: () async {
+                      final ok = await appState.postAnnouncement(
+                        title: _annTitleController.text,
+                        body: _annBodyController.text,
+                      );
+                      if (ok && mounted) {
+                        _annTitleController.clear();
+                        _annBodyController.clear();
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Past announcements',
+          style: displayStyle(p, size: 18, weight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        if (!appState.announcementsResolved)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (announcements.isEmpty)
+          _card(
+            p,
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('No announcements posted yet.'),
+            ),
+          )
+        else
+          for (final a in announcements)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              decoration: BoxDecoration(
+                color: c.surface,
+                border: Border.all(color: c.border),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          a.title,
+                          style: bodyStyle(
+                            p,
+                            size: 14,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        if (a.body.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            a.body,
+                            style: bodyStyle(p, size: 13, color: c.muted),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    tooltip: 'Delete announcement',
+                    onPressed: () async {
+                      final ok = await _confirmAction(
+                        title: 'Delete announcement?',
+                        body: '“${a.title}” will disappear from the Contest tab for everyone.',
+                      );
+                      if (ok) {
+                        await appState.deleteAnnouncement(a.id);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+        const SizedBox(height: 24),
+        Text(
+          'App update',
+          style: displayStyle(p, size: 18, weight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          updateInfo == null
+              ? 'Set the latest version — users see a Download / Later prompt when they open the app. Installed in this build: ${AppConstants.currentVersion}.'
+              : 'Set the latest version — users see a Download / Later prompt when they open the app. Installed in this build: ${AppConstants.currentVersion}. Published now: ${updateInfo.latestVersion}.',
+          style: bodyStyle(p, size: 13, color: c.muted),
+        ),
+        const SizedBox(height: 12),
+        _card(
+          p,
+          Padding(
+            padding: EdgeInsets.all(_isPhone ? 16 : 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _updVersionController,
+                  decoration: const InputDecoration(
+                    hintText: 'Latest version, e.g. 1.1.0',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _updUrlController,
+                  decoration: const InputDecoration(
+                    hintText: 'Download link (APK — Google Drive or direct link)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _updNotesController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'What\'s new? (optional)',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GoldButton(
+                    palette: p,
+                    label: 'Publish new version',
+                    minHeight: 44,
+                    onPressed: () async {
+                      final ok = await appState.saveAppUpdate(
+                        latestVersion: _updVersionController.text,
+                        downloadUrl: _updUrlController.text,
+                        notes: _updNotesController.text,
+                      );
+                      if (ok && mounted) {
+                        _updVersionController.clear();
+                        _updUrlController.clear();
+                        _updNotesController.clear();
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
