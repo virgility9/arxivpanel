@@ -109,10 +109,7 @@ class _TourDialogState extends State<_TourDialog> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            step.body,
-            style: bodyStyle(p, size: 14, color: c.textSub),
-          ),
+          Text(step.body, style: bodyStyle(p, size: 14, color: c.textSub)),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

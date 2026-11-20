@@ -37,7 +37,7 @@ class AppConstants {
   /// pubspec.yaml, without the `+build` part). The in-app update check
   /// compares it with `app_config/update.latestVersion` in Firestore.
   /// Bump both together on every release.
-  static const String currentVersion = '1.0.1';
+  static const String currentVersion = '1.0.2';
 
   /// Cartoonish preset avatars (DiceBear, PNG). Shown in the Edit Profile
   /// dialog and assigned to new signups.
