@@ -53,6 +53,7 @@ enum _Metric { reactions, views, comments }
 
 class _PollsScreenState extends State<PollsScreen> {
   _Metric _metric = _Metric.reactions;
+  bool _showPastAnnouncements = false;
 
   AppPalette get p => widget.theme.palette;
   AppColors get c => p.c;
@@ -240,10 +241,22 @@ class _PollsScreenState extends State<PollsScreen> {
   /// Admin announcements + the user's own paper-status notices, newest
   /// first. General posts are from the admins; paper notices tell the
   /// author their paper was approved, rejected, or needs revision.
-  /// Tapping a paper notice opens that paper when it can be found.
+  /// Only the newest announcement shows by default — older ones live
+  /// behind the "past announcements" toggle. Tapping a paper notice
+  /// opens that paper when it can be found.
   Widget _buildAnnouncements() {
     final items = widget.appState.allAnnouncements;
     final unread = widget.appState.unreadAnnouncementCount;
+    final past = items.length > 1 ? items.sublist(1) : <Announcement>[];
+
+    VoidCallback? openFor(Announcement item) {
+      if (item.paperId == null) return null;
+      return () {
+        final paper = widget.appState.paperById(item.paperId!);
+        if (paper != null) widget.appState.openPaper(paper);
+      };
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 32),
       child: Column(
@@ -300,18 +313,54 @@ class _PollsScreenState extends State<PollsScreen> {
                 style: bodyStyle(p, size: 13, color: c.muted),
               ),
             )
-          else
-            for (final item in items) _AnnouncementCard(
+          else ...[
+            _AnnouncementCard(
               palette: p,
-              item: item,
-              onTap: item.paperId == null
-                  ? null
-                  : () {
-                      final paper =
-                          widget.appState.paperById(item.paperId!);
-                      if (paper != null) widget.appState.openPaper(paper);
-                    },
+              item: items.first,
+              onTap: openFor(items.first),
             ),
+            if (past.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => setState(() =>
+                    _showPastAnnouncements = !_showPastAnnouncements),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _showPastAnnouncements
+                            ? 'Hide past announcements'
+                            : 'Show past announcements (${past.length})',
+                        style: bodyStyle(
+                          p,
+                          size: 13,
+                          weight: FontWeight.w700,
+                          color: p.accent.accent,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _showPastAnnouncements ? '▴' : '▾',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: p.accent.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_showPastAnnouncements)
+                for (final item in past) _AnnouncementCard(
+                  palette: p,
+                  item: item,
+                  onTap: openFor(item),
+                ),
+            ],
+          ],
         ],
       ),
     );
