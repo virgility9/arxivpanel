@@ -590,6 +590,32 @@ class AppState extends ChangeNotifier {
     showToast('Profile updated!', '✅');
   }
 
+  /// Persists the current theme on the signed-in user's profile, so
+  /// Settings survive sign-out / sign-in (and a new device). Fire-and-
+  /// forget: a failed write only logs — the theme still applies on
+  /// screen, and the next change retries the save. The local [_user]
+  /// copy is updated first so the next sync check sees the saved values
+  /// instead of re-applying the old ones.
+  Future<void> saveThemeSettings({
+    String? mode,
+    String? accent,
+  }) async {
+    final user = _user;
+    if (!_firebaseReady || user == null) return;
+    final newMode = mode ?? user.themeMode;
+    final newAccent = accent ?? user.themeAccent;
+    _user = user.copyWith(themeMode: newMode, themeAccent: newAccent);
+    try {
+      await _repo!.saveThemeSettings(
+        user.id,
+        mode: newMode,
+        accent: newAccent,
+      );
+    } catch (e) {
+      debugPrint('[AppState] saveThemeSettings failed: $e');
+    }
+  }
+
   // ---------------------------------------------------------------- toasts
 
   void showToast(String message, [String? icon]) {
@@ -1130,16 +1156,27 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Deletes a user profile (admin only per `firestore.rules`). The user's
-  /// papers are kept. Returns false — and toasts — when the write is
-  /// rejected.
+  /// Deletes a user profile (admin only per `firestore.rules`) and bans
+  /// the account from signing back in (see FirestoreRepository.deleteUser
+  /// — a profile delete alone would let them sign straight back in).
+  /// The user's papers are kept. Self-delete is refused here as well as
+  /// in the admin UI, and a non-admin can never reach the write.
+  /// Returns false — and toasts — when the write is rejected.
   Future<bool> deleteUser(String uid) async {
     if (!_firebaseReady) return false;
     final user = _user;
-    if (user == null) return false;
+    if (user == null || !user.isAdmin) return false;
+    if (uid == user.id) {
+      showToast('You cannot delete your own account.', '⚠️');
+      return false;
+    }
     try {
-      await _repo!.deleteUser(uid, deleterIsAdmin: user.isAdmin);
-      showToast('User deleted', '🗑');
+      await _repo!.deleteUser(
+        uid,
+        deleterUid: user.id,
+        deleterIsAdmin: user.isAdmin,
+      );
+      showToast('User deleted — they can no longer sign in.', '🗑');
       return true;
     } catch (e) {
       debugPrint('deleteUser failed: $e');

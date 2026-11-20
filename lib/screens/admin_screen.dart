@@ -1914,7 +1914,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 final ok = await _confirmAction(
                   title: 'Delete user?',
                   body:
-                      '“${u.username}” will lose access immediately. Their papers stay in the archive.',
+                      '“${u.username}” will be removed and will not be able to sign in again. Their papers stay in the archive.',
                 );
                 if (ok) await widget.appState.deleteUser(u.id);
               },

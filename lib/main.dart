@@ -15,6 +15,8 @@
 /// notifies, and both are passed down the tree via constructors.
 library;
 
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -47,14 +49,31 @@ class _ArxivAppState extends State<ArxivApp> {
   AppState? _appState;
   _BootPhase _phase = _BootPhase.splash;
 
+  /// Which account the on-screen theme was last adopted for (see
+  /// [_syncThemeFromUser]). Reset on sign-out so the next sign-in
+  /// re-syncs instead of keeping the previous account's adoption.
+  String? _themeSyncedForUid;
+
   @override
   void initState() {
     super.initState();
-    _theme.addListener(_onChange);
+    _theme.addListener(_onThemeChanged);
     _boot();
   }
 
-  void _onChange() => setState(() {});
+  /// Theme changed (Settings screen): rebuild, and save the new theme to
+  /// the signed-in user's profile so it survives sign-out / sign-in.
+  void _onThemeChanged() {
+    setState(() {});
+    _saveThemeToAccount();
+  }
+
+  /// App state changed: rebuild, and sync the theme from the signed-in
+  /// user's saved settings (see [_syncThemeFromUser]).
+  void _onAppStateChanged() {
+    setState(() {});
+    _syncThemeFromUser();
+  }
 
   /// Initializes Firebase in the background while the splash is showing.
   /// [AppState] is created only after init succeeds: its repositories
@@ -95,7 +114,7 @@ class _ArxivAppState extends State<ArxivApp> {
     setState(() {
       if (ready) {
         _appState ??= AppState();
-        _appState!.addListener(_onChange);
+        _appState!.addListener(_onAppStateChanged);
         _phase = _BootPhase.ready;
       } else if (!configured) {
         _phase = _BootPhase.notConfigured;
@@ -110,10 +129,80 @@ class _ArxivAppState extends State<ArxivApp> {
     _boot();
   }
 
+  /// Saves the on-screen theme to the signed-in user's profile, so it
+  /// survives sign-out / sign-in (and a new device). Skipped when signed
+  /// out — the theme just stays on screen — and when the profile already
+  /// holds these values. That last check is what stops a save → profile
+  /// stream → apply → save loop.
+  void _saveThemeToAccount() {
+    final appState = _appState;
+    if (appState == null) return;
+    final user = appState.user;
+    if (user == null) return;
+    if (user.themeMode == _theme.mode.name &&
+        user.themeAccent == _theme.accent.name) {
+      return;
+    }
+    unawaited(appState.saveThemeSettings(
+      mode: _theme.mode.name,
+      accent: _theme.accent.name,
+    ));
+  }
+
+  /// Applies the signed-in user's saved theme, once per sign-in for a
+  /// never-customized account and whenever the stored values differ from
+  /// the on-screen theme. Signed out: keeps the on-screen theme and
+  /// forgets the last account, so the next sign-in syncs fresh.
+  /// No loop: applying calls ThemeProvider.update, which only notifies
+  /// on a real change, and [_saveThemeToAccount] no-ops once the profile
+  /// already holds the applied values.
+  void _syncThemeFromUser() {
+    final appState = _appState;
+    if (appState == null) return;
+    final user = appState.user;
+    if (user == null) {
+      _themeSyncedForUid = null;
+      return;
+    }
+    final savedMode = _modeFromName(user.themeMode);
+    final savedAccent = _accentFromName(user.themeAccent);
+    if (savedMode == null && savedAccent == null) {
+      // Never customized: the theme on screen right now becomes theirs.
+      if (_themeSyncedForUid == user.id) return;
+      _themeSyncedForUid = user.id;
+      unawaited(appState.saveThemeSettings(
+        mode: _theme.mode.name,
+        accent: _theme.accent.name,
+      ));
+      return;
+    }
+    if ((savedMode == null || savedMode == _theme.mode) &&
+        (savedAccent == null || savedAccent == _theme.accent)) {
+      return;
+    }
+    _theme.update(mode: savedMode, accent: savedAccent);
+  }
+
+  AppMode? _modeFromName(String? name) {
+    if (name == null) return null;
+    for (final mode in AppMode.values) {
+      if (mode.name == name) return mode;
+    }
+    return null;
+  }
+
+  AppAccent? _accentFromName(String? name) {
+    if (name == null) return null;
+    for (final accent in AppAccent.values) {
+      if (accent.name == name) return accent;
+    }
+    return null;
+  }
+
   @override
   void dispose() {
-    _theme.removeListener(_onChange);
-    _appState?.removeListener(_onChange);
+    _theme.removeListener(_onThemeChanged);
+    _appState?.removeListener(_onAppStateChanged);
     _theme.dispose();
     _appState?.dispose();
     super.dispose();

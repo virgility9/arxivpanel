@@ -18,6 +18,7 @@ rules_version = '2';
 //   announcements/{id}                  admin announcements (Contest tab)
 //   users/{uid}/notifications/{id}      paper-status notices, one author only
 //   app_config/update                   latest published app version
+//   deleted_users/{uid}              accounts an admin deleted — sign-in refuses them
 //   admins/{uid}                          presence of a doc marks the user as admin
 //                                         (create the first one manually in the
 //                                         console — see FIREBASE_SETUP.md step 8)
@@ -203,6 +204,19 @@ service cloud.firestore {
     match /app_config/{docId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // ---------------------------------------------------------- deleted_users
+    // Accounts an admin deleted inside the app. The Auth account itself
+    // can only be erased in the Firebase console (or via the Admin SDK),
+    // so this marker is what actually locks them out: sign-in checks it
+    // before recreating a profile, and a live session is signed out
+    // when its profile disappears. Only admins can write it; a user can
+    // read only their own marker (the sign-in check runs right after
+    // auth, before any profile exists).
+    match /deleted_users/{uid} {
+      allow read: if signedIn() && uid == request.auth.uid;
+      allow create, delete: if isAdmin();
     }
 
     // ------------------------------------------------------------- admins

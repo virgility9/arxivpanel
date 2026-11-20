@@ -61,6 +61,13 @@ class AuthRepository {
                 '${data == null ? 'missing' : 'loaded'}',
               );
               if (controller.isClosed) return;
+              if (data == null) {
+                // Profile gone: either it hasn't been created yet (a new
+                // sign-up — self-heal follows) or an admin deleted the
+                // account. Only the ban marker forces a sign-out — a
+                // missing doc alone must NOT sign a fresh account out.
+                unawaited(_signOutIfDeleted(uid));
+              }
               controller.add(
                 data == null ? null : AppUser.fromJson(doc.id, data),
               );
@@ -116,6 +123,27 @@ class AuthRepository {
       );
       final user = credential.user;
       if (user != null) {
+        // Deleted by an admin? The Auth account itself can't be deleted
+        // from inside the app (only the console / Admin SDK can), so the
+        // ban lives in Firestore: refuse the sign-in and sign straight
+        // back out instead of self-healing the profile. A failed check
+        // (e.g. rules not published yet) fails open — it must never lock
+        // every user out of sign-in.
+        var banned = false;
+        try {
+          banned = (await _firestore
+                  .collection('deleted_users')
+                  .doc(user.uid)
+                  .get())
+              .exists;
+        } catch (e) {
+          debugPrint('[AuthRepository] deleted-users check failed: $e');
+        }
+        if (banned) {
+          await _auth.signOut();
+          return 'This account was deleted by an admin. '
+              'Please contact support if you think this is a mistake.';
+        }
         // Self-heal: a previous sign-up may have created the Auth account
         // while the profile write failed (e.g. rules not published yet).
         // Create the missing users/{uid} doc so the account actually works.
@@ -189,6 +217,24 @@ class AuthRepository {
             'your profile will be created automatically.';
       }
       return 'Sign up failed (${e.code}). Please try again.';
+    }
+  }
+
+  /// Signs the Firebase Auth session out when [uid] has a ban marker in
+  /// `deleted_users` — i.e. an admin deleted the account while this
+  /// session was live. Best-effort: a failed read (e.g. rules not yet
+  /// published) never signs anyone out.
+  Future<void> _signOutIfDeleted(String uid) async {
+    try {
+      final banned = await _firestore
+          .collection('deleted_users')
+          .doc(uid)
+          .get();
+      if (banned.exists) {
+        await _auth.signOut();
+      }
+    } catch (e) {
+      debugPrint('[AuthRepository] deleted-users check failed: $e');
     }
   }
 

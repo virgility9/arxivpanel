@@ -19,6 +19,8 @@ class AppUser {
     this.website,
     this.isAdmin = false,
     this.lastSeenAnnouncementAt,
+    this.themeMode,
+    this.themeAccent,
   });
 
   final String id;
@@ -36,6 +38,13 @@ class AppUser {
   /// Null means never — everything counts as unread.
   final DateTime? lastSeenAnnouncementAt;
 
+  /// Saved theme, so Settings survive sign-out / sign-in and a fresh
+  /// install on another device: mode is 'dark' | 'light', accent is the
+  /// accent name ('gold', 'terracotta', ...). Null = never customized —
+  /// the app defaults apply.
+  final String? themeMode;
+  final String? themeAccent;
+
   AppUser copyWith({
     String? username,
     String? email,
@@ -46,6 +55,8 @@ class AppUser {
     String? website,
     bool? isAdmin,
     DateTime? lastSeenAnnouncementAt,
+    String? themeMode,
+    String? themeAccent,
   }) {
     return AppUser(
       id: id,
@@ -59,6 +70,8 @@ class AppUser {
       isAdmin: isAdmin ?? this.isAdmin,
       lastSeenAnnouncementAt:
           lastSeenAnnouncementAt ?? this.lastSeenAnnouncementAt,
+      themeMode: themeMode ?? this.themeMode,
+      themeAccent: themeAccent ?? this.themeAccent,
     );
   }
 
@@ -79,6 +92,14 @@ class AppUser {
     if (lastSeenAnnouncementAt != null) {
       data['lastSeenAnnouncementAt'] =
           Timestamp.fromDate(lastSeenAnnouncementAt!);
+    }
+    // Same rule for the saved theme: only write it when known, so a
+    // profile save never clears a theme saved from another device.
+    if (themeMode != null) {
+      data['themeMode'] = themeMode;
+    }
+    if (themeAccent != null) {
+      data['themeAccent'] = themeAccent;
     }
     return data;
   }
@@ -108,6 +129,8 @@ class AppUser {
       website: json['website'] as String?,
       isAdmin: json['isAdmin'] as bool? ?? false,
       lastSeenAnnouncementAt: parsedLastSeen,
+      themeMode: json['themeMode'] as String?,
+      themeAccent: json['themeAccent'] as String?,
     );
   }
 }

@@ -262,26 +262,39 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 duration:
                                     const Duration(milliseconds: 250),
                                 curve: Curves.easeOutCubic,
-                                child: Wrap(
-                                spacing: spacing,
-                                runSpacing: spacing,
-                                children: [
-                                  for (final paper in pageItems)
-                                    SizedBox(
-                                      width: cellWidth,
-                                      child: PaperCard(
-                                        key: ValueKey(paper.id),
-                                        paper: paper,
-                                        appState: widget.appState,
-                                        theme: widget.theme,
-                                        onAuthPrompt: widget.onAuthPrompt,
-                                      ),
-                                    ),
-                                ],
+                                // Full width + start-aligned: under the
+                                // Center above, a Wrap only as wide as its
+                                // widest run gets centered — with a single
+                                // paper that put the one card in the middle
+                                // of the screen. Forcing full width pins
+                                // the first card to the left, however few
+                                // papers there are.
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: Wrap(
+                                    alignment: WrapAlignment.start,
+                                    spacing: spacing,
+                                    runSpacing: spacing,
+                                    children: [
+                                      for (final paper in pageItems)
+                                        SizedBox(
+                                          width: cellWidth,
+                                          child: PaperCard(
+                                            key: ValueKey(paper.id),
+                                            paper: paper,
+                                            appState: widget.appState,
+                                            theme: widget.theme,
+                                            onAuthPrompt: widget.onAuthPrompt,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               );
                               if (pageCount <= 1) return grid;
                               return Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
                                 children: [
                                   grid,
                                   const SizedBox(height: 28),
@@ -406,16 +419,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
               // six ShaderMasks (six saveLayers per frame) made the
               // first load stutter on phones.
               return Shimmer(
-                child: Wrap(
-                  spacing: spacing,
-                  runSpacing: spacing,
-                  children: [
-                    for (var i = 0; i < 6; i++)
-                      SizedBox(
-                        width: cellWidth,
-                        child: _paperSkeletonCard(p),
-                      ),
-                  ],
+                // Same full-width, left-aligned treatment as the real
+                // grid, so the skeleton cards never center either.
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Wrap(
+                    alignment: WrapAlignment.start,
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: [
+                      for (var i = 0; i < 6; i++)
+                        SizedBox(
+                          width: cellWidth,
+                          child: _paperSkeletonCard(p),
+                        ),
+                    ],
+                  ),
                 ),
               );
             },

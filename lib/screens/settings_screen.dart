@@ -329,6 +329,11 @@ class SettingsScreen extends StatelessWidget {
                           );
                         },
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Saved to your account — your theme comes back after you sign out and sign in again.',
+                        style: bodyStyle(p, size: 12, color: c.muted),
+                      ),
                       const SizedBox(height: 40),
 
                       // About

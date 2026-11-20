@@ -561,16 +561,54 @@ class FirestoreRepository {
         .set(user.toJson(), SetOptions(merge: true));
   }
 
+  /// Saves the user's theme (mode + accent names) on their profile doc.
+  /// Merge-set, so it never wipes the rest of the profile; the users
+  /// rules allow an owner to update their own doc (isAdmin unchanged).
+  Future<void> saveThemeSettings(
+    String uid, {
+    String? mode,
+    String? accent,
+  }) {
+    final data = <String, dynamic>{};
+    if (mode != null) data['themeMode'] = mode;
+    if (accent != null) data['themeAccent'] = accent;
+    if (data.isEmpty) return Future.value();
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .set(data, SetOptions(merge: true));
+  }
+
   /// Deletes a user document. Only admins may do this per `firestore.rules`.
   ///
   /// Papers they authored are kept (author info is denormalized onto the
-  /// paper documents); the `bookmarks` and `history` subcollections are
-  /// cleaned up best-effort afterwards.
+  /// paper documents); the `bookmarks`, `history` and `notifications`
+  /// subcollections are cleaned up best-effort afterwards.
+  ///
+  /// A profile delete alone does NOT delete the Firebase Auth account —
+  /// the client SDK cannot delete another user — and sign-in self-heals
+  /// a missing profile doc, so a deleted user could sign straight back
+  /// in and come back to life. That is why the delete writes a
+  /// `deleted_users/{uid}` ban marker FIRST: sign-in refuses a banned
+  /// uid (see AuthRepository) and a live session is signed out when its
+  /// profile disappears. The marker is written first so a later failure
+  /// leaves the account banned (retryable) instead of half-deleted.
+  /// Their `admins/{uid}` doc is removed too — isAdmin() trusts it even
+  /// with no profile, so a deleted admin must not keep admin powers.
   Future<void> deleteUser(
     String uid, {
+    required String deleterUid,
     required bool deleterIsAdmin,
   }) async {
     final docRef = _firestore.collection('users').doc(uid);
+    final target = await docRef.get();
+    final targetData = target.data();
+    await _firestore.collection('deleted_users').doc(uid).set({
+      'email': targetData?['email'] ?? '',
+      'username': targetData?['username'] ?? '',
+      'deletedAt': FieldValue.serverTimestamp(),
+      'deletedBy': deleterUid,
+    });
     // Snapshot the subcollections first, then delete the user document
     // on its own (same atomic-batch failure mode as deletePaper: one
     // denied subcollection doc would reject the whole delete).
@@ -579,9 +617,20 @@ class FirestoreRepository {
     // so a non-admin deleter attempts nothing and logs nothing.
     final bookmarks = await docRef.collection('bookmarks').get();
     final history = await docRef.collection('history').get();
+    final notifications = await docRef.collection('notifications').get();
     await docRef.delete();
+    try {
+      await _firestore.collection('admins').doc(uid).delete();
+    } catch (e) {
+      debugPrint('deleteUser: could not remove admins doc: $e');
+    }
     await _deleteDocsBestEffort(bookmarks, (_) => false, deleterIsAdmin);
     await _deleteDocsBestEffort(history, (_) => false, deleterIsAdmin);
+    await _deleteDocsBestEffort(
+      notifications,
+      (_) => false,
+      deleterIsAdmin,
+    );
   }
 
   // ------------------------------------------------------------------
