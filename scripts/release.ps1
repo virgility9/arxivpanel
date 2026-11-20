@@ -9,7 +9,7 @@
 .DESCRIPTION
   Run AFTER bumping the version and building the APK:
     1. pubspec.yaml: version: 1.0.1+2  (and lib/data/constants.dart
-       AppConstants.currentVersion = '1.0.1' — must match, no +build)
+       AppConstants.currentVersion = '1.0.1' - must match, no +build)
     2. flutter build apk --release
     3. From the repo root (C:\Projects\Flutter\arxivpanel):
          .\scripts\release.ps1 1.0.1
@@ -66,8 +66,9 @@ if (-not (Test-Path $apk)) {
 
 # 4. Tag once, push the tag.
 $tag = "v$Version"
-if (git tag --list $tag) {
-  Write-Host "Tag $tag already exists. Pick a new version — a release cannot be re-published under the same tag." -ForegroundColor Red
+$existingTag = git tag --list $tag
+if ($existingTag) {
+  Write-Host "Tag $tag already exists. Pick a new version - a release cannot be re-published under the same tag." -ForegroundColor Red
   exit 1
 }
 git tag $tag
