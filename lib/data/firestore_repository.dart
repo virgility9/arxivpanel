@@ -579,6 +579,16 @@ class FirestoreRepository {
         .set(data, SetOptions(merge: true));
   }
 
+  /// Marks the first-time help tour as seen for one user. Merge-set, so
+  /// it never wipes the rest of the profile; same owner-update rule as
+  /// the theme save above.
+  Future<void> saveOnboardingSeen(String uid) {
+    return _firestore.collection('users').doc(uid).set(
+      {'hasSeenOnboarding': true},
+      SetOptions(merge: true),
+    );
+  }
+
   /// Deletes a user document. Only admins may do this per `firestore.rules`.
   ///
   /// Papers they authored are kept (author info is denormalized onto the
@@ -813,31 +823,6 @@ class FirestoreRepository {
     return _firestore.collection('users').doc(uid).update({
       'lastSeenAnnouncementAt': FieldValue.serverTimestamp(),
     });
-  }
-
-  // ------------------------------------------------------------------
-  // App update
-  // ------------------------------------------------------------------
-
-  /// Reads the published latest version once (`app_config/update`).
-  /// Returns null when the devs have never published one — then no
-  /// update prompt is shown.
-  Future<AppUpdateInfo?> fetchAppUpdate() async {
-    final doc = await _firestore.collection('app_config').doc('update').get();
-    final data = doc.data();
-    if (data == null) return null;
-    return AppUpdateInfo.fromJson(doc.id, data);
-  }
-
-  /// Publishes a new latest version (admin only per `firestore.rules`).
-  Future<void> saveAppUpdate(AppUpdateInfo info) {
-    return _firestore
-        .collection('app_config')
-        .doc('update')
-        .set(
-          info.toJson()..['updatedAt'] = FieldValue.serverTimestamp(),
-          SetOptions(merge: true),
-        );
   }
 
   // ------------------------------------------------------------------

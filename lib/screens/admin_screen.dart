@@ -72,9 +72,6 @@ class _AdminScreenState extends State<AdminScreen> {
   final _userSearchController = TextEditingController();
   final _annTitleController = TextEditingController();
   final _annBodyController = TextEditingController();
-  final _updVersionController = TextEditingController();
-  final _updUrlController = TextEditingController();
-  final _updNotesController = TextEditingController();
   String _search = '';
   String _userSearch = '';
   String _statusFilter = 'all';
@@ -94,9 +91,6 @@ class _AdminScreenState extends State<AdminScreen> {
     _userSearchController.dispose();
     _annTitleController.dispose();
     _annBodyController.dispose();
-    _updVersionController.dispose();
-    _updUrlController.dispose();
-    _updNotesController.dispose();
     super.dispose();
   }
 
@@ -512,7 +506,7 @@ class _AdminScreenState extends State<AdminScreen> {
       'Dashboard',
       'Paper & Thesis Management',
       'User Management',
-      'Announcements & Updates',
+      'Announcements',
     ];
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1600,7 +1594,6 @@ class _AdminScreenState extends State<AdminScreen> {
     final c = p.c;
     final appState = widget.appState;
     final announcements = appState.announcements;
-    final updateInfo = appState.updateInfo;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1728,72 +1721,6 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
             ),
-        const SizedBox(height: 24),
-        Text(
-          'App update',
-          style: displayStyle(p, size: 18, weight: FontWeight.w700),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          updateInfo == null
-              ? 'Set the latest version — users see a Download / Later prompt when they open the app. Installed in this build: ${AppConstants.currentVersion}.'
-              : 'Set the latest version — users see a Download / Later prompt when they open the app. Installed in this build: ${AppConstants.currentVersion}. Published now: ${updateInfo.latestVersion}.',
-          style: bodyStyle(p, size: 13, color: c.muted),
-        ),
-        const SizedBox(height: 12),
-        _card(
-          p,
-          Padding(
-            padding: EdgeInsets.all(_isPhone ? 16 : 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: _updVersionController,
-                  decoration: const InputDecoration(
-                    hintText: 'Latest version, e.g. 1.1.0',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _updUrlController,
-                  decoration: const InputDecoration(
-                    hintText: 'Download link (APK — Google Drive or direct link)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _updNotesController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    hintText: 'What\'s new? (optional)',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: GoldButton(
-                    palette: p,
-                    label: 'Publish new version',
-                    minHeight: 44,
-                    onPressed: () async {
-                      final ok = await appState.saveAppUpdate(
-                        latestVersion: _updVersionController.text,
-                        downloadUrl: _updUrlController.text,
-                        notes: _updNotesController.text,
-                      );
-                      if (ok && mounted) {
-                        _updVersionController.clear();
-                        _updUrlController.clear();
-                        _updNotesController.clear();
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }

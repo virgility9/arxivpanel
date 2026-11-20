@@ -26,6 +26,7 @@ import '../data/news_repository.dart';
 import '../firebase/firebase_config.dart';
 import '../models/models.dart';
 import '../services/app_updater.dart';
+import '../services/github_update.dart';
 
 /// The app's connection health, derived from the papers stream: `online`
 /// once data flows, `slow` when the first emission takes over 8 seconds,
@@ -315,7 +316,7 @@ class AppState extends ChangeNotifier {
   /// write to round-trip through the profile stream.
   DateTime? _seenOverride;
 
-  /// Published latest version (null = the devs never published one).
+  /// Latest GitHub release (null = no release found yet).
   AppUpdateInfo? _updateInfo;
   bool _updateChecked = false;
   bool _updateDismissed = false;
@@ -401,7 +402,7 @@ class AppState extends ChangeNotifier {
 
   bool get hasUnreadAnnouncements => unreadAnnouncementCount > 0;
 
-  /// Published latest version, if the devs ever published one.
+  /// Latest release from GitHub Releases, if one was found.
   AppUpdateInfo? get updateInfo => _updateInfo;
 
   /// True when a newer version is published and the user hasn't tapped
@@ -884,16 +885,47 @@ class AppState extends ChangeNotifier {
 
   // -------------------------------------------------------------- app update
 
-  /// Fetches the published latest version once. Silent when nothing was
-  /// ever published or the fetch fails — then no prompt is shown.
-  Future<void> checkForUpdate() async {
-    if (!_firebaseReady || _updateChecked) return;
+  /// Checks GitHub Releases once for a newer version. No Firebase
+  /// needed, so it also runs signed out. Silent when there is no
+  /// release yet, no APK is attached, or the request fails — then no
+  /// prompt is shown. With [forceRefresh] (Settings > Check for
+  /// updates) it checks again even if it already checked this session,
+  /// and clears a "Later" dismissal so the prompt can show again.
+  Future<void> checkForUpdate({bool forceRefresh = false}) async {
+    if (_updateChecked && !forceRefresh) return;
     _updateChecked = true;
+    if (forceRefresh) _updateDismissed = false;
+    _updateInfo = await fetchLatestGithubRelease();
+    if (updateAvailable) notifyListeners();
+  }
+
+  /// Latest release, for the Settings > What's New page. Reuses the
+  /// startup check when it already ran; otherwise fetches once.
+  Future<AppUpdateInfo?> fetchLatestRelease() async {
+    if (_updateInfo != null) return _updateInfo;
+    _updateInfo = await fetchLatestGithubRelease();
+    return _updateInfo;
+  }
+
+  /// True when the signed-in user has never seen (or skipped) the
+  /// first-time help tour. The tour shows once per account.
+  bool get shouldShowOnboarding =>
+      _user != null && !_user!.hasSeenOnboarding;
+
+  /// Marks the help tour as seen, on the profile and locally, so it
+  /// never shows again for this account. Fire-and-forget: a failed
+  /// write only logs — the local flag still stops the tour this
+  /// session, and the next sign-in retries the save by showing it
+  /// again only if the profile still says unseen.
+  Future<void> markOnboardingSeen() async {
+    final user = _user;
+    if (user == null || user.hasSeenOnboarding) return;
+    _user = user.copyWith(hasSeenOnboarding: true);
+    notifyListeners();
     try {
-      _updateInfo = await _repo!.fetchAppUpdate();
-      if (updateAvailable) notifyListeners();
+      await _repo!.saveOnboardingSeen(user.id);
     } catch (e) {
-      debugPrint('[AppState] update check failed: $e');
+      debugPrint('[AppState] markOnboardingSeen failed: $e');
     }
   }
 
@@ -949,39 +981,6 @@ class AppState extends ChangeNotifier {
           '⚠️',
         );
         return false;
-    }
-  }
-
-  /// Publishes a new latest version (admin only). Returns true when
-  /// Firestore accepted the write.
-  Future<bool> saveAppUpdate({
-    required String latestVersion,
-    required String downloadUrl,
-    required String notes,
-  }) async {
-    if (!_firebaseReady) return false;
-    final user = _user;
-    if (user == null || !user.isAdmin) return false;
-    if (latestVersion.trim().isEmpty || downloadUrl.trim().isEmpty) {
-      return false;
-    }
-    try {
-      final info = AppUpdateInfo(
-        latestVersion: latestVersion.trim(),
-        downloadUrl: downloadUrl.trim(),
-        notes: notes.trim(),
-        updatedAt: DateTime.now(),
-      );
-      await _repo!.saveAppUpdate(info);
-      _updateInfo = info;
-      _updateDismissed = false;
-      showToast('New version published!', '⬆️');
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('saveAppUpdate failed: $e');
-      showToast('Could not publish the new version.', '⚠️');
-      return false;
     }
   }
 

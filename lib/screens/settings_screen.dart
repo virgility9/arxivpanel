@@ -4,18 +4,43 @@
 /// [ThemeProvider.update]; the provider notifies and the root MaterialApp
 /// rebuilds with the new [ThemeData], so changes apply live. Text size is
 /// fixed at the Normal scale — there is no text-size control.
+///
+/// Account / app rows open detail pages in place (this app swaps views
+/// instead of pushing routes, so Settings keeps its own page state):
+/// Profile (navigates to the profile view), What's New (latest GitHub
+/// release notes), Help (re-opens the first-time tour), About, and
+/// Privacy Policy. No License page — virgil dropped the licence.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../data/constants.dart';
+import '../data/privacy_policy.dart';
+import '../models/models.dart';
+import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/shared.dart';
+import 'onboarding_tour.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.theme});
+enum _SettingsPage { whatsNew, privacy, about }
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key, required this.theme, required this.appState});
 
   final ThemeProvider theme;
+  final AppState appState;
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  _SettingsPage? _page;
+  bool _checkingUpdate = false;
+
+  ThemeProvider get theme => widget.theme;
+  AppState get appState => widget.appState;
 
   // -- Section label ---------------------------------------------------------
   // Mirrors the `Section` component: mono 9px, letterspaced, muted, faint
@@ -220,12 +245,231 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  // -- Settings row (Profile / What's New / Help / About / Privacy) --------
+  Widget _row(
+    AppPalette p, {
+    required String icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    final c = p.c;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: Text(icon, style: const TextStyle(fontSize: 22)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: bodyStyle(p, size: 14, weight: FontWeight.w600),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: bodyStyle(p, size: 12, color: c.muted),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Text('›', style: TextStyle(color: c.muted, fontSize: 20)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    await appState.checkForUpdate(forceRefresh: true);
+    if (!mounted) return;
+    setState(() => _checkingUpdate = false);
+    if (!appState.updateAvailable) {
+      appState.showToast(
+        'You\'re up to date (v${AppConstants.currentVersion}).',
+        '✅',
+      );
+    }
+    // When an update IS available, the update prompt dialog shows
+    // itself — nothing else to do here.
+  }
+
+  // -- Detail pages (in place, with a back row) -------------------------------
+  Widget _detailHeader(AppPalette p, String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton(
+          onPressed: () => setState(() => _page = null),
+          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+          child: Text(
+            '‹ Back to Settings',
+            style: TextStyle(color: p.accent.accent, fontSize: 13),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: displayStyle(p, size: 22, weight: FontWeight.w700),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _whatsNewPage(AppPalette p) {
+    final c = p.c;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _detailHeader(p, 'What\'s New'),
+        FutureBuilder<AppUpdateInfo?>(
+          future: appState.fetchLatestRelease(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final info = snapshot.data;
+            if (info == null) {
+              return Text(
+                'No release notes yet. Check back after the next release — or pull down the Feed to refresh.',
+                style: bodyStyle(p, size: 14, color: c.muted),
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Version ${info.latestVersion} · ${timeAgo(info.updatedAt)}',
+                  style: monoStyle(p, size: 10, color: p.accent.accent),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  info.notes.isEmpty
+                      ? 'No notes for this release.'
+                      : info.notes,
+                  style: bodyStyle(p, size: 14, color: c.textSub),
+                ),
+                if (info.isNewerThan(AppConstants.currentVersion)) ...[
+                  const SizedBox(height: 20),
+                  GoldButton(
+                    palette: p,
+                    label: 'Update to ${info.latestVersion}',
+                    onPressed: () async {
+                      await appState.startUpdateDownload();
+                    },
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _privacyPage(AppPalette p) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _detailHeader(p, 'Privacy Policy'),
+        Text(
+          kPrivacyPolicyText,
+          style: bodyStyle(p, size: 14, color: p.c.textSub),
+        ),
+      ],
+    );
+  }
+
+  Widget _aboutPage(AppPalette p) {
+    final c = p.c;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _detailHeader(p, 'About'),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+          decoration: BoxDecoration(
+            color: c.surface,
+            border: Border.all(color: c.border),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              AppLogo(palette: p, fontSize: 17),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Arxiv · v${AppConstants.currentVersion}',
+                      style: bodyStyle(p, size: 14, weight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'A paper library for students.',
+                      style: bodyStyle(p, size: 12, color: c.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Browse research papers, read them in the app, submit your own, and follow the latest papers from arXiv. Built with Flutter and Firebase.',
+          style: bodyStyle(p, size: 14, color: c.textSub),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Project page: github.com/virgility9/arxivpanel',
+          style: bodyStyle(p, size: 13, color: c.muted),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = theme.palette;
     final c = p.c;
-    final a = p.accent;
     final narrow = MediaQuery.of(context).size.width < 700;
+    final user = appState.user;
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -255,7 +499,7 @@ class SettingsScreen extends StatelessWidget {
                         p,
                         size: 9,
                         letterSpacing: 0.15,
-                        color: a.accent,
+                        color: p.accent.accent,
                       ),
                     ),
                   ),
@@ -285,94 +529,139 @@ class SettingsScreen extends StatelessWidget {
                     narrow ? 16 : 20,
                     120,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Appearance
-                      _section(p, 'Appearance'),
+                  child: _page == _SettingsPage.whatsNew
+                      ? _whatsNewPage(p)
+                      : _page == _SettingsPage.privacy
+                          ? _privacyPage(p)
+                          : _page == _SettingsPage.about
+                              ? _aboutPage(p)
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Appearance
+                                    _section(p, 'Appearance'),
 
-                      // Color Mode
-                      _groupTitle(p, 'Color Mode'),
-                      // Color Mode — both cards keep an identical layout in
-                      // either mode (the check-badge slot is always laid
-                      // out), so switching modes never resizes them.
-                      Row(
-                        children: [
-                          _modeCard(p, AppMode.dark, narrow),
-                          const SizedBox(width: 10),
-                          _modeCard(p, AppMode.light, narrow),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Accent Color
-                      _groupTitle(p, 'Accent Color'),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          // Clamp: on web, a hot restart can build one frame
-                          // before the browser reports a size, so maxWidth
-                          // arrives as 0 and (0 - 20) / 3 = -6.7, which makes
-                          // SizedBox throw "negative minimum width". At 0 the
-                          // chips are invisible for that one frame, then the
-                          // real-width frame lays them out normally.
-                          final w =
-                              ((constraints.maxWidth - 20) / 3)
-                                  .clamp(0.0, double.infinity)
-                                  .toDouble();
-                          return Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: AppAccent.values
-                                .map((option) =>
-                                    _accentOption(p, option, w, narrow))
-                                .toList(),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Saved to your account — your theme comes back after you sign out and sign in again.',
-                        style: bodyStyle(p, size: 12, color: c.muted),
-                      ),
-                      const SizedBox(height: 40),
-
-                      // About
-                      _section(p, 'About'),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: c.surface,
-                          border: Border.all(color: c.border),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            AppLogo(palette: p, fontSize: 17),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Research Library · v1.0',
-                                    style: monoStyle(
-                                      p,
-                                      size: 10,
-                                      letterSpacing: 0.04,
+                                    // Color Mode
+                                    _groupTitle(p, 'Color Mode'),
+                                    // Color Mode — both cards keep an identical layout in
+                                    // either mode (the check-badge slot is always laid
+                                    // out), so switching modes never resizes them.
+                                    Row(
+                                      children: [
+                                        _modeCard(p, AppMode.dark, narrow),
+                                        const SizedBox(width: 10),
+                                        _modeCard(p, AppMode.light, narrow),
+                                      ],
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                                    const SizedBox(height: 32),
+
+                                    // Accent Color
+                                    _groupTitle(p, 'Accent Color'),
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        // Clamp: on web, a hot restart can build one frame
+                                        // before the browser reports a size, so maxWidth
+                                        // arrives as 0 and (0 - 20) / 3 = -6.7, which makes
+                                        // SizedBox throw "negative minimum width". At 0 the
+                                        // chips are invisible for that one frame, then the
+                                        // real-width frame lays them out normally.
+                                        final w =
+                                            ((constraints.maxWidth - 20) / 3)
+                                                .clamp(0.0, double.infinity)
+                                                .toDouble();
+                                        return Wrap(
+                                          spacing: 10,
+                                          runSpacing: 10,
+                                          children: AppAccent.values
+                                              .map((option) =>
+                                                  _accentOption(p, option, w, narrow))
+                                              .toList(),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Saved to your account — your theme comes back after you sign out and sign in again.',
+                                      style: bodyStyle(p, size: 12, color: c.muted),
+                                    ),
+                                    const SizedBox(height: 40),
+
+                                    // Account
+                                    _section(p, 'Account'),
+                                    _row(
+                                      p,
+                                      icon: '👤',
+                                      title: 'Profile',
+                                      subtitle: user == null
+                                          ? 'Sign in to view your profile'
+                                          : user.username,
+                                      onTap: () {
+                                        if (user != null) {
+                                          appState.navigate(AppView.profile);
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(height: 32),
+
+                                    // App
+                                    _section(p, 'App'),
+                                    _row(
+                                      p,
+                                      icon: '✨',
+                                      title: 'What\'s New',
+                                      subtitle:
+                                          'Version ${AppConstants.currentVersion} — see the latest release notes',
+                                      onTap: () => setState(
+                                        () => _page = _SettingsPage.whatsNew,
+                                      ),
+                                    ),
+                                    _row(
+                                      p,
+                                      icon: '⬇️',
+                                      title: 'Check for updates',
+                                      subtitle: _checkingUpdate
+                                          ? 'Checking…'
+                                          : 'See if a newer version is out',
+                                      onTap: _checkForUpdates,
+                                    ),
+                                    _row(
+                                      p,
+                                      icon: '❓',
+                                      title: 'Help',
+                                      subtitle:
+                                          'Take the tour again — Library, Feed, Contest, Submit',
+                                      onTap: () => OnboardingTour.show(
+                                        context,
+                                        appState: appState,
+                                        theme: theme,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 32),
+
+                                    // Info
+                                    _section(p, 'Info'),
+                                    _row(
+                                      p,
+                                      icon: '📖',
+                                      title: 'About',
+                                      subtitle:
+                                          'Arxiv v${AppConstants.currentVersion}',
+                                      onTap: () => setState(
+                                        () => _page = _SettingsPage.about,
+                                      ),
+                                    ),
+                                    _row(
+                                      p,
+                                      icon: '🔒',
+                                      title: 'Privacy Policy',
+                                      subtitle:
+                                          'What the app collects and where it lives',
+                                      onTap: () => setState(
+                                        () => _page = _SettingsPage.privacy,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                 ),
               ),
             ),

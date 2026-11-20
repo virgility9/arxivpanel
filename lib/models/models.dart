@@ -21,6 +21,7 @@ class AppUser {
     this.lastSeenAnnouncementAt,
     this.themeMode,
     this.themeAccent,
+    this.hasSeenOnboarding = false,
   });
 
   final String id;
@@ -45,6 +46,10 @@ class AppUser {
   final String? themeMode;
   final String? themeAccent;
 
+  /// True once the user has seen (or skipped) the first-time help tour.
+  /// False / missing on old accounts, so they get the tour once too.
+  final bool hasSeenOnboarding;
+
   AppUser copyWith({
     String? username,
     String? email,
@@ -57,6 +62,7 @@ class AppUser {
     DateTime? lastSeenAnnouncementAt,
     String? themeMode,
     String? themeAccent,
+    bool? hasSeenOnboarding,
   }) {
     return AppUser(
       id: id,
@@ -72,6 +78,7 @@ class AppUser {
           lastSeenAnnouncementAt ?? this.lastSeenAnnouncementAt,
       themeMode: themeMode ?? this.themeMode,
       themeAccent: themeAccent ?? this.themeAccent,
+      hasSeenOnboarding: hasSeenOnboarding ?? this.hasSeenOnboarding,
     );
   }
 
@@ -100,6 +107,11 @@ class AppUser {
     }
     if (themeAccent != null) {
       data['themeAccent'] = themeAccent;
+    }
+    // Only write the tour flag once seen: a false here would be a
+    // no-op write, and legacy docs simply read as false.
+    if (hasSeenOnboarding) {
+      data['hasSeenOnboarding'] = true;
     }
     return data;
   }
@@ -131,6 +143,7 @@ class AppUser {
       lastSeenAnnouncementAt: parsedLastSeen,
       themeMode: json['themeMode'] as String?,
       themeAccent: json['themeAccent'] as String?,
+      hasSeenOnboarding: json['hasSeenOnboarding'] as bool? ?? false,
     );
   }
 }
@@ -782,11 +795,13 @@ class Announcement {
 }
 
 /// The latest app version the devs published, stored in Firestore at
-/// `app_config/update` so no Play Store is needed.
+/// A published release: the latest version from GitHub Releases, so no
+/// Play Store is needed and no admin form has to publish it.
 ///
-/// The admin sets it from the Admin console (or the Firebase console).
-/// The app compares [latestVersion] with the version it was built with
-/// and shows a Download / Later prompt when a newer one exists.
+/// The release is created with `scripts/release.ps1` after
+/// `flutter build apk --release`. The app compares [latestVersion] with
+/// the version it was built with and shows an Update / Later prompt
+/// when a newer one exists. [notes] is the release body (What's New).
 class AppUpdateInfo {
   const AppUpdateInfo({
     required this.latestVersion,

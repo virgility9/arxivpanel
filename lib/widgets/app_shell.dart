@@ -13,6 +13,7 @@ import '../models/models.dart';
 import '../screens/admin_screen.dart';
 import '../screens/feed_screen.dart';
 import '../screens/library_screen.dart';
+import '../screens/onboarding_tour.dart';
 import '../screens/polls_screen.dart';
 import '../screens/post_paper_screen.dart';
 import '../screens/profile_screen.dart';
@@ -94,6 +95,9 @@ class AppShell extends StatelessWidget {
             Positioned.fill(child: GrainTexture(palette: palette)),
             // Shows the "new version available" prompt once per session.
             _UpdatePrompt(appState: appState, theme: theme),
+            // Shows the first-time help tour once per account, right
+            // after a new user registers and signs in.
+            _OnboardingPrompt(appState: appState, theme: theme),
             // Toast stack
             Positioned(
               left: 16,
@@ -187,7 +191,7 @@ class AppShell extends StatelessWidget {
         return ProfileScreen(
             appState: appState, theme: theme, onAuthPrompt: onAuthPrompt);
       case AppView.settings:
-        return SettingsScreen(theme: theme);
+        return SettingsScreen(theme: theme, appState: appState);
       case AppView.admin:
         if (appState.user?.isAdmin != true) {
           return LibraryScreen(
@@ -1022,6 +1026,45 @@ class _BottomNav extends StatelessWidget {
 /// "Update" downloads the APK inside the app (Android DownloadManager,
 /// progress in the notification shade, then the system installer) — no
 /// browser, no Play Store account needed. On web it opens the link.
+// Shows the first-time help tour once per account: when the signed-in
+// user has never seen (or skipped) it, the dialog opens once for that
+// uid this session. Skip / Got it marks it seen, so it never shows
+// again; Settings > Help can still re-open it any time.
+class _OnboardingPrompt extends StatefulWidget {
+  const _OnboardingPrompt({required this.appState, required this.theme});
+
+  final AppState appState;
+  final ThemeProvider theme;
+
+  @override
+  State<_OnboardingPrompt> createState() => _OnboardingPromptState();
+}
+
+class _OnboardingPromptState extends State<_OnboardingPrompt> {
+  String? _shownForUid;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = widget.appState;
+    if (appState.shouldShowOnboarding) {
+      final uid = appState.user!.id;
+      if (_shownForUid != uid) {
+        _shownForUid = uid;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            OnboardingTour.show(
+              context,
+              appState: appState,
+              theme: widget.theme,
+            );
+          }
+        });
+      }
+    }
+    return const SizedBox.shrink();
+  }
+}
+
 class _UpdatePrompt extends StatefulWidget {
   const _UpdatePrompt({required this.appState, required this.theme});
 
