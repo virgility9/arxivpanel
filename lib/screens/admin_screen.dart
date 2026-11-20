@@ -2158,7 +2158,7 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 }
 
-/// Line chart for the Library Statistics panel: papers vs users per day.
+/// Bar chart for the Library Statistics panel: papers vs users per day.
 /// No chart package is used on purpose — a new pub dependency would need a
 /// network fetch on virgil's flaky connection, so this is plain CustomPaint.
 class _StatsChartPainter extends CustomPainter {
@@ -2231,39 +2231,44 @@ class _StatsChartPainter extends CustomPainter {
       drawLabel('${(yMax * f).round()}', 0, gy - 6);
     }
 
-    void drawSeries(List<int> values, Color color) {
-      // A series that is zero every day draws a flat line along the
-      // bottom of the chart — on 30D that read as a stray line under
-      // the rising Papers line, so it is skipped entirely.
-      if (values.isEmpty || values.every((v) => v == 0)) return;
-      final path = Path();
-      for (var i = 0; i < values.length; i++) {
-        final px = x(i);
-        final py = y(values[i]);
-        if (i == 0) {
-          path.moveTo(px, py);
-        } else {
-          path.lineTo(px, py);
-        }
-      }
-      final linePaint = Paint()
-        ..color = color
-        ..strokeWidth = 2.5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-      canvas.drawPath(path, linePaint);
-      // Dots on each point, only when sparse enough to read.
-      if (values.length <= 31) {
-        final dotPaint = Paint()..color = color;
-        for (var i = 0; i < values.length; i++) {
-          canvas.drawCircle(Offset(x(i), y(values[i])), 3, dotPaint);
+    // Bars, grouped per day when both series have data. A series that
+    // is zero every day draws nothing, so it is skipped — that also
+    // keeps the other series centered in its slot instead of offset
+    // to one side.
+    final active = <(List<int>, Color)>[
+      if (paperCounts.any((v) => v != 0)) (paperCounts, paperColor),
+      if (userCounts.any((v) => v != 0)) (userCounts, userColor),
+    ];
+    if (active.isNotEmpty) {
+      final slotW = plotW / days.length;
+      final groupW = slotW * 0.8;
+      // A gap between paired bars only when the slot is wide enough
+      // for it; on 90D the slot is ~3px and the gap would eat the bar.
+      final gap = active.length > 1 && slotW >= 10 ? 1.0 : 0.0;
+      final barW = (groupW - gap * (active.length - 1)) / active.length;
+      final radius = Radius.circular(barW / 2 < 2 ? barW / 2 : 2);
+      for (var i = 0; i < days.length; i++) {
+        final groupLeft = left + slotW * (i + 0.5) - groupW / 2;
+        for (var j = 0; j < active.length; j++) {
+          final v = active[j].$1[i];
+          if (v == 0) continue;
+          final barTop = y(v);
+          canvas.drawRRect(
+            RRect.fromRectAndCorners(
+              Rect.fromLTWH(
+                groupLeft + j * (barW + gap),
+                barTop,
+                barW,
+                top + plotH - barTop,
+              ),
+              topLeft: radius,
+              topRight: radius,
+            ),
+            Paint()..color = active[j].$2,
+          );
         }
       }
     }
-
-    drawSeries(paperCounts, paperColor);
-    drawSeries(userCounts, userColor);
 
     // X labels: every day for a week, weekly ticks at 30D, every 15
     // days at 90D — 13 weekly labels crowd a phone-width chart.
