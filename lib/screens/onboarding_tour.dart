@@ -8,7 +8,6 @@ library;
 import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
-import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/shared.dart';
 
