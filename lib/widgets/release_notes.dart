@@ -241,7 +241,7 @@ class ReleaseNotesView extends StatelessWidget {
             baseline: TextBaseline.alphabetic,
             child: GestureDetector(
               onTap: () => onOpenUrl(prUrl),
-              child: Text('PR #' + number, style: linkStyle),
+              child: Text('PR #$number', style: linkStyle),
             ),
           ),
         );
@@ -303,7 +303,7 @@ class ReleaseNotesView extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'All commits in v' + version,
+                        'All commits in v$version',
                         style: bodyStyle(p, size: 12, color: c.muted),
                       ),
                     ],
