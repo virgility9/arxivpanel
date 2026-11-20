@@ -170,6 +170,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     child: Image.memory(
                                       avatarBytes!,
                                       fit: BoxFit.contain,
+                                      gaplessPlayback: true,
                                     ),
                                   ),
                                 )
@@ -673,15 +674,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: ClipOval(
         // Custom avatars are inline data URLs; presets are network URLs.
+        // gaplessPlayback: the app rebuilds on every AppState notify,
+        // and without it the photo drops out for a frame while the
+        // fresh image object decodes — the profile flicker.
         child: isDataUrl(user.avatar)
             ? Image.memory(
                 dataUrlToBytes(user.avatar),
                 fit: BoxFit.cover,
+                gaplessPlayback: true,
                 errorBuilder: (_, _, _) => fallback,
               )
             : Image.network(
                 user.avatar,
                 fit: BoxFit.cover,
+                gaplessPlayback: true,
                 loadingBuilder: (ctx, child, progress) =>
                     progress == null ? child : fallback,
                 errorBuilder: (_, _, _) => fallback,

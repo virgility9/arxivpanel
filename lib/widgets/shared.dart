@@ -265,7 +265,7 @@ class NetImage extends StatelessWidget {
   }
 }
 
-class AvatarImage extends StatelessWidget {
+class AvatarImage extends StatefulWidget {
   const AvatarImage({
     super.key,
     required this.url,
@@ -278,6 +278,42 @@ class AvatarImage extends StatelessWidget {
   final double size;
   final Color? borderColor;
   final double borderWidth;
+
+  @override
+  State<AvatarImage> createState() => _AvatarImageState();
+}
+
+class _AvatarImageState extends State<AvatarImage> {
+  // One image object per avatar URL, kept across rebuilds. The app
+  // rebuilds on every AppState notify (tab change, like, bookmark...),
+  // and the old code decoded the base64 data URL into a fresh
+  // MemoryImage on every build — a new provider object is a cache miss
+  // and a fresh decode, and Image drops the old picture while decoding
+  // (gaplessPlayback defaults to false), so the avatar flashed blank
+  // for a frame on every action. Holding the provider here means
+  // rebuilds reuse the decoded image; gaplessPlayback covers the
+  // actual photo-change case.
+  late ImageProvider _provider;
+
+  @override
+  void initState() {
+    super.initState();
+    _provider = _providerFor(widget.url);
+  }
+
+  @override
+  void didUpdateWidget(AvatarImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.url != oldWidget.url) {
+      _provider = _providerFor(widget.url);
+    }
+  }
+
+  ImageProvider _providerFor(String url) {
+    return isDataUrl(url)
+        ? MemoryImage(dataUrlToBytes(url))
+        : NetworkImage(url);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -297,30 +333,23 @@ class AvatarImage extends StatelessWidget {
     // NOTE: the fallback is a Material icon, not an emoji — emoji glyphs
     // like 👤 are missing from Windows fonts and trigger Flutter's
     // "could not find a set of Noto fonts" warning.
-    final Widget image = isDataUrl(url)
-        ? Image.memory(
-            dataUrlToBytes(url),
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, _, _) => fallback,
-          )
-        : Image.network(
-            url,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, _, _) => fallback,
-          );
+    final Widget image = Image(
+      image: _provider,
+      width: widget.size,
+      height: widget.size,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (context, _, _) => fallback,
+    );
     return Container(
-      width: size,
-      height: size,
+      width: widget.size,
+      height: widget.size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: borderWidth > 0
+        border: widget.borderWidth > 0
             ? Border.all(
-                color: borderColor ?? Colors.transparent,
-                width: borderWidth,
+                color: widget.borderColor ?? Colors.transparent,
+                width: widget.borderWidth,
               )
             : null,
       ),
