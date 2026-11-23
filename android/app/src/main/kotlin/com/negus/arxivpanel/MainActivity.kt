@@ -100,6 +100,12 @@ class MainActivity : FlutterActivity() {
         }
         val safeVersion = version.filter { it.isLetterOrDigit() || it == '.' || it == '-' }
         val fileName = if (safeVersion.isEmpty()) "arxiv-update.apk" else "arxiv-$safeVersion.apk"
+        // A previous download of this version may still sit in the folder
+        // (e.g. a stale build replaced on the release). Delete it so the
+        // new download cannot be shadowed by the old file.
+        val downloadsDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        val oldFile = downloadsDir?.let { File(it, fileName) }
+        if (oldFile != null && oldFile.exists()) oldFile.delete()
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             setTitle("Arxiv update")
             setDescription("Downloading version $version")

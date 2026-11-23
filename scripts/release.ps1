@@ -64,6 +64,26 @@ if (-not (Test-Path $apk)) {
   exit 1
 }
 
+# 3b. The in-app version constant must match too. The app reports
+# AppConstants.currentVersion, not pubspec, so a mismatch makes the
+# Update prompt loop forever (phone says the old version after install).
+$constants = Get-Content lib\data\constants.dart -Raw
+if ($constants -notmatch "currentVersion\s*=\s*'$([regex]::Escape($Version))'") {
+  Write-Host "lib/data/constants.dart currentVersion is not '$Version'. Set it to '$Version', rebuild, then re-run this script." -ForegroundColor Red
+  exit 1
+}
+
+# 3c. The APK must be a fresh build, not a stale file from an older
+# release. A stale APK uploads fine and the phone then installs the old
+# version while the release says a new one exists (1.0.4 shipped the
+# 1.0.3 APK this way because the rebuild was skipped).
+$headTime = [int]((git log -1 --format="%ct").Trim())
+$apkTime = [int]([System.DateTimeOffset](Get-Item $apk).LastWriteTimeUtc).ToUnixTimeSeconds()
+if ($apkTime -lt $headTime) {
+  Write-Host "The APK at $apk is older than the latest commit. Run: flutter build apk --release" -ForegroundColor Red
+  exit 1
+}
+
 # 4. Tag once, push the tag.
 $tag = "v$Version"
 $existingTag = git tag --list $tag
