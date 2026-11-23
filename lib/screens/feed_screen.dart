@@ -494,6 +494,10 @@ class _NewsCardState extends State<_NewsCard> {
   /// entirely instead of leaving a tall empty box with a 📄 in it.
   bool _imageFailed = false;
 
+  /// True while the cover tries the sharp 800px variant: if that fails,
+  /// the card falls back to the feed thumbnail once before giving up.
+  bool _useHiRes = true;
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
@@ -531,14 +535,22 @@ class _NewsCardState extends State<_NewsCard> {
               // leaving an empty box behind.
               if (item.imageUrl.isNotEmpty && !_imageFailed)
                 NetImage(
-                  url: item.imageUrl,
+                  url: _useHiRes
+                      ? NewsItem.hiResImageUrl(item.imageUrl)
+                      : item.imageUrl,
                   width: double.infinity,
                   height: 190,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(12),
                   ),
                   onError: () {
-                    if (!_imageFailed) {
+                    if (_imageFailed) return;
+                    // Sharp variant failed (e.g. an old item with no 800px
+                    // file): retry once with the feed thumbnail, then hide.
+                    final hiRes = NewsItem.hiResImageUrl(item.imageUrl);
+                    if (_useHiRes && hiRes != item.imageUrl) {
+                      setState(() => _useHiRes = false);
+                    } else {
                       setState(() => _imageFailed = true);
                     }
                   },

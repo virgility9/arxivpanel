@@ -222,6 +222,7 @@ class NetImage extends StatelessWidget {
           width: width,
           height: height,
           fit: fit,
+          filterQuality: FilterQuality.high,
           cacheWidth: cacheWidth,
           cacheHeight: cacheHeight,
           // Loading placeholder so images don't pop in from blank.

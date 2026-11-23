@@ -1506,12 +1506,31 @@ class _AdminScreenState extends State<AdminScreen> {
 
   // ------------------------------------------------------------- users list
 
+  /// Small caps header for one user group ("ADMINS · 2").
+  Widget _userGroupLabel(AppPalette p, String title, int count) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        '${title.toUpperCase()} · $count',
+        style: monoStyle(
+          p,
+          size: 10,
+          weight: FontWeight.w600,
+          letterSpacing: 0.12,
+          color: p.c.muted,
+        ),
+      ),
+    );
+  }
+
   /// User management, backed by the live `users` collection stream.
   /// Profiles are publicly readable per firestore.rules; deletion is
   /// admin-only. Admin grants happen in the Firebase console (the rules
   /// don't allow client-side isAdmin changes), hence the hint below.
   Widget _buildUsers(AppPalette p) {
     final users = _filteredUsers;
+    final admins = users.where((u) => u.isAdmin).toList();
+    final regulars = users.where((u) => !u.isAdmin).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1578,8 +1597,17 @@ class _AdminScreenState extends State<AdminScreen> {
                   : 'Try a different search.',
             ),
           )
-        else
-          ...users.map((u) => _buildUserRow(p, u)),
+        else ...[
+          if (admins.isNotEmpty) ...[
+            _userGroupLabel(p, 'Admins', admins.length),
+            ...admins.map((u) => _buildUserRow(p, u)),
+          ],
+          if (regulars.isNotEmpty) ...[
+            if (admins.isNotEmpty) const SizedBox(height: 16),
+            _userGroupLabel(p, 'Users', regulars.length),
+            ...regulars.map((u) => _buildUserRow(p, u)),
+          ],
+        ],
       ],
     );
   }

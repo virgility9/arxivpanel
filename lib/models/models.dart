@@ -702,6 +702,18 @@ class NewsItem {
     );
   }
 
+  /// Sharp version of a feed thumbnail.
+  ///
+  /// Phys.org's rss2json thumbnails are 90x90 (`/csz/news/tmb/`) — stretched
+  /// to a full-width cover they blur. The same file exists at 800px wide
+  /// under `/csz/news/800/` (verified live on the whole current feed), so
+  /// the cover uses that. Any other URL is returned unchanged.
+  static String hiResImageUrl(String url) {
+    const marker = '/csz/news/tmb/';
+    if (!url.contains(marker)) return url;
+    return url.replaceFirst(marker, '/csz/news/800/');
+  }
+
   /// Strips HTML tags and common entities from a feed summary.
   static String _plainText(String raw) {
     var text = raw.replaceAll(RegExp(r'<[^>]*>'), ' ');

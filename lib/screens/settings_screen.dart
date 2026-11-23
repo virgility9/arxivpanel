@@ -41,6 +41,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   _SettingsPage? _page;
   bool _checkingUpdate = false;
 
+  /// Email field for the Forgot Password dialog, prefilled with the
+  /// signed-in account's email when there is one.
+  final _resetEmailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _resetEmailController.dispose();
+    super.dispose();
+  }
+
   ThemeProvider get theme => widget.theme;
   AppState get appState => widget.appState;
 
@@ -307,6 +317,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Forgot Password: asks for the account email (prefilled when signed
+  /// in) and sends Firebase's password-reset email. The email's wording
+  /// and logo live in the Firebase console template, not in code.
+  Future<void> _openForgotPassword() async {
+    _resetEmailController.text = appState.user?.email ?? '';
+    var error = '';
+    final email = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Forgot Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter your account email and we will send you a link to reset your password.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _resetEmailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  hintText: 'Email address',
+                  errorText: error.isEmpty ? null : error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final value = _resetEmailController.text.trim();
+                if (value.isEmpty || !value.contains('@')) {
+                  setDialogState(
+                    () => error = 'Enter a valid email address.',
+                  );
+                  return;
+                }
+                Navigator.of(ctx).pop(value);
+              },
+              child: const Text('Send'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (email == null || email.isEmpty || !mounted) return;
+    final err = await appState.sendPasswordReset(email: email);
+    if (!mounted) return;
+    if (err != null) {
+      appState.showToast(err, '⚠️');
+    } else {
+      appState.showToast('Reset link sent to $email.', '📧');
+    }
   }
 
   Future<void> _openUrl(String url) async {
@@ -610,6 +681,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           appState.navigate(AppView.profile);
                                         }
                                       },
+                                    ),
+                                    _row(
+                                      p,
+                                      icon: '🔑',
+                                      title: 'Forgot Password',
+                                      subtitle:
+                                          'Email a link to reset your password',
+                                      onTap: _openForgotPassword,
                                     ),
                                     const SizedBox(height: 32),
 

@@ -29,6 +29,14 @@ import 'motion.dart';
 import 'release_notes.dart';
 import 'shared.dart';
 
+/// First word of a display name ("Niño Anton" -> "Niño"). The top-right
+/// header shows the first name only.
+String _firstName(String name) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return trimmed.split(RegExp(r'\s+')).first;
+}
+
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.appState, required this.theme});
 
@@ -642,7 +650,7 @@ class _Navbar extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            user.username,
+                            _firstName(user.username),
                             style: bodyStyle(
                               palette,
                               size: 12,
@@ -808,7 +816,7 @@ class _UserMenu extends StatelessWidget {
             AvatarImage(url: user.avatar, size: 26),
             const SizedBox(width: 8),
             Text(
-              user.username,
+              _firstName(user.username),
               style: TextStyle(
                 color: c.text,
                 fontSize: 13,
