@@ -329,7 +329,7 @@ class FirebaseSetupPrompt extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🔥', style: TextStyle(fontSize: 48)),
+                  Icon(Icons.warning, size: 48, color: c.text),
                   const SizedBox(height: 16),
                   Text(
                     'Firebase not configured',

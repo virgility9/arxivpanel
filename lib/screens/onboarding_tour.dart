@@ -14,33 +14,33 @@ import '../widgets/shared.dart';
 class OnboardingTour {
   OnboardingTour._();
 
-  static const _steps = <({String icon, String title, String body})>[
+  static const _steps = <({IconData icon, String title, String body})>[
     (
-      icon: '📚',
+      icon: Icons.library_books,
       title: 'Welcome to Arxiv',
       body:
           'A paper library for students. Browse research papers, read them in the app, and save the ones you want to come back to.',
     ),
     (
-      icon: '🔍',
+      icon: Icons.search,
       title: 'Library',
       body:
           'Find papers by field or search. Tap a card to open it, tap the heart to like it, and tap the bookmark to save it to your profile.',
     ),
     (
-      icon: '📰',
+      icon: Icons.newspaper,
       title: 'Feed',
       body:
           'See the latest papers from arXiv and today\'s science news. Pull down to refresh, tap a card to open the article.',
     ),
     (
-      icon: '🏆',
+      icon: Icons.emoji_events,
       title: 'Contest',
       body:
           'See the most-liked papers and read announcements from the admins here. New announcements ping this tab.',
     ),
     (
-      icon: '⬆️',
+      icon: Icons.upload,
       title: 'Submit a paper',
       body:
           'Tap the gold button at the bottom right to submit your own paper. Pick a PDF from your device — it is reviewed before it appears in the Library.',
@@ -98,7 +98,7 @@ class _TourDialogState extends State<_TourDialog> {
         children: [
           Row(
             children: [
-              Text(step.icon, style: const TextStyle(fontSize: 28)),
+              Icon(step.icon, size: 28, color: c.text),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(

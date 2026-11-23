@@ -103,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 } catch (e) {
                   widget.appState.showToast(
                     'Could not process the image (${shortError(e)})',
-                    '⚠️',
+                    Icons.warning,
                   );
                   setDialogState(() => saving = false);
                   return;
@@ -122,7 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // updateUser already toasts on success; surface failures too
               // and re-enable the actions instead of leaving the dialog
               // stuck in the saving state.
-              widget.appState.showToast('Could not save profile', '⚠️');
+              widget.appState.showToast('Could not save profile', Icons.warning);
               setDialogState(() => saving = false);
               return;
             }
@@ -201,7 +201,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             widget.appState.showToast(
                                               'Could not read the image '
                                               '(${shortError(e)})',
-                                              '⚠️',
+                                              Icons.warning,
                                             );
                                           }
                                         },
@@ -755,7 +755,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (uri.scheme.isEmpty) uri = Uri.tryParse('https://${raw.trim()}');
     if (uri == null) return;
     if (!await launchUrl(uri)) {
-      widget.appState.showToast('Could not open website', '⚠️');
+      widget.appState.showToast('Could not open website', Icons.warning);
     }
   }
 
@@ -772,7 +772,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('👤', style: TextStyle(fontSize: narrow ? 44 : 56)),
+          Icon(Icons.person, size: narrow ? 44 : 56, color: c.muted),
           SizedBox(height: narrow ? 16 : 20),
           Text(
             'Your Scholar Profile',
@@ -1113,7 +1113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 : IconButton(
                     onPressed: () => onDelete(paper),
                     tooltip: 'Delete paper',
-                    icon: const Text('🗑', style: TextStyle(fontSize: 16)),
+                    icon: const Icon(Icons.delete, size: 16),
                   ),
           ),
       ],

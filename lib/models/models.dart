@@ -5,6 +5,7 @@
 library;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/widgets.dart';
 
 /// A registered user of the platform.
 class AppUser {
@@ -446,13 +447,14 @@ class ReadEntry {
 /// The top-level navigation views (mirrors the `View` union type).
 enum AppView { library, feed, reader, post, polls, profile, settings, admin }
 
-/// A transient toast notification.
+/// A transient toast notification. [icon] is a solid Material icon
+/// (never an emoji: emoji glyphs render as boxes on some Windows fonts).
 class AppToast {
   const AppToast({required this.id, required this.message, this.icon});
 
   final String id;
   final String message;
-  final String? icon;
+  final IconData? icon;
 }
 
 /// A single answer option inside a [Poll].

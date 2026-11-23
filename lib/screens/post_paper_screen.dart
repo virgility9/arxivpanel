@@ -70,6 +70,13 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     _abstract = TextEditingController();
     _institution = TextEditingController();
     _tags = TextEditingController();
+    // The system back button asks before discarding a half-filled form,
+    // so typing here registers the discard confirm as the inner back
+    // action (see _syncInnerBack).
+    _title.addListener(_syncInnerBack);
+    _abstract.addListener(_syncInnerBack);
+    _institution.addListener(_syncInnerBack);
+    _tags.addListener(_syncInnerBack);
   }
 
   @override
@@ -79,7 +86,65 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
     _institution.dispose();
     _tags.dispose();
     _revokePreviewUrl();
+    widget.appState.setInnerBackHandler(null);
     super.dispose();
+  }
+
+  /// True when the form holds anything worth protecting from an
+  /// accidental back press (the field picker always has a value, so it
+  /// does not count).
+  bool get _isDirty =>
+      _title.text.trim().isNotEmpty ||
+      _abstract.text.trim().isNotEmpty ||
+      _institution.text.trim().isNotEmpty ||
+      _tags.text.trim().isNotEmpty ||
+      _pdfBytes != null;
+
+  /// Registers (or clears) the discard confirm as the system-back action,
+  /// matching the form's current contents.
+  void _syncInnerBack() {
+    if (!mounted) return;
+    widget.appState.setInnerBackHandler(
+      _isDirty ? _confirmDiscard : null,
+    );
+  }
+
+  /// System-back action while the form has content: confirm before the
+  /// typed title, text or picked PDF is thrown away.
+  void _confirmDiscard() {
+    final p = widget.theme.palette;
+    final c = p.c;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: c.border),
+        ),
+        title: Text(
+          'Discard this paper?',
+          style: displayStyle(p, size: 18, weight: FontWeight.w700),
+        ),
+        content: Text(
+          'Your title, text and PDF will be lost.',
+          style: bodyStyle(p, size: 14, color: c.textSub),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              widget.appState.navigate(AppView.library);
+            },
+            child: Text('Discard', style: TextStyle(color: p.danger)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Human-readable size of the picked PDF (e.g. "2.4 MB").
@@ -173,6 +238,8 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       _loading = false;
       _submitted = true;
     });
+    // The success screen replaces the form: back no longer discards.
+    widget.appState.setInnerBackHandler(null);
   }
 
   /// Revokes the picked PDF's blob URL (web only). Called when the PDF is
@@ -203,10 +270,11 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           _pdfCoverPreview = buildPdfView(_pdfPreviewUrl!);
         }
       });
+      _syncInnerBack();
     } catch (e) {
       widget.appState.showToast(
         'Could not read the PDF (${shortError(e)})',
-        '⚠️',
+        Icons.warning,
       );
     }
   }
@@ -215,7 +283,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
   /// same blob URL as the inline cover preview.
   void _previewPdf() {
     if (!kIsWeb) {
-      widget.appState.showToast('PDF preview is only available on web', '⚠️');
+      widget.appState.showToast('PDF preview is only available on web', Icons.warning);
       return;
     }
     final url = _pdfPreviewUrl;
@@ -289,7 +357,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('📄', style: TextStyle(fontSize: narrow ? 44 : 56)),
+          Icon(Icons.description, size: narrow ? 44 : 56, color: c.muted),
           SizedBox(height: narrow ? 16 : 20),
           Text(
             'Submit Your Research',
@@ -328,7 +396,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('📬', style: TextStyle(fontSize: narrow ? 48 : 64)),
+          Icon(Icons.mark_email_read, size: narrow ? 48 : 64, color: a.accent),
           SizedBox(height: narrow ? 16 : 20),
           Text(
             'Paper Submitted!',
@@ -434,7 +502,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           children: [
             GhostButton(
               palette: p,
-              label: '←',
+              icon: Icons.arrow_back,
               minHeight: 44,
               onPressed: () => widget.appState.navigate(AppView.library),
             ),
@@ -606,12 +674,15 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
                     IconButton(
                       onPressed: _loading
                           ? null
-                          : () => setState(() {
+                          : () {
+                              setState(() {
                                 _revokePreviewUrl();
                                 _pdfBytes = null;
                                 _pdfName = null;
                                 _pdfPageCount = null;
-                              }),
+                              });
+                              _syncInnerBack();
+                            },
                       icon: Icon(
                         Icons.close,
                         size: 18,

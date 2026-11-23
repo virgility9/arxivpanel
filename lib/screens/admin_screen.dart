@@ -635,7 +635,8 @@ class _AdminScreenState extends State<AdminScreen> {
     );
     final button = GoldButton(
       palette: p,
-      label: 'Review pending papers →',
+      label: 'Review pending papers',
+      icon: Icons.arrow_forward,
       minHeight: 44,
       onPressed: () => _openPapers('pending'),
     );
@@ -1064,7 +1065,14 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               TextButton(
                 onPressed: () => _openPapers('pending'),
-                child: const Text('View all →'),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('View all'),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward, size: 14),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1315,7 +1323,7 @@ class _AdminScreenState extends State<AdminScreen> {
             p,
             EmptyState(
               palette: p,
-              icon: '🔍',
+              icon: Icons.search,
               title: 'No papers found',
               sub: 'Try changing your search or filters.',
             ),
@@ -1588,7 +1596,7 @@ class _AdminScreenState extends State<AdminScreen> {
             p,
             EmptyState(
               palette: p,
-              icon: '👥',
+              icon: Icons.group,
               title: _userSearch.trim().isEmpty
                   ? 'No users yet'
                   : 'No users found',
@@ -2277,7 +2285,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                           if (!await launchUrl(url)) {
                                             widget.appState.showToast(
                                               'Could not open the PDF link',
-                                              '⚠️',
+                                              Icons.warning,
                                             );
                                           }
                                         },

@@ -120,18 +120,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Row(
               children: [
-                // Fixed-size slot: some emoji glyphs (notably ☀️ on Windows)
-                // render far larger than their font size, so the icon is
-                // fitted into a fixed box and can never blow up the card.
+                // Fixed-size slot keeps the mode icon centred in its card.
                 SizedBox(
                   width: 28,
                   height: 28,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: Text(
-                      dark ? '🌙' : '☀️',
-                      style: const TextStyle(fontSize: 24),
-                    ),
+                  child: Icon(
+                    dark ? Icons.dark_mode : Icons.light_mode,
+                    size: 24,
+                    color: active ? a.accent : c.text,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -172,13 +168,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: active ? a.accent : Colors.transparent,
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    '✓',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: active ? a.accentFg : Colors.transparent,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Icon(
+                    Icons.check,
+                    size: 10,
+                    color: active ? a.accentFg : Colors.transparent,
                   ),
                 ),
               ],
@@ -260,7 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // -- Settings row (Profile / What's New / Help / About / Privacy) --------
   Widget _row(
     AppPalette p, {
-    required String icon,
+    required IconData icon,
     required String title,
     String? subtitle,
     required VoidCallback onTap,
@@ -285,10 +278,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SizedBox(
                   width: 28,
                   height: 28,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: Text(icon, style: const TextStyle(fontSize: 22)),
-                  ),
+                  child: Icon(icon, size: 22, color: c.text),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -310,7 +300,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-                Text('›', style: TextStyle(color: c.muted, fontSize: 20)),
+                Icon(Icons.chevron_right, size: 20, color: c.muted),
               ],
             ),
           ),
@@ -374,9 +364,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final err = await appState.sendPasswordReset(email: email);
     if (!mounted) return;
     if (err != null) {
-      appState.showToast(err, '⚠️');
+      appState.showToast(err, Icons.warning);
     } else {
-      appState.showToast('Reset link sent to $email.', '📧');
+      appState.showToast('Reset link sent to $email.', Icons.mail);
     }
   }
 
@@ -384,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      appState.showToast('Could not open the link.', '⚠️');
+      appState.showToast('Could not open the link.', Icons.warning);
     }
   }
 
@@ -397,7 +387,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!appState.updateAvailable) {
       appState.showToast(
         'You\'re up to date (v${AppConstants.currentVersion}).',
-        '✅',
+        Icons.check_circle,
       );
     }
     // When an update IS available, the update prompt dialog shows
@@ -405,16 +395,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // -- Detail pages (in place, with a back row) -------------------------------
+  /// Opens a detail page and registers the system-back handler so the
+  /// phone's back button returns to the settings list first.
+  void _openPage(_SettingsPage page) {
+    setState(() => _page = page);
+    widget.appState.setInnerBackHandler(_closePage);
+  }
+
+  void _closePage() {
+    setState(() => _page = null);
+    widget.appState.setInnerBackHandler(null);
+  }
+
   Widget _detailHeader(AppPalette p, String title) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextButton(
-          onPressed: () => setState(() => _page = null),
+          onPressed: _closePage,
           style: TextButton.styleFrom(padding: EdgeInsets.zero),
-          child: Text(
-            '‹ Back to Settings',
-            style: TextStyle(color: p.accent.accent, fontSize: 13),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.chevron_left, size: 14, color: p.accent.accent),
+              const SizedBox(width: 2),
+              Text(
+                'Back to Settings',
+                style: TextStyle(color: p.accent.accent, fontSize: 13),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
@@ -671,7 +680,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     _section(p, 'Account'),
                                     _row(
                                       p,
-                                      icon: '👤',
+                                      icon: Icons.person,
                                       title: 'Profile',
                                       subtitle: user == null
                                           ? 'Sign in to view your profile'
@@ -684,7 +693,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     ),
                                     _row(
                                       p,
-                                      icon: '🔑',
+                                      icon: Icons.key,
                                       title: 'Forgot Password',
                                       subtitle:
                                           'Email a link to reset your password',
@@ -696,17 +705,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     _section(p, 'App'),
                                     _row(
                                       p,
-                                      icon: '✨',
+                                      icon: Icons.auto_awesome,
                                       title: 'What\'s New',
                                       subtitle:
                                           'Version ${AppConstants.currentVersion} — see the latest release notes',
-                                      onTap: () => setState(
-                                        () => _page = _SettingsPage.whatsNew,
+                                      onTap: () => _openPage(
+                                        _SettingsPage.whatsNew,
                                       ),
                                     ),
                                     _row(
                                       p,
-                                      icon: '⬇️',
+                                      icon: Icons.download,
                                       title: 'Check for updates',
                                       subtitle: _checkingUpdate
                                           ? 'Checking…'
@@ -715,7 +724,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     ),
                                     _row(
                                       p,
-                                      icon: '❓',
+                                      icon: Icons.help,
                                       title: 'Help',
                                       subtitle:
                                           'Take the tour again — Library, Feed, Contest, Submit',
@@ -731,22 +740,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     _section(p, 'Info'),
                                     _row(
                                       p,
-                                      icon: '📖',
+                                      icon: Icons.info,
                                       title: 'About',
                                       subtitle:
                                           'Arxiv v${AppConstants.currentVersion}',
-                                      onTap: () => setState(
-                                        () => _page = _SettingsPage.about,
+                                      onTap: () => _openPage(
+                                        _SettingsPage.about,
                                       ),
                                     ),
                                     _row(
                                       p,
-                                      icon: '🔒',
+                                      icon: Icons.lock,
                                       title: 'Privacy Policy',
                                       subtitle:
                                           'What the app collects and where it lives',
-                                      onTap: () => setState(
-                                        () => _page = _SettingsPage.privacy,
+                                      onTap: () => _openPage(
+                                        _SettingsPage.privacy,
                                       ),
                                     ),
                                   ],

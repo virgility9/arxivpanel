@@ -38,8 +38,6 @@ const _medalBorders = <Color>[
   Color(0x4DCD7F32), // rgba(205,127,50,0.3)
 ];
 
-const _medals = <String>['🥇', '🥈', '🥉'];
-
 class PollsScreen extends StatefulWidget {
   const PollsScreen({super.key, required this.appState, required this.theme});
 
@@ -209,9 +207,9 @@ class _PollsScreenState extends State<PollsScreen> {
 
   Widget _buildTabs() {
     final tabs = [
-      (key: _Metric.reactions, icon: '❤️', label: 'Most Liked'),
-      (key: _Metric.views, icon: '👁', label: 'Most Read'),
-      (key: _Metric.comments, icon: '💬', label: 'Most Discussed'),
+      (key: _Metric.reactions, icon: Icons.favorite, label: 'Most Liked'),
+      (key: _Metric.views, icon: Icons.visibility, label: 'Most Read'),
+      (key: _Metric.comments, icon: Icons.chat_bubble, label: 'Most Discussed'),
     ];
     return Container(
       decoration: BoxDecoration(
@@ -274,7 +272,7 @@ class _PollsScreenState extends State<PollsScreen> {
         children: [
           Row(
             children: [
-              const Text('📢', style: TextStyle(fontSize: 16)),
+              Icon(Icons.campaign, size: 16, color: p.c.text),
               const SizedBox(width: 8),
               Text(
                 'ANNOUNCEMENTS',
@@ -383,7 +381,7 @@ class _PollsScreenState extends State<PollsScreen> {
     if (top3.isEmpty) {
       return EmptyState(
         palette: p,
-        icon: '🏆',
+        icon: Icons.emoji_events,
         title: 'No papers ranked yet',
         sub: 'Rankings will appear here once papers gather engagement.',
       );
@@ -652,7 +650,7 @@ class _MetricTab extends StatelessWidget {
   });
 
   final AppPalette palette;
-  final String icon;
+  final IconData icon;
   final String label;
   final bool active;
   final Color activeColor;
@@ -683,7 +681,7 @@ class _MetricTab extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(icon, style: const TextStyle(fontSize: 14)),
+              Icon(icon, size: 14, color: active ? activeColor : muted),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -768,9 +766,10 @@ class _PodiumCard extends StatelessWidget {
           Positioned(
             top: 10,
             left: 10,
-            child: Text(
-              _medals[index],
-              style: TextStyle(fontSize: wide ? 24 : 20, height: 1),
+            child: Icon(
+              Icons.emoji_events,
+              size: wide ? 24 : 20,
+              color: _medalColors[index],
             ),
           ),
           // big rank number bottom-right (wide only)
@@ -937,9 +936,10 @@ class _RankingRow extends StatelessWidget {
                 width: wide ? 36 : 28,
                 child: Center(
                   child: isTop3
-                      ? Text(
-                          _medals[index],
-                          style: TextStyle(fontSize: wide ? 22 : 18, height: 1),
+                      ? Icon(
+                          Icons.emoji_events,
+                          size: wide ? 22 : 18,
+                          color: _medalColors[index],
                         )
                       : Text(
                           '#${index + 1}',

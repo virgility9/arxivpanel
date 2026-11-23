@@ -191,7 +191,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Text('📶', style: TextStyle(fontSize: 14)),
+                      Icon(Icons.wifi_off, size: 14, color: c.textSub),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -233,7 +233,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         : filtered.isEmpty
                         ? EmptyState(
                             palette: p,
-                            icon: '📭',
+                            icon: Icons.inbox,
                             title: 'No papers found',
                             sub: 'Try a different search or field filter',
                           )
@@ -279,12 +279,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                       for (final paper in pageItems)
                                         SizedBox(
                                           width: cellWidth,
-                                          child: PaperCard(
-                                            key: ValueKey(paper.id),
-                                            paper: paper,
-                                            appState: widget.appState,
-                                            theme: widget.theme,
-                                            onAuthPrompt: widget.onAuthPrompt,
+                                          child: RepaintBoundary(
+                                            child: PaperCard(
+                                              key: ValueKey(paper.id),
+                                              paper: paper,
+                                              appState: widget.appState,
+                                              theme: widget.theme,
+                                              onAuthPrompt:
+                                                  widget.onAuthPrompt,
+                                            ),
                                           ),
                                         ),
                                     ],
@@ -341,7 +344,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         child: Center(
           child: Column(
             children: [
-              const Text('📶', style: TextStyle(fontSize: 32)),
+              Icon(Icons.wifi_off, size: 32, color: c.muted),
               const SizedBox(height: 16),
               Text(
                 'You\'re offline',

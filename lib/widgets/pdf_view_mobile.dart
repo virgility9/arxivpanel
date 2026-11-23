@@ -112,7 +112,7 @@ class _MobilePdfViewState extends State<_MobilePdfView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('📄', style: TextStyle(fontSize: 32)),
+            const Icon(Icons.description, size: 32),
             const SizedBox(height: 12),
             Text(
               message,

@@ -315,7 +315,7 @@ class _AuthDialogState extends State<AuthDialog> {
                           onPressed: _resetSent ? null : _sendReset,
                           child: Text(
                             _resetSent
-                                ? 'Reset email sent ✓'
+                                ? 'Reset email sent'
                                 : 'Forgot password?',
                           ),
                         ),

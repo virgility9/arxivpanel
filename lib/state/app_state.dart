@@ -15,6 +15,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/auth_repository.dart';
@@ -86,7 +87,7 @@ class AppState extends ChangeNotifier {
         final known = _myNotifications.map((n) => n.id).toSet();
         for (final n in items) {
           if (!known.contains(n.id)) {
-            showToast(n.title, '📬');
+            showToast(n.title, Icons.campaign);
           }
         }
       }
@@ -508,7 +509,7 @@ class AppState extends ChangeNotifier {
     if (_userDataRetries >= _maxUserDataRetries) {
       showToast(
         'Could not load your saved data. Restart the app to try again.',
-        '⚠️',
+        Icons.warning,
       );
       return;
     }
@@ -581,7 +582,7 @@ class AppState extends ChangeNotifier {
     _subscribePapers();
     navigate(AppView.library);
     notifyListeners();
-    showToast('Signed out', '👋');
+    showToast('Signed out', Icons.logout);
   }
 
   /// Persists the edited profile to Firestore and reflects it locally right
@@ -591,7 +592,7 @@ class AppState extends ChangeNotifier {
     await _repo!.updateUser(updated);
     _user = updated;
     notifyListeners();
-    showToast('Profile updated!', '✅');
+    showToast('Profile updated!', Icons.check_circle);
   }
 
   /// Persists the current theme on the signed-in user's profile, so
@@ -622,7 +623,7 @@ class AppState extends ChangeNotifier {
 
   // ---------------------------------------------------------------- toasts
 
-  void showToast(String message, [String? icon]) {
+  void showToast(String message, [IconData? icon]) {
     final id = 't${DateTime.now().millisecondsSinceEpoch}_${_toastSeq++}';
     _toasts.add(AppToast(id: id, message: message, icon: icon));
     notifyListeners();
@@ -639,6 +640,27 @@ class AppState extends ChangeNotifier {
 
   /// Mirrors `navigate(v)` — records reading time when leaving the reader,
   /// guards profile/admin behind auth.
+  /// Inner back handler for the visible view: settings detail pages, the
+  /// reader's non-first tab, and the submit form's discard confirm all
+  /// register here so the phone's system back button unwinds the app's
+  /// own navigation first. Cleared on every [navigate]/[openPaper].
+  VoidCallback? _innerBackHandler;
+  bool get hasInnerBack => _innerBackHandler != null;
+
+  void setInnerBackHandler(VoidCallback? handler) {
+    _innerBackHandler = handler;
+    notifyListeners();
+  }
+
+  /// Runs the registered inner back action, if any. Returns true when a
+  /// handler ran (the back press is consumed).
+  bool tryInnerBack() {
+    final handler = _innerBackHandler;
+    if (handler == null) return false;
+    handler();
+    return true;
+  }
+
   void navigate(AppView v, {void Function()? onAuthPrompt}) {
     if (v == AppView.profile && _user == null) {
       onAuthPrompt?.call();
@@ -648,6 +670,7 @@ class AppState extends ChangeNotifier {
     // Admins do admin tasks only — they cannot open the submit-paper form.
     if (v == AppView.post && _user?.isAdmin == true) return;
     _recordReadingTime();
+    _innerBackHandler = null;
     _view = v;
     if (v != AppView.reader) _selectedPaperId = null;
     // Opening the Feed refetches the live headlines (the repo caches for
@@ -693,6 +716,7 @@ class AppState extends ChangeNotifier {
     _recordReadingTime();
     unawaited(_repo!.incrementViews(paper.id));
     _selectedPaperId = paper.id;
+    _innerBackHandler = null;
     _view = AppView.reader;
     _readStart = DateTime.now();
     notifyListeners();
@@ -733,7 +757,7 @@ class AppState extends ChangeNotifier {
     final current = (paper?.reactions[emoji] ?? const []).contains(user.id);
     final toSet = current ? null : emoji;
     unawaited(_repo!.setReaction(paperId, user.id, toSet));
-    if (!current) showToast('Liked', '❤️');
+    if (!current) showToast('Liked', Icons.favorite);
   }
 
   // ---------------------------------------------------------------- comments
@@ -753,7 +777,7 @@ class AppState extends ChangeNotifier {
       likedBy: const [],
     );
     unawaited(_repo!.addComment(paperId, comment));
-    showToast('Comment posted', '💬');
+    showToast('Comment posted', Icons.chat_bubble);
   }
 
   void toggleCommentLike(String paperId, String commentId) {
@@ -772,9 +796,9 @@ class AppState extends ChangeNotifier {
     final bookmarked = !isBookmarked(paperId);
     unawaited(_repo!.setBookmark(user.id, paperId, bookmarked));
     if (bookmarked) {
-      showToast('Paper saved!', '🔖');
+      showToast('Paper saved!', Icons.bookmark);
     } else {
-      showToast('Removed from saved', '🏷️');
+      showToast('Removed from saved', Icons.bookmark_remove);
     }
   }
 
@@ -833,11 +857,11 @@ class AppState extends ChangeNotifier {
     if (!_firebaseReady) return false;
     try {
       await _repo!.deleteNews(newsId);
-      showToast('News removed', '🗑');
+      showToast('News removed', Icons.delete);
       return true;
     } catch (e) {
       debugPrint('deleteNews failed: $e');
-      showToast('Could not remove the news.', '⚠️');
+      showToast('Could not remove the news.', Icons.warning);
       return false;
     }
   }
@@ -860,11 +884,11 @@ class AppState extends ChangeNotifier {
         body: body.trim(),
         createdBy: user.id,
       );
-      showToast('Announcement posted!', '📢');
+      showToast('Announcement posted!', Icons.campaign);
       return true;
     } catch (e) {
       debugPrint('postAnnouncement failed: $e');
-      showToast('Could not post the announcement.', '⚠️');
+      showToast('Could not post the announcement.', Icons.warning);
       return false;
     }
   }
@@ -874,11 +898,11 @@ class AppState extends ChangeNotifier {
     if (!_firebaseReady) return false;
     try {
       await _repo!.deleteAnnouncement(announcementId);
-      showToast('Announcement removed', '🗑');
+      showToast('Announcement removed', Icons.delete);
       return true;
     } catch (e) {
       debugPrint('deleteAnnouncement failed: $e');
-      showToast('Could not remove the announcement.', '⚠️');
+      showToast('Could not remove the announcement.', Icons.warning);
       return false;
     }
   }
@@ -953,7 +977,7 @@ class AppState extends ChangeNotifier {
       return true;
     }
     if (_updateDownloading) {
-      showToast('Update is already downloading — check the notification.', '⬇️');
+      showToast('Update is already downloading — check the notification.', Icons.download);
       return true;
     }
     _updateDownloading = true;
@@ -964,21 +988,21 @@ class AppState extends ChangeNotifier {
     _updateDownloading = false;
     switch (result) {
       case 'started':
-        showToast('Downloading update — watch the notification.', '⬇️');
+        showToast('Downloading update — watch the notification.', Icons.download);
         return true;
       case 'already_downloading':
-        showToast('Update is already downloading — check the notification.', '⬇️');
+        showToast('Update is already downloading — check the notification.', Icons.download);
         return true;
       case 'needs_unknown_sources':
         showToast(
           'Allow Arxiv to install apps in Settings, then tap Update again.',
-          '⚠️',
+          Icons.warning,
         );
         return false;
       default:
         showToast(
           'Could not start the download. Check your connection and try again.',
-          '⚠️',
+          Icons.warning,
         );
         return false;
     }
@@ -994,7 +1018,7 @@ class AppState extends ChangeNotifier {
   Future<String?> submitPaper(Paper paper) async {
     if (!_firebaseReady) return null;
     final id = await _repo!.submitPaper(paper);
-    showToast('Paper submitted for review!', '📬');
+    showToast('Paper submitted for review!', Icons.send);
     // NOTE: no navigate() here — the post screen shows its own success
     // state with a "Back to Library" button.
     return id;
@@ -1013,7 +1037,7 @@ class AppState extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('setPaperPdfAndCover failed: $e');
-      showToast('Could not attach the PDF.', '⚠️');
+      showToast('Could not attach the PDF.', Icons.warning);
       return false;
     }
   }
@@ -1029,7 +1053,7 @@ class AppState extends ChangeNotifier {
     if (!CloudinaryConfig.isConfigured) {
       showToast(
         'PDF uploads need a free Cloudinary setup first — see the setup guide.',
-        '⚠️',
+        Icons.warning,
       );
       return null;
     }
@@ -1041,7 +1065,7 @@ class AppState extends ChangeNotifier {
       );
     } catch (e) {
       debugPrint('PDF upload failed: $e');
-      showToast('PDF upload failed. Try again.', '⚠️');
+      showToast('PDF upload failed. Try again.', Icons.warning);
       return null;
     }
   }
@@ -1092,14 +1116,14 @@ class AppState extends ChangeNotifier {
     final paper = paperById(paperId);
     try {
       await _repo!.updatePaperStatus(paperId, PaperStatus.approved);
-      showToast('Paper approved and published!', '✅');
+      showToast('Paper approved and published!', Icons.check_circle);
       if (paper != null) {
         unawaited(_notifyPaperStatus(paper, PaperStatus.approved));
       }
       return true;
     } catch (e) {
       debugPrint('approvePaper failed: $e');
-      showToast('Could not approve the paper.', '⚠️');
+      showToast('Could not approve the paper.', Icons.warning);
       return false;
     }
   }
@@ -1110,7 +1134,7 @@ class AppState extends ChangeNotifier {
     try {
       await _repo!.updatePaperStatus(paperId, PaperStatus.rejected,
           reason: reason);
-      showToast('Paper rejected.', '❌');
+      showToast('Paper rejected.', Icons.cancel);
       if (paper != null) {
         unawaited(
           _notifyPaperStatus(paper, PaperStatus.rejected, reason: reason),
@@ -1119,7 +1143,7 @@ class AppState extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('rejectPaper failed: $e');
-      showToast('Could not reject the paper.', '⚠️');
+      showToast('Could not reject the paper.', Icons.warning);
       return false;
     }
   }
@@ -1139,7 +1163,7 @@ class AppState extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('requestRevision failed: $e');
-      showToast('Could not send the revision request.', '⚠️');
+      showToast('Could not send the revision request.', Icons.warning);
       return false;
     }
   }
@@ -1152,7 +1176,7 @@ class AppState extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('archivePaper failed: $e');
-      showToast('Could not archive the paper.', '⚠️');
+      showToast('Could not archive the paper.', Icons.warning);
       return false;
     }
   }
@@ -1170,11 +1194,11 @@ class AppState extends ChangeNotifier {
         deleterUid: user.id,
         deleterIsAdmin: user.isAdmin,
       );
-      showToast('Paper deleted', '🗑');
+      showToast('Paper deleted', Icons.delete);
       return true;
     } catch (e) {
       debugPrint('deletePaper failed: $e');
-      showToast('Could not delete the paper.', '⚠️');
+      showToast('Could not delete the paper.', Icons.warning);
       return false;
     }
   }
@@ -1190,7 +1214,7 @@ class AppState extends ChangeNotifier {
     final user = _user;
     if (user == null || !user.isAdmin) return false;
     if (uid == user.id) {
-      showToast('You cannot delete your own account.', '⚠️');
+      showToast('You cannot delete your own account.', Icons.warning);
       return false;
     }
     try {
@@ -1199,11 +1223,11 @@ class AppState extends ChangeNotifier {
         deleterUid: user.id,
         deleterIsAdmin: user.isAdmin,
       );
-      showToast('User deleted — they can no longer sign in.', '🗑');
+      showToast('User deleted — they can no longer sign in.', Icons.delete);
       return true;
     } catch (e) {
       debugPrint('deleteUser failed: $e');
-      showToast('Could not delete the user.', '⚠️');
+      showToast('Could not delete the user.', Icons.warning);
       return false;
     }
   }

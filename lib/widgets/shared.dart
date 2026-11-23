@@ -8,8 +8,6 @@
 /// `'monospace'` (mono labels), falling back to the default sans for body.
 library;
 
-import 'dart:math' as math;
-import 'dart:ui' show PointMode;
 
 import 'package:flutter/material.dart';
 
@@ -194,7 +192,7 @@ class NetImage extends StatelessWidget {
   final BorderRadius? borderRadius;
 
   /// Called when the image fails to load, so a caller can hide the
-  /// image block instead of showing the 📄 placeholder box. Callers
+  /// image block instead of showing the broken-image placeholder box. Callers
   /// that ignore it keep the old placeholder behavior.
   final VoidCallback? onError;
 
@@ -253,7 +251,7 @@ class NetImage extends StatelessWidget {
               height: height,
               color: surfaceColor,
               child: const Center(
-                  child: Text('📄', style: TextStyle(fontSize: 24))),
+                  child: Icon(Icons.broken_image, size: 24)),
             );
           },
         );
@@ -410,7 +408,7 @@ class GoldButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
-  final String? icon;
+  final IconData? icon;
   final double minHeight;
 
   @override
@@ -479,7 +477,11 @@ class GoldButton extends StatelessWidget {
                     // no gap — same 8px the icon branch already uses.
                     const SizedBox(width: 8),
                   ] else if (icon != null) ...[
-                    Text(icon!, style: const TextStyle(fontSize: 16)),
+                    Icon(
+                      icon!,
+                      size: 16,
+                      color: enabled ? a.accentFg : palette.c.muted,
+                    ),
                     const SizedBox(width: 8),
                   ],
                   Text(
@@ -507,8 +509,9 @@ class GhostButton extends StatelessWidget {
   const GhostButton({
     super.key,
     required this.palette,
-    required this.label,
+    this.label = '',
     required this.onPressed,
+    this.icon,
     this.color,
     this.minHeight = 40,
   });
@@ -516,6 +519,7 @@ class GhostButton extends StatelessWidget {
   final AppPalette palette;
   final String label;
   final VoidCallback? onPressed;
+  final IconData? icon;
   final Color? color;
   final double minHeight;
 
@@ -535,7 +539,16 @@ class GhostButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
-      child: Text(label),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon!, size: 16),
+            if (label.isNotEmpty) const SizedBox(width: 6),
+          ],
+          if (label.isNotEmpty) Text(label),
+        ],
+      ),
       ),
     );
   }
@@ -753,7 +766,7 @@ class EmptyState extends StatelessWidget {
   });
 
   final AppPalette palette;
-  final String icon;
+  final IconData icon;
   final String title;
   final String sub;
 
@@ -765,7 +778,7 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 40)),
+          Icon(icon, size: 40, color: c.muted),
           const SizedBox(height: 14),
           Text(
             title,
@@ -808,55 +821,4 @@ class ErrorBanner extends StatelessWidget {
       ),
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Micro-texture
-// ---------------------------------------------------------------------------
-
-/// Very faint paper grain laid over the page background. Fixed seed, a single
-/// `drawPoints` call, wrapped in a [RepaintBoundary] by the caller — so it is
-/// cheap, never animates, and never intercepts touches.
-class GrainTexture extends StatelessWidget {
-  const GrainTexture({super.key, required this.palette});
-
-  final AppPalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: RepaintBoundary(
-        child: CustomPaint(
-          painter: _GrainPainter(dark: palette.isDark),
-          size: Size.infinite,
-        ),
-      ),
-    );
-  }
-}
-
-class _GrainPainter extends CustomPainter {
-  _GrainPainter({required this.dark});
-
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final rng = math.Random(7);
-    final count = (size.width * size.height / 700).clamp(0, 3200).toInt();
-    final pts = <Offset>[
-      for (var i = 0; i < count; i++)
-        Offset(rng.nextDouble() * size.width, rng.nextDouble() * size.height),
-    ];
-    final paint = Paint()
-      ..color = (dark ? Colors.white : const Color(0xFF3A2E22))
-          .withValues(alpha: dark ? 0.035 : 0.05)
-      ..strokeWidth = 1
-      ..strokeCap = StrokeCap.square;
-    canvas.drawPoints(PointMode.points, pts, paint);
-  }
-
-  @override
-  bool shouldRepaint(_GrainPainter old) => old.dark != dark;
 }

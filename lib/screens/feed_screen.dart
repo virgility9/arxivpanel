@@ -53,14 +53,14 @@ class _FeedScreenState extends State<FeedScreen> {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      widget.appState.showToast('Could not open the article.', '⚠️');
+      widget.appState.showToast('Could not open the article.', Icons.warning);
     }
   }
 
   Future<void> _shareNews(NewsItem item) async {
     if (item.url.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: item.url));
-    widget.appState.showToast('Link copied', '🔗');
+    widget.appState.showToast('Link copied', Icons.link);
   }
 
   String _dateOf(NewsItem item) => timeAgo(item.publishedAt);
@@ -139,16 +139,18 @@ class _FeedScreenState extends State<FeedScreen> {
           _sectionLabel(p, 'POSTED BY ARXIV'),
           const SizedBox(height: 12),
           for (final item in adminNews) ...[
-            _NewsCard(
-              key: ValueKey(item.id),
-              item: item,
-              palette: p,
-              isAdminPost: true,
-              canDelete: isAdmin,
-              onOpen: () => _openUrl(item.url),
-              onDelete: () => _confirmDelete(p, item),
-              onShare: () => _shareNews(item),
-              dateLabel: _dateOf(item),
+            RepaintBoundary(
+              child: _NewsCard(
+                key: ValueKey(item.id),
+                item: item,
+                palette: p,
+                isAdminPost: true,
+                canDelete: isAdmin,
+                onOpen: () => _openUrl(item.url),
+                onDelete: () => _confirmDelete(p, item),
+                onShare: () => _shareNews(item),
+                dateLabel: _dateOf(item),
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -176,7 +178,7 @@ class _FeedScreenState extends State<FeedScreen> {
             padding: const EdgeInsets.symmetric(vertical: 32),
             child: Column(
               children: [
-                const Text('📶', style: TextStyle(fontSize: 32)),
+                Icon(Icons.wifi_off, size: 32, color: c.muted),
                 const SizedBox(height: 12),
                 Text(
                   'Couldn\'t load live news',
@@ -206,19 +208,21 @@ class _FeedScreenState extends State<FeedScreen> {
         else if (liveNews.isEmpty && adminNews.isEmpty)
           EmptyState(
             palette: p,
-            icon: '📰',
+            icon: Icons.newspaper,
             title: 'No news yet',
             sub: 'Pull down to refresh, or check back later',
           )
         else
           for (final item in liveNews) ...[
-            _NewsCard(
-              key: ValueKey(item.id),
-              item: item,
-              palette: p,
-              onOpen: () => _openUrl(item.url),
-              onShare: () => _shareNews(item),
-              dateLabel: _dateOf(item),
+            RepaintBoundary(
+              child: _NewsCard(
+                key: ValueKey(item.id),
+                item: item,
+                palette: p,
+                onOpen: () => _openUrl(item.url),
+                onShare: () => _shareNews(item),
+                dateLabel: _dateOf(item),
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -249,7 +253,7 @@ class _FeedScreenState extends State<FeedScreen> {
         padding: const EdgeInsets.symmetric(vertical: 32),
         child: Column(
           children: [
-            const Text('📶', style: TextStyle(fontSize: 32)),
+            Icon(Icons.wifi_off, size: 32, color: c.muted),
             const SizedBox(height: 12),
             Text(
               'Couldn\'t load papers',
@@ -280,7 +284,7 @@ class _FeedScreenState extends State<FeedScreen> {
     if (arxivPapers.isEmpty) {
       return EmptyState(
         palette: p,
-        icon: '📄',
+        icon: Icons.description,
         title: 'No papers yet',
         sub: 'Pull down to refresh, or check back later',
       );
@@ -289,14 +293,16 @@ class _FeedScreenState extends State<FeedScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final item in arxivPapers) ...[
-          _NewsCard(
-            key: ValueKey(item.id),
-            item: item,
-            palette: p,
-            showAuthor: true,
-            onOpen: () => _openUrl(item.url),
-            onShare: () => _shareNews(item),
-            dateLabel: _dateOf(item),
+          RepaintBoundary(
+            child: _NewsCard(
+              key: ValueKey(item.id),
+              item: item,
+              palette: p,
+              showAuthor: true,
+              onOpen: () => _openUrl(item.url),
+              onShare: () => _shareNews(item),
+              dateLabel: _dateOf(item),
+            ),
           ),
           const SizedBox(height: 12),
         ],
@@ -491,7 +497,7 @@ class _NewsCardState extends State<_NewsCard> {
   bool _expanded = false;
 
   /// Set when the cover image fails to load: the image block is dropped
-  /// entirely instead of leaving a tall empty box with a 📄 in it.
+  /// entirely instead of leaving a tall empty box with an icon in it.
   bool _imageFailed = false;
 
   /// True while the cover tries the sharp 800px variant: if that fails,
@@ -595,11 +601,12 @@ class _NewsCardState extends State<_NewsCard> {
                           InkWell(
                             onTap: widget.onDelete,
                             borderRadius: BorderRadius.circular(14),
-                            child: const Padding(
-                              padding: EdgeInsets.all(6),
-                              child: Text(
-                                '🗑️',
-                                style: TextStyle(fontSize: 14),
+                            child: Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: Icon(
+                                Icons.delete,
+                                size: 14,
+                                color: c.muted,
                               ),
                             ),
                           ),

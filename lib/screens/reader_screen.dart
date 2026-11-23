@@ -83,7 +83,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               ? Uri.base.toString()
               : 'https://arxivpanel.app/papers/${paper.id}';
           Clipboard.setData(ClipboardData(text: link));
-          appState.showToast('Link copied', '🔗');
+          appState.showToast('Link copied', Icons.link);
         }
 
         return Column(
@@ -173,7 +173,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   minWidth: 44,
                   onPressed: () =>
                       widget.appState.navigate(AppView.library),
-                  child: const Text('←'),
+                  child: Icon(Icons.arrow_back, size: 18, color: c.muted),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -203,13 +203,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     }
                     widget.appState.toggleBookmark(paper.id);
                   },
-                  child: Text(bookmarked ? '🔖' : '🏷️'),
+                  child: Icon(
+                    bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                    size: 18,
+                    color: bookmarked ? a.accent : c.muted,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 _topBarIconButton(
                   p,
                   onPressed: share,
-                  child: const Text('↗'),
+                  child: Icon(Icons.link, size: 18, color: c.muted),
                 ),
               ],
             ),
@@ -488,7 +492,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 17)),
+              Icon(
+                Icons.favorite,
+                size: 17,
+                color: active ? a.accent : c.muted,
+              ),
               if (count > 0) ...[
                 const SizedBox(width: 5),
                 Text(
@@ -508,6 +516,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   // --------------------------------------------------------------------- tabs
+
+  /// Switches the reader tab. Leaving the Abstract tab registers the
+  /// system-back handler so the phone's back button returns to Abstract
+  /// first instead of jumping straight to the Library.
+  void _selectTab(_ReaderTab tab) {
+    setState(() => _activeTab = tab);
+    if (tab == _ReaderTab.abstract) {
+      widget.appState.setInnerBackHandler(null);
+    } else {
+      widget.appState.setInnerBackHandler(_backToAbstractTab);
+    }
+  }
+
+  void _backToAbstractTab() {
+    setState(() => _activeTab = _ReaderTab.abstract);
+    widget.appState.setInnerBackHandler(null);
+  }
 
   Widget _buildTabsBar(
     AppPalette p,
@@ -532,7 +557,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               children: tabs.map((tab) {
               final active = _activeTab == tab;
               return InkWell(
-                onTap: () => setState(() => _activeTab = tab),
+                onTap: () => _selectTab(tab),
                 child: Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: narrow ? 16 : 24,
@@ -845,8 +870,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 48),
                 child: Column(
                   children: [
-                    const Text('💬',
-                        style: TextStyle(fontSize: 36)),
+                    Icon(Icons.chat_bubble, size: 36, color: c.muted),
                     const SizedBox(height: 12),
                     Text(
                       'Be the first to comment',
@@ -941,12 +965,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '♡',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: liked ? a.accent : c.muted,
-                        ),
+                      Icon(
+                        liked ? Icons.favorite : Icons.favorite_border,
+                        size: 13,
+                        color: liked ? a.accent : c.muted,
                       ),
                       const SizedBox(width: 5),
                       Text(
@@ -1066,17 +1088,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return GoldButton(
       palette: p,
       label: 'Download paper',
-      icon: '⬇️',
+      icon: Icons.download,
       onPressed: () {
         if (url.isEmpty) {
-          widget.appState.showToast('No PDF attached to this paper', '📄');
+          widget.appState.showToast('No PDF attached to this paper', Icons.description);
           return;
         }
         downloadFile(
           _downloadUrl(url),
           _safeFileName(paper.title),
         );
-        widget.appState.showToast('Download started', '⬇️');
+        widget.appState.showToast('Download started', Icons.download);
       },
     );
   }

@@ -65,13 +65,17 @@ class AppShell extends StatelessWidget {
         appState.view != AppView.reader;
 
     return PopScope(
-      // No router in this app, so intercept the system back button: on any
-      // non-library view, go back to the library instead of exiting.
-      // (Browser back-button history is not wired; this covers Android
-      // system back and programmatic pops.)
-      canPop: appState.view == AppView.library,
+      // No router in this app, so intercept the system back button: first
+      // unwind the visible view's own state (a settings detail page, a
+      // reader tab, a dirty submit form — see AppState.tryInnerBack), then
+      // fall back to the library instead of exiting. (Browser back-button
+      // history is not wired; this covers Android system back and
+      // programmatic pops.)
+      canPop: appState.view == AppView.library && !appState.hasInnerBack,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _navigate(context, AppView.library);
+        if (didPop) return;
+        if (appState.tryInnerBack()) return;
+        _navigate(context, AppView.library);
       },
       child: Scaffold(
         backgroundColor: c.bg,
@@ -101,8 +105,6 @@ class AppShell extends StatelessWidget {
                 ),
               ],
             ),
-            // Faint paper grain over the whole page (ignores touches).
-            Positioned.fill(child: GrainTexture(palette: palette)),
             // Shows the "new version available" prompt once per session.
             _UpdatePrompt(appState: appState, theme: theme),
             // Shows the first-time help tour once per account, right
@@ -766,8 +768,14 @@ class _UserMenu extends StatelessWidget {
             value: 'admin',
             child: Row(
               children: [
+                Icon(
+                  Icons.admin_panel_settings,
+                  size: 16,
+                  color: palette.accent.accent,
+                ),
+                const SizedBox(width: 6),
                 Text(
-                  '🛡️ Admin Panel',
+                  'Admin Panel',
                   style: TextStyle(color: palette.accent.accent, fontSize: 13),
                 ),
                 if (pendingCount > 0) ...[
@@ -1111,7 +1119,7 @@ class _UpdatePromptState extends State<_UpdatePrompt> {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      widget.appState.showToast('Could not open the link.', '⚠️');
+      widget.appState.showToast('Could not open the link.', Icons.warning);
     }
   }
 
@@ -1226,7 +1234,7 @@ class _ToastCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (toast.icon != null) ...[
-            Text(toast.icon!, style: const TextStyle(fontSize: 16)),
+            Icon(toast.icon!, size: 18, color: c.text),
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -1249,7 +1257,7 @@ class _ToastCard extends StatelessWidget {
               onTap: onDismiss,
               child: const Padding(
                 padding: EdgeInsets.all(8),
-                child: Text('✕', style: TextStyle(fontSize: 12)),
+                child: Icon(Icons.close, size: 12),
               ),
             ),
           ),
