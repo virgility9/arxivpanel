@@ -12,7 +12,7 @@ import '../models/catalog.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
-import 'shared.dart';
+import '../widgets/shared.dart';
 
 class CatalogDetailScreen extends StatefulWidget {
   const CatalogDetailScreen({

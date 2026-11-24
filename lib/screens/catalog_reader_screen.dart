@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
-import 'shared.dart';
+import '../widgets/shared.dart';
 
 class CatalogReaderScreen extends StatefulWidget {
   const CatalogReaderScreen({
