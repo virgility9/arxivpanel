@@ -9,6 +9,8 @@
 /// add it).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -91,6 +93,8 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
 
   /// Long strip: the page number is a scroll-fraction estimate (pages
   /// have different heights, so there is no exact offset per page).
+  /// When the estimate moves to a new page, the NEXT page starts
+  /// loading in the background, so it is ready when it scrolls in.
   void _onStripScroll() {
     if (!mounted || !_strip.hasClients) return;
     final count = widget.appState.mangaPageUrls.length;
@@ -103,7 +107,27 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
     ).toInt();
     if (index != _pageIndex) {
       setState(() => _pageIndex = index);
+      _precachePage(index + 1);
     }
+  }
+
+  /// Starts loading one strip page before it scrolls in, decoded at
+  /// the same 1x screen size the reader uses — the cache entry must
+  /// match what NetImage will ask for, or the precache is wasted and
+  /// the page decodes twice. Failures are ignored: the page's own
+  /// NetImage shows its placeholder and retries on rebuild.
+  void _precachePage(int index) {
+    final urls = widget.appState.mangaPageUrls;
+    if (!mounted || index < 0 || index >= urls.length) return;
+    final width = MediaQuery.sizeOf(context).width;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = (width * dpr).round();
+    unawaited(
+      precacheImage(
+        ResizeImage(NetworkImage(urls[index]), width: cacheWidth),
+        context,
+      ).catchError((_) {}),
+    );
   }
 
   /// Applies the rotation lock and fullscreen system UI for the
@@ -513,7 +537,7 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
             maxScale: 4,
             panEnabled: _zoomed,
             child: Center(
-              child: NetImage(url: pageUrls[i], fit: s.fit),
+              child: NetImage(url: pageUrls[i], fit: s.fit, cacheScale: 1.0),
             ),
           );
         },
@@ -521,14 +545,22 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
     }
     return ListView.builder(
       controller: _strip,
+      // A full viewport of look-ahead (the default 250px is a sliver
+      // of one tall manhwa page): the next page's widget builds — and
+      // its image starts loading — a screen before it appears.
+      cacheExtent: MediaQuery.sizeOf(context).height,
       itemCount: pageUrls.length,
       itemBuilder: (context, i) {
         // Long strip is fit-width by nature: width only, the height
-        // follows the page's own aspect ratio.
+        // follows the page's own aspect ratio. Decoded at exactly
+        // screen size (1.0, not the 2x covers use): a tall page at 2x
+        // is ~240MB in RAM and thrashes the image cache, so pages
+        // loaded slowly and re-decoded on every scroll.
         final image = NetImage(
           url: pageUrls[i],
           width: double.infinity,
           fit: BoxFit.fitWidth,
+          cacheScale: 1.0,
         );
         if (s.hasStripGaps && i < pageUrls.length - 1) {
           return Column(

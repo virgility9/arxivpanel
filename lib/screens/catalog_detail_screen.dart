@@ -467,11 +467,26 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel(
-            palette: p,
-            text: chapters.isEmpty
-                ? 'Chapters'
-                : 'Chapters · ${chapters.length}',
+          Row(
+            children: [
+              Expanded(
+                child: SectionLabel(
+                  palette: p,
+                  text: chapters.isEmpty
+                      ? 'Chapters'
+                      : 'Chapters · ${chapters.length}',
+                ),
+              ),
+              IconButton(
+                tooltip: 'Check for new chapters',
+                icon: Icon(Icons.refresh, color: c.faint, size: 20),
+                constraints:
+                    const BoxConstraints(minWidth: 44, minHeight: 44),
+                onPressed: loading
+                    ? null
+                    : () => appState.reloadMangaChapters(),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           if (loading && chapters.isEmpty)

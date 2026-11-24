@@ -439,11 +439,18 @@ class CatalogRepository {
   /// English chapters for one manga, oldest first. Only chapters
   /// with real pages are returned (licensed titles are just external
   /// links — filtered by [MangaChapter.fromMangaDex]). The list is
-  /// cached per manga, so re-opening the same title is instant.
-  /// Returns null on failure. Never throws.
-  Future<List<MangaChapter>?> fetchMangaChapters(String mangaId) async {
-    final cached = _mangaChaptersCache[mangaId];
-    if (cached != null) return cached;
+  /// cached per manga, so re-opening the same title is instant;
+  /// [forceRefresh] skips the cache (the detail screen's reload
+  /// button) and writes the fresh list back. Returns null on
+  /// failure. Never throws.
+  Future<List<MangaChapter>?> fetchMangaChapters(
+    String mangaId, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = _mangaChaptersCache[mangaId];
+      if (cached != null) return cached;
+    }
     final uri = Uri.parse(
       '$_mangaBase/manga/$mangaId/feed?limit=100'
       '&translatedLanguage[]=en&order[chapter]=asc'

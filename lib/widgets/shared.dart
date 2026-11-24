@@ -9,6 +9,7 @@
 library;
 
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -183,6 +184,7 @@ class NetImage extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.borderRadius,
     this.onError,
+    this.cacheScale = 2.0,
   });
 
   final String url;
@@ -196,41 +198,55 @@ class NetImage extends StatelessWidget {
   /// that ignore it keep the old placeholder behavior.
   final VoidCallback? onError;
 
+  /// Decode-size multiplier over the display size (× device pixel
+  /// ratio). Covers use 2x headroom for sharpness on dense screens;
+  /// full-width reader pages pass 1.0 — a tall manhwa page decoded
+  /// at 2x is ~240MB in RAM and thrashes the image cache, so pages
+  /// load slowly and re-decode on every scroll.
+
+  final double cacheScale;
+
   @override
   Widget build(BuildContext context) {
     // Decode at (about) display size, not full resolution: covers are
     // often 1200px+ but display at 130-360px, and decoding the full
     // bitmap on a phone wastes CPU and memory on every scroll. The
     // layout width is the real display width (cell width for cards,
-    // full width for feed images). 2x headroom keeps the image sharp
-    // on high-density screens. Thumbnails use BoxFit.contain: the
-    // whole image shows, never stretched and never cut off — a
-    // portrait book page in a wide frame letterboxes instead of
-    // losing its top and bottom. (Avatars keep BoxFit.cover in their
-    // own widget: a square crop of a face is what a circle wants.)
+    // full width for feed images). The image is also cached on DISK
+    // (cached_network_image, bounded cache), so a cover appears
+    // instantly on revisit instead of re-downloading on every app
+    // start — Image.network only kept it in memory. Thumbnails use
+    // BoxFit.contain: the whole image shows, never stretched and never
+    // cut off — a portrait book page in a wide frame letterboxes
+    // instead of losing its top and bottom. (Avatars keep BoxFit.cover
+    // in their own widget: a square crop of a face is what a circle
+    // wants.)
     return LayoutBuilder(
       builder: (context, constraints) {
         final dpr = MediaQuery.devicePixelRatioOf(context);
         final displayWidth = constraints.hasBoundedWidth
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final cacheWidth = (displayWidth * dpr * 2).round();
+        final cacheWidth = (displayWidth * dpr * cacheScale).round();
         final cacheHeight = (height != null && height!.isFinite)
-            ? (height! * dpr * 2).round()
+            ? (height! * dpr * cacheScale).round()
             : null;
-        final img = Image.network(
-          url,
+        final img = CachedNetworkImage(
+          imageUrl: url,
           width: width,
           height: height,
           fit: fit,
           filterQuality: FilterQuality.high,
-          cacheWidth: cacheWidth,
-          cacheHeight: cacheHeight,
+          memCacheWidth: cacheWidth,
+          memCacheHeight: cacheHeight,
+          // No fade: covers appear the moment they are ready, the way
+          // Image.network did.
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
           // Loading placeholder so images don't pop in from blank.
           // Skeleton-style loading: a plain grey block while the image
           // loads, no spinner.
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
+          placeholder: (context, _) {
             final surfaceColor =
                 Theme.of(context).colorScheme.surfaceContainerHighest;
             return Container(
@@ -239,8 +255,8 @@ class NetImage extends StatelessWidget {
               color: surfaceColor,
             );
           },
-          errorBuilder: (context, _, _) {
-            // Tell the caller the image failed (post-frame: errorBuilder
+          errorWidget: (context, _, _) {
+            // Tell the caller the image failed (post-frame: errorWidget
             // can run during build, so a setState inside the callback
             // would throw). The placeholder is still returned, so callers
             // that ignore onError keep the old behavior.

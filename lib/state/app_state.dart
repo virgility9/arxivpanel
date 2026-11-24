@@ -1595,19 +1595,25 @@ class AppState extends ChangeNotifier {
     await _ensureCatalogText();
   }
 
-  /// Downloads the open manga's English chapter list (once). Returns
-  /// false when the download fails. If the user opened another item
-  /// while this download was in flight, the result is dropped.
-  Future<bool> _ensureMangaChapters() async {
+  /// Downloads the open manga's English chapter list (once).
+  /// [forceRefresh] re-fetches even when chapters are already loaded
+  /// (the detail screen's reload button): new chapters released
+  /// since the first load appear. Returns false when the download
+  /// fails. If the user opened another item while this download was
+  /// in flight, the result is dropped.
+  Future<bool> _ensureMangaChapters({bool forceRefresh = false}) async {
     final item = _selectedCatalogItem;
     if (item == null || item.type != CatalogType.manga) return false;
-    if (_mangaChapters.isNotEmpty) return true;
+    if (!forceRefresh && _mangaChapters.isNotEmpty) return true;
     if (_mangaChaptersLoading) return false;
     _mangaChaptersLoading = true;
     _mangaChaptersError = false;
     notifyListeners();
     final mangaId = item.id.split(':').last;
-    final chapters = await _catalogRepo.fetchMangaChapters(mangaId);
+    final chapters = await _catalogRepo.fetchMangaChapters(
+      mangaId,
+      forceRefresh: forceRefresh,
+    );
     if (_selectedCatalogItem?.id != item.id) return false;
     if (chapters == null) {
       _mangaChaptersLoading = false;
@@ -1621,10 +1627,27 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  /// Retries the manga chapter download from the detail screen's
-  /// error state.
+  /// Reloads the open manga's chapter list from the network and
+  /// reports what changed. Previously this just called
+  /// [_ensureMangaChapters], which returns at once when chapters are
+  /// already loaded — so the detail screen's reload button did
+  /// nothing. A failed reload leaves the old list in place and shows
+  /// the error state instead of a toast.
   Future<void> reloadMangaChapters() async {
-    await _ensureMangaChapters();
+    final hadChapters = _mangaChapters.isNotEmpty;
+    final before = _mangaChapters.map((c) => c.id).toSet();
+    final ok = await _ensureMangaChapters(forceRefresh: true);
+    if (!ok || !hadChapters) return;
+    final fresh =
+        _mangaChapters.where((c) => !before.contains(c.id)).length;
+    if (fresh > 0) {
+      showToast(
+        '$fresh new chapter${fresh == 1 ? '' : 's'}',
+        Icons.new_releases,
+      );
+    } else {
+      showToast("You're up to date", Icons.check);
+    }
   }
 
   /// Opens a manga chapter in the page reader. Downloads the chapter's

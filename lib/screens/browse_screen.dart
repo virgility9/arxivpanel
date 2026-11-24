@@ -260,31 +260,51 @@ class _EbooksTabState extends State<_EbooksTab> {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1280),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (v) {
-                  setState(() => _search = v);
-                  _debouncer(() => _runSearch());
-                },
-                onSubmitted: (_) {
-                  _debouncer.cancel();
-                  _runSearch();
-                },
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Search free e-books…',
-                  prefixIcon: Icon(Icons.search, color: c.faint, size: 20),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 44),
-                  suffixIcon: _search.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear search',
-                          icon: Icon(Icons.clear, color: c.faint, size: 18),
-                          constraints: const BoxConstraints(
-                              minWidth: 44, minHeight: 44),
-                          onPressed: _clearSearch,
-                        ),
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) {
+                        setState(() => _search = v);
+                        _debouncer(() => _runSearch());
+                      },
+                      onSubmitted: (_) {
+                        _debouncer.cancel();
+                        _runSearch();
+                      },
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Search free e-books…',
+                        prefixIcon:
+                            Icon(Icons.search, color: c.faint, size: 20),
+                        prefixIconConstraints:
+                            const BoxConstraints(minWidth: 44),
+                        suffixIcon: _search.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                icon: Icon(Icons.clear,
+                                    color: c.faint, size: 18),
+                                constraints: const BoxConstraints(
+                                    minWidth: 44, minHeight: 44),
+                                onPressed: _clearSearch,
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Reload',
+                    icon: Icon(Icons.refresh, color: c.faint, size: 20),
+                    constraints:
+                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    onPressed: () {
+                      _debouncer.cancel();
+                      _runSearch(forceRefresh: true);
+                    },
+                  ),
+                ],
               ),
             ),
           ),
@@ -506,31 +526,51 @@ class _NovelsTabState extends State<_NovelsTab> {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1280),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (v) {
-                  setState(() => _search = v);
-                  _debouncer(() => _runSearch());
-                },
-                onSubmitted: (_) {
-                  _debouncer.cancel();
-                  _runSearch();
-                },
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Search free novels…',
-                  prefixIcon: Icon(Icons.search, color: c.faint, size: 20),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 44),
-                  suffixIcon: _search.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear search',
-                          icon: Icon(Icons.clear, color: c.faint, size: 18),
-                          constraints: const BoxConstraints(
-                              minWidth: 44, minHeight: 44),
-                          onPressed: _clearSearch,
-                        ),
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) {
+                        setState(() => _search = v);
+                        _debouncer(() => _runSearch());
+                      },
+                      onSubmitted: (_) {
+                        _debouncer.cancel();
+                        _runSearch();
+                      },
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Search free novels…',
+                        prefixIcon:
+                            Icon(Icons.search, color: c.faint, size: 20),
+                        prefixIconConstraints:
+                            const BoxConstraints(minWidth: 44),
+                        suffixIcon: _search.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                icon: Icon(Icons.clear,
+                                    color: c.faint, size: 18),
+                                constraints: const BoxConstraints(
+                                    minWidth: 44, minHeight: 44),
+                                onPressed: _clearSearch,
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Reload',
+                    icon: Icon(Icons.refresh, color: c.faint, size: 20),
+                    constraints:
+                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    onPressed: () {
+                      _debouncer.cancel();
+                      _runSearch(forceRefresh: true);
+                    },
+                  ),
+                ],
               ),
             ),
           ),
@@ -755,31 +795,51 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1280),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (v) {
-                  setState(() => _search = v);
-                  _debouncer(() => _runSearch());
-                },
-                onSubmitted: (_) {
-                  _debouncer.cancel();
-                  _runSearch();
-                },
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Search manga and comics…',
-                  prefixIcon: Icon(Icons.search, color: c.faint, size: 20),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 44),
-                  suffixIcon: _search.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear search',
-                          icon: Icon(Icons.clear, color: c.faint, size: 18),
-                          constraints: const BoxConstraints(
-                              minWidth: 44, minHeight: 44),
-                          onPressed: _clearSearch,
-                        ),
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) {
+                        setState(() => _search = v);
+                        _debouncer(() => _runSearch());
+                      },
+                      onSubmitted: (_) {
+                        _debouncer.cancel();
+                        _runSearch();
+                      },
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Search manga and comics…',
+                        prefixIcon:
+                            Icon(Icons.search, color: c.faint, size: 20),
+                        prefixIconConstraints:
+                            const BoxConstraints(minWidth: 44),
+                        suffixIcon: _search.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                icon: Icon(Icons.clear,
+                                    color: c.faint, size: 18),
+                                constraints: const BoxConstraints(
+                                    minWidth: 44, minHeight: 44),
+                                onPressed: _clearSearch,
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Reload',
+                    icon: Icon(Icons.refresh, color: c.faint, size: 20),
+                    constraints:
+                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    onPressed: () {
+                      _debouncer.cancel();
+                      _runSearch(forceRefresh: true);
+                    },
+                  ),
+                ],
               ),
             ),
           ),
