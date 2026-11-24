@@ -7,7 +7,6 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../models/catalog.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/theme_provider.dart';
