@@ -14,7 +14,9 @@ import '../models/models.dart';
 import '../screens/admin_screen.dart';
 import '../screens/browse_screen.dart';
 import '../screens/catalog_detail_screen.dart';
+import '../screens/catalog_pdf_screen.dart';
 import '../screens/catalog_reader_screen.dart';
+import '../screens/manga_reader_screen.dart';
 import '../screens/feed_screen.dart';
 import '../screens/saved_library_screen.dart';
 import '../screens/onboarding_tour.dart';
@@ -234,6 +236,38 @@ class AppShell extends StatelessWidget {
           appState: appState,
           theme: theme,
         );
+      case AppView.mangaReader:
+        if (appState.selectedCatalogItem == null ||
+            appState.selectedMangaChapter == null ||
+            appState.mangaPageUrls.isEmpty) {
+          return BrowseScreen(
+            appState: appState,
+            theme: theme,
+            onAuthPrompt: onAuthPrompt,
+          );
+        }
+        // Keyed by chapter index: a chapter change remounts the reader
+        // so the page index resets to the first page.
+        return MangaReaderScreen(
+          key: ValueKey(
+            'mangaReader:${appState.selectedMangaChapterIndex}',
+          ),
+          appState: appState,
+          theme: theme,
+        );
+      case AppView.catalogPdf:
+        if (appState.selectedCatalogItem == null ||
+            appState.selectedCatalogItem?.pdfUrl == null) {
+          return BrowseScreen(
+            appState: appState,
+            theme: theme,
+            onAuthPrompt: onAuthPrompt,
+          );
+        }
+        return CatalogPdfScreen(
+          appState: appState,
+          theme: theme,
+        );
       case AppView.post:
         return PostPaperScreen(
           appState: appState,
@@ -282,6 +316,13 @@ class AppShell extends StatelessWidget {
       return 'catalogReader:${appState.selectedCatalogItem?.id}:'
           '${appState.selectedChapterIndex}';
     }
+    if (view == AppView.mangaReader) {
+      return 'mangaReader:${appState.selectedCatalogItem?.id}:'
+          '${appState.selectedMangaChapterIndex}';
+    }
+    if (view == AppView.catalogPdf) {
+      return 'catalogPdf:${appState.selectedCatalogItem?.id}';
+    }
     return 'tabs';
   }
 
@@ -296,7 +337,9 @@ class AppShell extends StatelessWidget {
         view == AppView.post ||
         view == AppView.profile ||
         view == AppView.catalogDetail ||
-        view == AppView.catalogReader) {
+        view == AppView.catalogReader ||
+        view == AppView.mangaReader ||
+        view == AppView.catalogPdf) {
       return _buildView(context, view);
     }
     return _TabPages(

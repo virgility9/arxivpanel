@@ -244,6 +244,10 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
   }
 
   Widget _chapters(AppPalette p, CatalogItem item) {
+    // Manga chapters are page lists from MangaDex, comics have no
+    // chapters at all — they open in the PDF viewer instead.
+    if (item.type == CatalogType.manga) return _mangaChapters(p, item);
+    if (item.type == CatalogType.comic) return _readComic(p, item);
     final c = p.c;
     final appState = widget.appState;
     final chapters = appState.catalogChapters;
@@ -390,6 +394,181 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
             Text(
               'No chapters found for this book yet.',
               style: bodyStyle(p, size: 13, color: c.faint),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Manga chapter list (English chapters with real pages, from
+  /// MangaDex). Same shape as the book chapters above, without read
+  /// marks — page-level progress is not tracked yet. Tapping a
+  /// chapter opens the page reader.
+  Widget _mangaChapters(AppPalette p, CatalogItem item) {
+    final c = p.c;
+    final appState = widget.appState;
+    final chapters = appState.mangaChapters;
+    final loading = appState.mangaChaptersLoading;
+    final failed = appState.mangaChaptersError;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(
+            palette: p,
+            text: chapters.isEmpty
+                ? 'Chapters'
+                : 'Chapters · ${chapters.length}',
+          ),
+          const SizedBox(height: 10),
+          if (loading && chapters.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: p.accent.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Loading chapters…',
+                    style: bodyStyle(p, size: 13, color: c.faint),
+                  ),
+                ],
+              ),
+            )
+          else if (failed && chapters.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: c.surface,
+                border: Border.all(color: c.border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Could not load the chapters. Check your '
+                    'connection and try again.',
+                    style: bodyStyle(p, size: 13, color: c.textSub),
+                  ),
+                  const SizedBox(height: 10),
+                  GoldButton(
+                    palette: p,
+                    label: 'Retry',
+                    icon: Icons.refresh,
+                    onPressed: () => appState.reloadMangaChapters(),
+                    minHeight: 40,
+                  ),
+                ],
+              ),
+            )
+          else
+            ...chapters.asMap().entries.map((entry) {
+              final index = entry.key;
+              final chapter = entry.value;
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: loading
+                      ? null
+                      : () => appState.openMangaChapter(index),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 12),
+                    decoration: BoxDecoration(
+                      border:
+                          Border(bottom: BorderSide(color: c.borderFaint)),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          chapter.number.isEmpty ? '–' : chapter.number,
+                          style: monoStyle(p, size: 11, color: c.faint),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            chapter.label,
+                            style: bodyStyle(p, size: 14, color: c.text),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${chapter.pages} pages',
+                          style: monoStyle(p, size: 10, color: c.faint),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.chevron_right, size: 18, color: c.muted),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          if (!loading && !failed && chapters.isEmpty)
+            Text(
+              'No readable chapters in English yet.',
+              style: bodyStyle(p, size: 13, color: c.faint),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Comic read section: the issue opens in the in-app PDF viewer.
+  /// The PDF URL resolves from the issue's IA metadata when the
+  /// detail page opens; the button waits on that.
+  Widget _readComic(AppPalette p, CatalogItem item) {
+    final c = p.c;
+    final appState = widget.appState;
+    final resolving = appState.comicPdfResolving;
+    final failed = appState.comicPdfError;
+    final ready = item.pdfUrl != null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(palette: p, text: 'Read this comic'),
+          const SizedBox(height: 10),
+          Text(
+            'The full issue opens in the in-app PDF viewer — swipe '
+            'through the pages.',
+            style: bodyStyle(p, size: 13, color: c.textSub),
+          ),
+          const SizedBox(height: 12),
+          if (failed)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: c.surface,
+                border: Border.all(color: c.border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Could not find the issue file. Check your connection '
+                'and reopen this comic.',
+                style: bodyStyle(p, size: 13, color: c.textSub),
+              ),
+            )
+          else
+            GoldButton(
+              palette: p,
+              label: resolving ? 'Finding the issue…' : 'Read now',
+              icon: Icons.picture_as_pdf,
+              loading: resolving,
+              onPressed:
+                  ready ? () => appState.openCatalogPdf() : null,
             ),
         ],
       ),

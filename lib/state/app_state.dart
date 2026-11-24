@@ -310,11 +310,32 @@ class AppState extends ChangeNotifier {
   bool _ebooksLoading = false;
   bool _ebooksError = false;
   String _ebooksQuery = '';
+  List<CatalogItem> _novels = <CatalogItem>[];
+  bool _novelsLoading = false;
+  bool _novelsError = false;
+  String _novelsQuery = '';
+  List<CatalogItem> _comics = <CatalogItem>[];
+  bool _comicsLoading = false;
+  bool _comicsError = false;
+  String _comicsQuery = '';
+  List<CatalogItem> _manga = <CatalogItem>[];
+  bool _mangaLoading = false;
+  bool _mangaError = false;
+  String _mangaQuery = '';
   CatalogItem? _selectedCatalogItem;
   List<CatalogChapter> _catalogChapters = <CatalogChapter>[];
   int _selectedChapterIndex = 0;
   bool _catalogTextLoading = false;
   bool _catalogTextError = false;
+  List<MangaChapter> _mangaChapters = <MangaChapter>[];
+  int _selectedMangaChapterIndex = 0;
+  bool _mangaChaptersLoading = false;
+  bool _mangaChaptersError = false;
+  List<String> _mangaPageUrls = <String>[];
+  bool _mangaPagesLoading = false;
+  bool _mangaPagesError = false;
+  bool _comicPdfResolving = false;
+  bool _comicPdfError = false;
   List<PaperComment> _catalogComments = <PaperComment>[];
   Set<String> _catalogLikedBy = <String>{};
   List<CatalogSave> _catalogSaves = <CatalogSave>[];
@@ -478,10 +499,51 @@ class AppState extends ChangeNotifier {
   bool get ebooksError => _ebooksError;
   String get ebooksQuery => _ebooksQuery;
 
+  /// Novels list from Open Library (default: fiction).
+  List<CatalogItem> get novels => _novels;
+  bool get novelsLoading => _novelsLoading;
+  bool get novelsError => _novelsError;
+  String get novelsQuery => _novelsQuery;
+
+  /// Comics list from the Internet Archive (issues with a Text PDF).
+  List<CatalogItem> get comics => _comics;
+  bool get comicsLoading => _comicsLoading;
+  bool get comicsError => _comicsError;
+  String get comicsQuery => _comicsQuery;
+
+  /// Manga list from MangaDex (most followed first).
+  List<CatalogItem> get manga => _manga;
+  bool get mangaLoading => _mangaLoading;
+  bool get mangaError => _mangaError;
+  String get mangaQuery => _mangaQuery;
+
   /// The catalog item whose detail page (or reader) is open.
   CatalogItem? get selectedCatalogItem => _selectedCatalogItem;
   List<CatalogChapter> get catalogChapters => _catalogChapters;
   int get selectedChapterIndex => _selectedChapterIndex;
+
+  /// Manga chapters + page URLs for the open manga (empty unless a
+  /// manga detail/reader is open). Page URLs are the full-size
+  /// at-home image URLs for the selected chapter.
+  List<MangaChapter> get mangaChapters => _mangaChapters;
+  int get selectedMangaChapterIndex => _selectedMangaChapterIndex;
+  MangaChapter? get selectedMangaChapter {
+    if (_mangaChapters.isEmpty) return null;
+    final index =
+        _selectedMangaChapterIndex.clamp(0, _mangaChapters.length - 1);
+    return _mangaChapters[index];
+  }
+
+  List<String> get mangaPageUrls => _mangaPageUrls;
+  bool get mangaChaptersLoading => _mangaChaptersLoading;
+  bool get mangaChaptersError => _mangaChaptersError;
+  bool get mangaPagesLoading => _mangaPagesLoading;
+  bool get mangaPagesError => _mangaPagesError;
+
+  /// Comic PDF resolution state for the open comic (the detail
+  /// screen's Read button waits on this).
+  bool get comicPdfResolving => _comicPdfResolving;
+  bool get comicPdfError => _comicPdfError;
 
   CatalogChapter? get selectedChapter {
     if (_catalogChapters.isEmpty) return null;
@@ -751,15 +813,28 @@ class AppState extends ChangeNotifier {
     _view = v;
     if (v != AppView.reader) _selectedPaperId = null;
     // Leaving the catalog detail/reader closes the open item: its
-    // comment/like/progress streams stop and the downloaded text is
-    // dropped (re-downloaded on next open).
-    if (v != AppView.catalogDetail && v != AppView.catalogReader) {
+    // comment/like/progress streams stop and the downloaded text,
+    // manga chapters/pages and resolved comic PDF are dropped
+    // (re-downloaded on next open).
+    if (v != AppView.catalogDetail &&
+        v != AppView.catalogReader &&
+        v != AppView.mangaReader &&
+        v != AppView.catalogPdf) {
       _cancelCatalogItemSubs();
       _selectedCatalogItem = null;
       _catalogChapters = <CatalogChapter>[];
       _selectedChapterIndex = 0;
       _catalogTextLoading = false;
       _catalogTextError = false;
+      _mangaChapters = <MangaChapter>[];
+      _selectedMangaChapterIndex = 0;
+      _mangaChaptersLoading = false;
+      _mangaChaptersError = false;
+      _mangaPageUrls = <String>[];
+      _mangaPagesLoading = false;
+      _mangaPagesError = false;
+      _comicPdfResolving = false;
+      _comicPdfError = false;
     }
     // Opening the Feed refetches the live headlines (the repo caches for
     // 5 minutes, so this is cheap). The Feed screen used to refetch from
@@ -923,6 +998,79 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fetches the novels list from Open Library. Same shape as
+  /// [fetchEbooks]: the repo caches for 5 minutes, the loading flag
+  /// only shows while the list is empty. Never throws.
+  Future<void> fetchNovels({String? search, bool forceRefresh = false}) async {
+    if (_novelsLoading) return;
+    _novelsLoading = true;
+    _novelsError = false;
+    notifyListeners();
+    try {
+      final items = await _catalogRepo.fetchNovels(
+        search: search,
+        forceRefresh: forceRefresh,
+      );
+      _novels = items ?? <CatalogItem>[];
+      _novelsQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _novelsError = items == null;
+    } catch (e) {
+      debugPrint('[AppState] novels fetch failed: $e');
+      _novelsError = true;
+    }
+    _novelsLoading = false;
+    notifyListeners();
+  }
+
+  /// Fetches the comics list from the Internet Archive. Same shape as
+  /// [fetchEbooks]. Never throws.
+  Future<void> fetchComics({String? search, bool forceRefresh = false}) async {
+    if (_comicsLoading) return;
+    _comicsLoading = true;
+    _comicsError = false;
+    notifyListeners();
+    try {
+      final items = await _catalogRepo.fetchComics(
+        search: search,
+        forceRefresh: forceRefresh,
+      );
+      _comics = items ?? <CatalogItem>[];
+      _comicsQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _comicsError = items == null;
+    } catch (e) {
+      debugPrint('[AppState] comics fetch failed: $e');
+      _comicsError = true;
+    }
+    _comicsLoading = false;
+    notifyListeners();
+  }
+
+  /// Fetches the manga list from MangaDex. Same shape as
+  /// [fetchEbooks]. Never throws.
+  Future<void> fetchManga({String? search, bool forceRefresh = false}) async {
+    if (_mangaLoading) return;
+    _mangaLoading = true;
+    _mangaError = false;
+    notifyListeners();
+    try {
+      final items = await _catalogRepo.fetchManga(
+        search: search,
+        forceRefresh: forceRefresh,
+      );
+      _manga = items ?? <CatalogItem>[];
+      _mangaQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _mangaError = items == null;
+    } catch (e) {
+      debugPrint('[AppState] manga fetch failed: $e');
+      _mangaError = true;
+    }
+    _mangaLoading = false;
+    notifyListeners();
+  }
+
   /// Opens a catalog item's detail page and subscribes to its comments,
   /// likes and (when signed in) reading progress.
   void openCatalogItem(CatalogItem item) {
@@ -932,14 +1080,62 @@ class AppState extends ChangeNotifier {
     _selectedChapterIndex = 0;
     _catalogTextLoading = false;
     _catalogTextError = false;
+    _mangaChapters = <MangaChapter>[];
+    _selectedMangaChapterIndex = 0;
+    _mangaChaptersLoading = false;
+    _mangaChaptersError = false;
+    _mangaPageUrls = <String>[];
+    _mangaPagesLoading = false;
+    _mangaPagesError = false;
+    _comicPdfResolving = false;
+    _comicPdfError = false;
     _catalogComments = <PaperComment>[];
     _catalogLikedBy = <String>{};
     _catalogProgress = null;
     _subscribeCatalogItem(item.id);
     navigate(AppView.catalogDetail);
-    // Start the chapter download now so the chapter list is ready on
-    // the detail screen (the reader reuses it on first chapter open).
-    unawaited(_ensureCatalogText());
+    // Start the content load now so the detail screen is ready: the
+    // book's full text (the reader reuses it on first chapter open),
+    // the manga's chapter list, or the comic's PDF URL.
+    if (item.type == CatalogType.manga) {
+      unawaited(_ensureMangaChapters());
+    } else if (item.type == CatalogType.comic) {
+      unawaited(_ensureComicPdf());
+    } else if (item.iaIds.isNotEmpty) {
+      unawaited(_ensureCatalogText());
+    }
+  }
+
+  /// Resolves the open comic's PDF URL from IA metadata (once). The
+  /// detail screen's Read button waits on [_comicPdfResolving]; a
+  /// failure sets [_comicPdfError] instead of the URL.
+  Future<void> _ensureComicPdf() async {
+    final item = _selectedCatalogItem;
+    if (item == null || item.type != CatalogType.comic) return;
+    if (item.pdfUrl != null || _comicPdfResolving) return;
+    _comicPdfResolving = true;
+    _comicPdfError = false;
+    notifyListeners();
+    final url = await _catalogRepo.fetchComicPdfUrl(item);
+    if (_selectedCatalogItem?.id != item.id) return;
+    if (url == null) {
+      _comicPdfResolving = false;
+      _comicPdfError = true;
+      notifyListeners();
+      return;
+    }
+    _selectedCatalogItem = item.copyWith(pdfUrl: url);
+    _comicPdfResolving = false;
+    notifyListeners();
+  }
+
+  /// Opens the resolved comic PDF in the in-app PDF viewer. The Read
+  /// button only enables once the URL is resolved, so this is a
+  /// no-op when there is nothing to open yet.
+  void openCatalogPdf() {
+    final item = _selectedCatalogItem;
+    if (item == null || item.pdfUrl == null) return;
+    navigate(AppView.catalogPdf);
   }
 
   void _subscribeCatalogItem(String catalogId) {
@@ -1016,6 +1212,65 @@ class AppState extends ChangeNotifier {
     await _ensureCatalogText();
   }
 
+  /// Downloads the open manga's English chapter list (once). Returns
+  /// false when the download fails. If the user opened another item
+  /// while this download was in flight, the result is dropped.
+  Future<bool> _ensureMangaChapters() async {
+    final item = _selectedCatalogItem;
+    if (item == null || item.type != CatalogType.manga) return false;
+    if (_mangaChapters.isNotEmpty) return true;
+    if (_mangaChaptersLoading) return false;
+    _mangaChaptersLoading = true;
+    _mangaChaptersError = false;
+    notifyListeners();
+    final mangaId = item.id.split(':').last;
+    final chapters = await _catalogRepo.fetchMangaChapters(mangaId);
+    if (_selectedCatalogItem?.id != item.id) return false;
+    if (chapters == null) {
+      _mangaChaptersLoading = false;
+      _mangaChaptersError = true;
+      notifyListeners();
+      return false;
+    }
+    _mangaChapters = chapters;
+    _mangaChaptersLoading = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Retries the manga chapter download from the detail screen's
+  /// error state.
+  Future<void> reloadMangaChapters() async {
+    await _ensureMangaChapters();
+  }
+
+  /// Opens a manga chapter in the page reader. Downloads the chapter's
+  /// page URLs first (at-home server); a failed download leaves the
+  /// user on the detail screen with its error state instead.
+  Future<void> openMangaChapter(int index) async {
+    final item = _selectedCatalogItem;
+    if (item == null || item.type != CatalogType.manga) return;
+    if (index < 0 || index >= _mangaChapters.length) return;
+    final chapter = _mangaChapters[index];
+    if (_mangaPagesLoading) return;
+    _mangaPagesLoading = true;
+    _mangaPagesError = false;
+    notifyListeners();
+    final pages = await _catalogRepo.fetchMangaPages(chapter.id);
+    if (_selectedCatalogItem?.id != item.id) return;
+    if (pages == null) {
+      _mangaPagesLoading = false;
+      _mangaPagesError = true;
+      notifyListeners();
+      return;
+    }
+    _selectedMangaChapterIndex = index;
+    _mangaPageUrls = pages.pageUrls;
+    _mangaPagesLoading = false;
+    notifyListeners();
+    navigate(AppView.mangaReader);
+  }
+
   /// Opens a chapter in the text reader. Downloads the book's full text
   /// on first open (split into chapters afterwards) and marks the
   /// chapter read. While downloading, the detail screen shows its
@@ -1038,7 +1293,14 @@ class AppState extends ChangeNotifier {
     final saved = !isCatalogSaved(item.id);
     unawaited(_repo!.setCatalogSave(user.id, item, saved));
     if (saved) {
-      showToast('Book saved!', Icons.bookmark);
+      showToast(
+        switch (item.type) {
+          CatalogType.manga => 'Manga saved!',
+          CatalogType.comic => 'Comic saved!',
+          _ => 'Book saved!',
+        },
+        Icons.bookmark,
+      );
     } else {
       showToast('Removed from saved', Icons.bookmark_remove);
     }

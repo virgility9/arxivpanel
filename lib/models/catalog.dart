@@ -25,6 +25,7 @@ class CatalogItem {
     required this.subjects,
     required this.iaIds,
     this.coverUrl,
+    this.pdfUrl,
   });
 
   final String id;
@@ -35,11 +36,30 @@ class CatalogItem {
 
   /// Internet Archive item ids with full text, in source order. The
   /// reader tries them in order until one returns non-empty text.
+  /// For comics this holds the single issue identifier (the PDF
+  /// filename resolves from the item's metadata at open time).
   final List<String> iaIds;
 
   /// Open Library cover URL (`covers.openlibrary.org`), or null when
   /// the source has no cover — the card then shows a book-icon block.
   final String? coverUrl;
+
+  /// Direct PDF URL for a comic issue, resolved from IA metadata when
+  /// the detail screen opens (null until then, and null for books).
+  final String? pdfUrl;
+
+  CatalogItem copyWith({List<String>? iaIds, String? pdfUrl}) {
+    return CatalogItem(
+      id: id,
+      type: type,
+      title: title,
+      authors: authors,
+      subjects: subjects,
+      iaIds: iaIds ?? this.iaIds,
+      coverUrl: coverUrl,
+      pdfUrl: pdfUrl ?? this.pdfUrl,
+    );
+  }
 
   String get authorLabel =>
       authors.isEmpty ? 'Unknown author' : authors.join(', ');
@@ -49,10 +69,17 @@ class CatalogItem {
   static String textUrlForIa(String iaId) =>
       'https://archive.org/download/$iaId/${iaId}_djvu.txt';
 
-  /// Builds an e-book from one Open Library search.json document.
-  /// Returns null when the document has no usable full text
-  /// (`has_fulltext` false or no `ia` ids) — the repo filters those out.
-  static CatalogItem? fromOpenLibrary(Map<String, dynamic> json) {
+  /// Builds an e-book or novel from one Open Library search.json
+  /// document. Returns null when the document has no usable full text
+  /// (`has_fulltext` false or no `ia` ids) — the repo filters those
+  /// out. NOTE: `has_fulltext` alone does NOT mean the text is
+  /// readable — many IA texts are lending-restricted (401/403 on
+  /// download). The repo drops restricted ids with a bulk IA check
+  /// before the list reaches the screen.
+  static CatalogItem? fromOpenLibrary(
+    Map<String, dynamic> json, {
+    CatalogType type = CatalogType.ebook,
+  }) {
     final hasFullText = json['has_fulltext'] == true;
     final iaIds =
         (json['ia'] as List?)?.whereType<String>().toList() ?? <String>[];
@@ -65,7 +92,7 @@ class CatalogItem {
     final coverId = json['cover_i'];
     return CatalogItem(
       id: 'ol:$workId',
-      type: CatalogType.ebook,
+      type: type,
       title: (json['title'] as String? ?? 'Untitled').trim(),
       authors:
           (json['author_name'] as List?)?.whereType<String>().toList() ??
@@ -79,6 +106,134 @@ class CatalogItem {
           : null,
     );
   }
+
+  /// Builds a comic issue from one Internet Archive advancedsearch
+  /// document (identifier + title + restriction flag). The cover is
+  /// IA's thumbnail service; the PDF filename resolves from the
+  /// item's metadata when the detail screen opens.
+  static CatalogItem? fromInternetArchive(Map<String, dynamic> json) {
+    final identifier = json['identifier'] as String?;
+    if (identifier == null || identifier.isEmpty) return null;
+    return CatalogItem(
+      id: 'ia:$identifier',
+      type: CatalogType.comic,
+      title: (json['title'] as String? ?? identifier).trim(),
+      authors: const [],
+      subjects: const [],
+      iaIds: [identifier],
+      coverUrl: 'https://archive.org/services/img/$identifier',
+    );
+  }
+
+  /// Builds a manga from one MangaDex search document. The title is a
+  /// map of localizations — English preferred, otherwise the first
+  /// one available. The cover comes from the `cover_art`
+  /// relationship (verified live: uploads.mangadex.org serves the
+  /// file; HEAD is rejected with 405, GET works).
+  static CatalogItem? fromMangaDex(Map<String, dynamic> json) {
+    final mangaId = json['id'] as String?;
+    if (mangaId == null || mangaId.isEmpty) return null;
+    final attr = json['attributes'] as Map<String, dynamic>? ?? {};
+    final titles = attr['title'] as Map<String, dynamic>? ?? {};
+    final title = (titles['en'] as String?) ??
+        (titles.values.whereType<String>().firstOrNull ?? 'Untitled');
+    final relationships =
+        (json['relationships'] as List?)?.whereType<Map<String, dynamic>>() ??
+            const [];
+    final authors = <String>[];
+    String? coverFile;
+    for (final rel in relationships) {
+      final relType = rel['type'] as String?;
+      final relAttr = rel['attributes'] as Map<String, dynamic>? ?? {};
+      if (relType == 'author' || relType == 'artist') {
+        final name = relAttr['name'] as String?;
+        if (name != null && name.isNotEmpty && !authors.contains(name)) {
+          authors.add(name);
+        }
+      } else if (relType == 'cover_art') {
+        coverFile = relAttr['fileName'] as String?;
+      }
+    }
+    final tags = (attr['tags'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map((t) =>
+                (t['attributes'] as Map<String, dynamic>?)?['name']
+                    as Map<String, dynamic>?)
+            .map((n) => n?['en'] as String?)
+            .whereType<String>()
+            .take(6)
+            .toList() ??
+        const [];
+    return CatalogItem(
+      id: 'md:$mangaId',
+      type: CatalogType.manga,
+      title: title.trim(),
+      authors: authors,
+      subjects: tags,
+      iaIds: const [],
+      coverUrl: coverFile != null
+          ? 'https://uploads.mangadex.org/covers/$mangaId/$coverFile'
+          : null,
+    );
+  }
+}
+
+/// One manga chapter from MangaDex. Only chapters with real pages are
+/// kept — licensed titles return chapters that are just an external
+/// link (`externalUrl` set, `pages: 0`) and those are filtered out by
+/// [MangaChapter.fromMangaDex].
+class MangaChapter {
+  const MangaChapter({
+    required this.id,
+    required this.number,
+    required this.title,
+    required this.pages,
+  });
+
+  final String id;
+
+  /// Chapter number as the source gives it ("12", "1.5", "" for a
+  /// oneshot). Displayed as-is; sorting parses it numerically.
+  final String number;
+  final String title;
+  final int pages;
+
+  String get label {
+    final num = number.isEmpty ? 'Oneshot' : 'Ch. $number';
+    return title.isEmpty ? num : '$num — $title';
+  }
+
+  static MangaChapter? fromMangaDex(Map<String, dynamic> json) {
+    final attr = json['attributes'] as Map<String, dynamic>? ?? {};
+    if (attr['externalUrl'] != null) return null;
+    final pages = (attr['pages'] as num?)?.toInt() ?? 0;
+    if (pages <= 0) return null;
+    final id = json['id'] as String?;
+    if (id == null || id.isEmpty) return null;
+    return MangaChapter(
+      id: id,
+      number: (attr['chapter'] as String?) ?? '',
+      title: (attr['title'] as String? ?? '').trim(),
+      pages: pages,
+    );
+  }
+}
+
+/// Page image URLs for one manga chapter, from MangaDex's at-home
+/// server (`/at-home/server/{chapterId}`): `{baseUrl}/data/{hash}/...`.
+class MangaPages {
+  const MangaPages({
+    required this.baseUrl,
+    required this.hash,
+    required this.files,
+  });
+
+  final String baseUrl;
+  final String hash;
+  final List<String> files;
+
+  List<String> get pageUrls =>
+      files.map((f) => '$baseUrl/data/$hash/$f').toList();
 }
 
 /// One chapter of a catalog item's full text. [text] is the chapter

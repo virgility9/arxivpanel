@@ -1,7 +1,7 @@
 /// Library tab: the user's saved collection — everything bookmarked,
 /// grouped by type, so nothing has to be browsed for twice. Papers
-/// first (Phase 2 adds the saved catalog sections here). Read-only
-/// collection: posting happens from Browse's Local Library tab.
+/// first, then the catalog sections (e-books, novels, comics, manga).
+/// Read-only collection: posting happens from Browse's Local Library tab.
 library;
 
 import 'package:flutter/material.dart';
@@ -62,8 +62,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       palette: p,
                       icon: Icons.bookmark,
                       title: 'Sign in to see your saved collection',
-                      sub: 'Your saved papers and books live here once '
-                          'you sign in.',
+                      sub: 'Your saved papers, books, comics and manga '
+                          'live here once you sign in.',
                     ),
                     const SizedBox(height: 20),
                     GoldButton(
@@ -98,6 +98,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
               save.title.toLowerCase().contains(q) ||
               save.author.toLowerCase().contains(q);
         }).toList();
+        final novelSaves = widget.appState.catalogSaves
+            .where((save) => save.type == CatalogType.novel)
+            .where((save) {
+          return q.isEmpty ||
+              save.title.toLowerCase().contains(q) ||
+              save.author.toLowerCase().contains(q);
+        }).toList();
+        final comicSaves = widget.appState.catalogSaves
+            .where((save) => save.type == CatalogType.comic)
+            .where((save) {
+          return q.isEmpty ||
+              save.title.toLowerCase().contains(q) ||
+              save.author.toLowerCase().contains(q);
+        }).toList();
+        final mangaSaves = widget.appState.catalogSaves
+            .where((save) => save.type == CatalogType.manga)
+            .where((save) {
+          return q.isEmpty ||
+              save.title.toLowerCase().contains(q) ||
+              save.author.toLowerCase().contains(q);
+        }).toList();
+        final hasCatalogSaves = ebookSaves.isNotEmpty ||
+            novelSaves.isNotEmpty ||
+            comicSaves.isNotEmpty ||
+            mangaSaves.isNotEmpty;
 
         return SingleChildScrollView(
           child: Column(
@@ -121,7 +146,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       controller: _searchController,
                       onChanged: (v) => setState(() => _search = v),
                       decoration: InputDecoration(
-                        hintText: 'Search your saved papers and books…',
+                        hintText:
+                            'Search your saved papers, books, comics and manga…',
                         prefixIcon:
                             Icon(Icons.search, color: c.faint, size: 20),
                         prefixIconConstraints:
@@ -154,16 +180,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1280),
-                    child: filtered.isEmpty && ebookSaves.isEmpty
+                    child: filtered.isEmpty && !hasCatalogSaves
                         ? EmptyState(
                             palette: p,
                             icon: Icons.bookmark,
-                            title: saved.isEmpty && ebookSaves.isEmpty
+                            title: saved.isEmpty && !hasCatalogSaves
                                 ? 'Nothing saved yet'
                                 : 'No saved items found',
-                            sub: saved.isEmpty && ebookSaves.isEmpty
-                                ? 'Tap the bookmark on a paper or a book '
-                                    'to keep it here.'
+                            sub: saved.isEmpty && !hasCatalogSaves
+                                ? 'Tap the bookmark on a paper, a book, '
+                                    'a comic or a manga to keep it here.'
                                 : 'Try a different search',
                           )
                         : Column(
@@ -219,6 +245,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     p, 'E-BOOKS · ${ebookSaves.length}'),
                                 const SizedBox(height: 14),
                                 _catalogGrid(ebookSaves),
+                              ],
+                              if (novelSaves.isNotEmpty) ...[
+                                const SizedBox(height: 28),
+                                _sectionLabel(
+                                    p, 'NOVELS · ${novelSaves.length}'),
+                                const SizedBox(height: 14),
+                                _catalogGrid(novelSaves),
+                              ],
+                              if (comicSaves.isNotEmpty) ...[
+                                const SizedBox(height: 28),
+                                _sectionLabel(
+                                    p, 'COMICS · ${comicSaves.length}'),
+                                const SizedBox(height: 14),
+                                _catalogGrid(comicSaves),
+                              ],
+                              if (mangaSaves.isNotEmpty) ...[
+                                const SizedBox(height: 28),
+                                _sectionLabel(
+                                    p, 'MANGA · ${mangaSaves.length}'),
+                                const SizedBox(height: 14),
+                                _catalogGrid(mangaSaves),
                               ],
                             ],
                           ),
