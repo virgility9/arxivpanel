@@ -448,12 +448,13 @@ class ReadEntry {
 /// Top-level views the shell swaps between. [browse] is the home tab
 /// (Browse: Local Library + the read-only catalog tabs); [library] is
 /// the user's saved collection (saved papers and catalog items).
-enum AppView { browse, library, feed, reader, post, polls, profile, settings, admin }
+enum AppView { browse, library, feed, reader, post, polls, profile, settings, admin, catalogDetail, catalogReader }
 
 /// Inner tabs of the Browse view. [localLibrary] is the app's own
 /// submitted papers; the other four are read-only catalog tabs backed
-/// by free public sources (Gutendex for e-books/novels, MangaDex for
-/// manga, Internet Archive for comics).
+/// by free public sources (Open Library for e-books — Gutendex joins
+/// later when it recovers — MangaDex for manga, Internet Archive for
+/// comics).
 enum BrowseTab { localLibrary, ebooks, novels, comics, manga }
 
 /// A transient toast notification. [icon] is a solid Material icon

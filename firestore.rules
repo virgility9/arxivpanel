@@ -138,6 +138,53 @@ service cloud.firestore {
         allow read, write: if isAdmin()
           || (signedIn() && uid == request.auth.uid);
       }
+
+      // Saved catalog items (snapshot docs) and reading progress.
+      // Same owner rule as bookmarks/history: the owner or an admin.
+      match /catalog_saves/{catalogId} {
+        allow read, write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
+      }
+
+      match /catalog_progress/{catalogId} {
+        allow read, write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
+      }
+    }
+
+    // ------------------------------------------------------------ catalog
+    // Browse catalog items (e-books, novels, comics, manga) live in the
+    // source APIs, not in Firestore — but their comments and reactions
+    // do. Catalog content is public, so reads are public (signed-out
+    // users can read comments and like counts); writes mirror papers.
+    match /catalog_items/{catalogId} {
+      // The catalog item doc itself is never written by clients (it
+      // only exists as a parent for the subcollections); reads stay
+      // open so the subcollection rules below can resolve.
+      allow read: if true;
+
+      match /comments/{commentId} {
+        allow read: if true;
+
+        allow create: if signedIn()
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.keys().hasAll(
+               ['userId', 'username', 'text']);
+
+        // Authors can edit/delete their own comments; admins can delete.
+        allow update, delete: if signedIn()
+          && (resource.data.userId == request.auth.uid || isAdmin());
+      }
+
+      // One doc per user (doc id = uid): { emoji, reactedAt }.
+      match /reactions/{uid} {
+        allow read: if true;
+
+        // Users can only write their own reaction doc; admins can clean
+        // up reactions when deleting catalog data.
+        allow write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
+      }
     }
 
     // -------------------------------------------------------------- polls

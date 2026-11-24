@@ -856,9 +856,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       const SizedBox(height: 10),
                     ],
                   )
-                : _CommentComposer(
+                : CommentComposer(
                     palette: p,
                     user: user,
+                    hintText: 'Share your thoughts on this research…',
                     onPost: (text) =>
                         widget.appState.addComment(paper.id, text),
                   ),
@@ -1100,81 +1101,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
         );
         widget.appState.showToast('Download started', Icons.download);
       },
-    );
-  }
-}
-
-/// Comment composer, extracted as its own [StatefulWidget] so typing in the
-/// field only rebuilds the composer — previously `onChanged` called
-/// `setState` on the whole reader screen per keystroke.
-class _CommentComposer extends StatefulWidget {
-  const _CommentComposer({
-    required this.palette,
-    required this.user,
-    required this.onPost,
-  });
-
-  final AppPalette palette;
-  final AppUser user;
-  final ValueChanged<String> onPost;
-
-  @override
-  State<_CommentComposer> createState() => _CommentComposerState();
-}
-
-class _CommentComposerState extends State<_CommentComposer> {
-  final TextEditingController _ctrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = widget.palette;
-    final c = p.c;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AvatarImage(
-          url: widget.user.avatar,
-          size: 32,
-          borderColor: c.border,
-          borderWidth: 2,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              TextField(
-                controller: _ctrl,
-                maxLines: 3,
-                style: bodyStyle(p, size: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Share your thoughts on this research…',
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 8),
-              GoldButton(
-                palette: p,
-                label: 'Post',
-                onPressed: _ctrl.text.trim().isEmpty
-                    ? null
-                    : () {
-                        widget.onPost(_ctrl.text.trim());
-                        _ctrl.clear();
-                        setState(() {});
-                      },
-                minHeight: 40,
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

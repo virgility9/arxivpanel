@@ -822,3 +822,82 @@ class ErrorBanner extends StatelessWidget {
     );
   }
 }
+
+/// Comment composer: avatar + multi-line field + Post button. Shared by
+/// the paper reader and the catalog detail screen (moved here from the
+/// reader so both use the same composer). Posts only when the field is
+/// non-empty; clears itself after posting.
+class CommentComposer extends StatefulWidget {
+  const CommentComposer({
+    super.key,
+    required this.palette,
+    required this.user,
+    required this.onPost,
+    this.hintText = 'Share your thoughts…',
+  });
+
+  final AppPalette palette;
+  final AppUser user;
+  final ValueChanged<String> onPost;
+  final String hintText;
+
+  @override
+  State<CommentComposer> createState() => _CommentComposerState();
+}
+
+class _CommentComposerState extends State<CommentComposer> {
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.palette;
+    final c = p.c;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AvatarImage(
+          url: widget.user.avatar,
+          size: 32,
+          borderColor: c.border,
+          borderWidth: 2,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              TextField(
+                controller: _ctrl,
+                maxLines: 3,
+                style: bodyStyle(p, size: 14),
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              GoldButton(
+                palette: p,
+                label: 'Post',
+                onPressed: _ctrl.text.trim().isEmpty
+                    ? null
+                    : () {
+                        widget.onPost(_ctrl.text.trim());
+                        _ctrl.clear();
+                        setState(() {});
+                      },
+                minHeight: 40,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

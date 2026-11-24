@@ -13,6 +13,8 @@ import '../data/constants.dart';
 import '../models/models.dart';
 import '../screens/admin_screen.dart';
 import '../screens/browse_screen.dart';
+import '../screens/catalog_detail_screen.dart';
+import '../screens/catalog_reader_screen.dart';
 import '../screens/feed_screen.dart';
 import '../screens/saved_library_screen.dart';
 import '../screens/onboarding_tour.dart';
@@ -200,6 +202,38 @@ class AppShell extends StatelessWidget {
           theme: theme,
           onAuthPrompt: onAuthPrompt,
         );
+      case AppView.catalogDetail:
+        if (appState.selectedCatalogItem == null) {
+          return BrowseScreen(
+            appState: appState,
+            theme: theme,
+            onAuthPrompt: onAuthPrompt,
+          );
+        }
+        return CatalogDetailScreen(
+          appState: appState,
+          theme: theme,
+          onAuthPrompt: onAuthPrompt,
+        );
+      case AppView.catalogReader:
+        if (appState.selectedCatalogItem == null ||
+            appState.selectedChapter == null) {
+          return BrowseScreen(
+            appState: appState,
+            theme: theme,
+            onAuthPrompt: onAuthPrompt,
+          );
+        }
+        // Keyed by chapter index: a chapter change remounts the reader
+        // so the scroll resets to the top and the saved position for
+        // the new chapter restores (see _CatalogReaderScreenState).
+        return CatalogReaderScreen(
+          key: ValueKey(
+            'catalogReader:${appState.selectedChapterIndex}',
+          ),
+          appState: appState,
+          theme: theme,
+        );
       case AppView.post:
         return PostPaperScreen(
           appState: appState,
@@ -234,25 +268,35 @@ class AppShell extends StatelessWidget {
 
   /// MotionSwitcher key: one key for all tabs, so tab-to-tab motion is
   /// owned by the PageView and the switcher does not animate it; the
-  /// reader, the submit form and the profile keep their own keys so the
-  /// switcher still fades/slides those in.
+  /// reader, the submit form, the profile and the catalog detail/reader
+  /// keep their own keys so the switcher still fades/slides those in.
   String get _contentKey {
     final view = appState.view;
     if (view == AppView.reader) return 'reader:${appState.selectedPaper?.id}';
     if (view == AppView.post) return 'post';
     if (view == AppView.profile) return 'profile';
+    if (view == AppView.catalogDetail) {
+      return 'catalogDetail:${appState.selectedCatalogItem?.id}';
+    }
+    if (view == AppView.catalogReader) {
+      return 'catalogReader:${appState.selectedCatalogItem?.id}:'
+          '${appState.selectedChapterIndex}';
+    }
     return 'tabs';
   }
 
   Widget _buildContent(BuildContext context) {
     final view = appState.view;
-    // Reader, submit form and profile are not swipe tabs: the reader
-    // must not swipe (its PDF pages use horizontal swipes), the form
-    // must never be swiped away mid-draft, and the profile is reached
-    // from the top-right avatar instead of the tab strip.
+    // Reader, submit form, profile and the catalog detail/reader are
+    // not swipe tabs: the reader must not swipe (its PDF pages use
+    // horizontal swipes), the form must never be swiped away mid-draft,
+    // the profile is reached from the top-right avatar instead of the
+    // tab strip, and the catalog pages are drill-in views, not tabs.
     if (view == AppView.reader ||
         view == AppView.post ||
-        view == AppView.profile) {
+        view == AppView.profile ||
+        view == AppView.catalogDetail ||
+        view == AppView.catalogReader) {
       return _buildView(context, view);
     }
     return _TabPages(

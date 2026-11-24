@@ -6,10 +6,12 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../models/catalog.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/catalog_card.dart';
 import '../widgets/paper_card.dart';
 import '../widgets/shared.dart';
 
@@ -89,6 +91,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
               paper.author.toLowerCase().contains(q) ||
               paper.tags.any((t) => t.toLowerCase().contains(q));
         }).toList();
+        final ebookSaves = widget.appState.catalogSaves
+            .where((save) => save.type == CatalogType.ebook)
+            .where((save) {
+          return q.isEmpty ||
+              save.title.toLowerCase().contains(q) ||
+              save.author.toLowerCase().contains(q);
+        }).toList();
 
         return SingleChildScrollView(
           child: Column(
@@ -112,7 +121,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       controller: _searchController,
                       onChanged: (v) => setState(() => _search = v),
                       decoration: InputDecoration(
-                        hintText: 'Search your saved papers…',
+                        hintText: 'Search your saved papers and books…',
                         prefixIcon:
                             Icon(Icons.search, color: c.faint, size: 20),
                         prefixIconConstraints:
@@ -145,22 +154,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1280),
-                    child: filtered.isEmpty
+                    child: filtered.isEmpty && ebookSaves.isEmpty
                         ? EmptyState(
                             palette: p,
                             icon: Icons.bookmark,
-                            title: saved.isEmpty
+                            title: saved.isEmpty && ebookSaves.isEmpty
                                 ? 'Nothing saved yet'
-                                : 'No saved papers found',
-                            sub: saved.isEmpty
-                                ? 'Tap the bookmark on a paper to keep '
-                                    'it here.'
+                                : 'No saved items found',
+                            sub: saved.isEmpty && ebookSaves.isEmpty
+                                ? 'Tap the bookmark on a paper or a book '
+                                    'to keep it here.'
                                 : 'Try a different search',
                           )
                         : Column(
                             crossAxisAlignment:
                                 CrossAxisAlignment.stretch,
                             children: [
+                              if (filtered.isNotEmpty) ...[
                               _sectionLabel(
                                   p, 'PAPERS · ${filtered.length}'),
                               const SizedBox(height: 14),
@@ -202,6 +212,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   );
                                 },
                               ),
+                              ],
+                              if (ebookSaves.isNotEmpty) ...[
+                                const SizedBox(height: 28),
+                                _sectionLabel(
+                                    p, 'E-BOOKS · ${ebookSaves.length}'),
+                                const SizedBox(height: 14),
+                                _catalogGrid(ebookSaves),
+                              ],
                             ],
                           ),
                   ),
@@ -222,6 +240,57 @@ class _LibraryScreenState extends State<LibraryScreen> {
         fontWeight: FontWeight.w700,
         letterSpacing: 0.12,
       ),
+    );
+  }
+
+  /// Saved e-books grid (same columns as the papers grid). Saved items
+  /// are snapshots, so the card's item is rebuilt from the save — the
+  /// stored IA ids keep the chapters working without a source fetch.
+  Widget _catalogGrid(List<CatalogSave> saves) {
+    final items = [
+      for (final save in saves)
+        CatalogItem(
+          id: save.id,
+          type: save.type,
+          title: save.title,
+          authors: [save.author],
+          subjects: const [],
+          iaIds: save.iaIds,
+          coverUrl: save.coverUrl,
+        ),
+    ];
+    return LayoutBuilder(
+      builder: (context, listConstraints) {
+        final width = listConstraints.maxWidth;
+        final columns = width < 700 ? 2 : width < 1100 ? 3 : 4;
+        const spacing = 12.0;
+        final cellWidth = (width - spacing * (columns - 1)) / columns;
+        return SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.start,
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              for (final item in items)
+                SizedBox(
+                  width: cellWidth,
+                  child: RepaintBoundary(
+                    child: CatalogCard(
+                      key: ValueKey(item.id),
+                      item: item,
+                      appState: widget.appState,
+                      theme: widget.theme,
+                      onAuthPrompt: widget.onAuthPrompt,
+                      onOpen: () =>
+                          widget.appState.openCatalogItem(item),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 

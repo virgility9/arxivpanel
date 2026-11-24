@@ -19,12 +19,14 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/auth_repository.dart';
+import '../data/catalog_repository.dart';
 import '../data/cloudinary_config.dart';
 import '../data/cloudinary_repository.dart';
 import '../data/constants.dart';
 import '../data/firestore_repository.dart';
 import '../data/news_repository.dart';
 import '../firebase/firebase_config.dart';
+import '../models/catalog.dart';
 import '../models/models.dart';
 import '../services/app_updater.dart';
 import '../services/github_update.dart';
@@ -296,6 +298,26 @@ class AppState extends ChangeNotifier {
   Timer? _slowTimer;
 
   final NewsRepository _newsRepo = NewsRepository();
+
+  // ------------------------------------------------------------ catalog
+  final CatalogRepository _catalogRepo = CatalogRepository();
+  List<CatalogItem> _ebooks = <CatalogItem>[];
+  bool _ebooksLoading = false;
+  bool _ebooksError = false;
+  String _ebooksQuery = '';
+  CatalogItem? _selectedCatalogItem;
+  List<CatalogChapter> _catalogChapters = <CatalogChapter>[];
+  int _selectedChapterIndex = 0;
+  bool _catalogTextLoading = false;
+  bool _catalogTextError = false;
+  List<PaperComment> _catalogComments = <PaperComment>[];
+  Set<String> _catalogLikedBy = <String>{};
+  List<CatalogSave> _catalogSaves = <CatalogSave>[];
+  CatalogProgress? _catalogProgress;
+  StreamSubscription<List<PaperComment>>? _catalogCommentsSub;
+  StreamSubscription<Set<String>>? _catalogReactionsSub;
+  StreamSubscription<CatalogProgress?>? _catalogProgressSub;
+  StreamSubscription<List<CatalogSave>>? _catalogSavesSub;
   List<NewsItem> _adminNews = <NewsItem>[];
   bool _adminNewsLoaded = false;
   List<NewsItem> _liveNews = <NewsItem>[];
@@ -443,6 +465,36 @@ class AppState extends ChangeNotifier {
   List<ReadEntry> get readingHistory => _readingHistory;
   List<AppToast> get toasts => _toasts;
 
+  // ------------------------------------------------------------ catalog
+
+  /// E-books list from Open Library (default: education books).
+  List<CatalogItem> get ebooks => _ebooks;
+  bool get ebooksLoading => _ebooksLoading;
+  bool get ebooksError => _ebooksError;
+  String get ebooksQuery => _ebooksQuery;
+
+  /// The catalog item whose detail page (or reader) is open.
+  CatalogItem? get selectedCatalogItem => _selectedCatalogItem;
+  List<CatalogChapter> get catalogChapters => _catalogChapters;
+  int get selectedChapterIndex => _selectedChapterIndex;
+
+  CatalogChapter? get selectedChapter {
+    if (_catalogChapters.isEmpty) return null;
+    final index = _selectedChapterIndex.clamp(0, _catalogChapters.length - 1);
+    return _catalogChapters[index];
+  }
+
+  bool get catalogTextLoading => _catalogTextLoading;
+  bool get catalogTextError => _catalogTextError;
+  List<PaperComment> get catalogComments => _catalogComments;
+  Set<String> get catalogLikedBy => _catalogLikedBy;
+  List<CatalogSave> get catalogSaves => _catalogSaves;
+  CatalogProgress? get catalogProgress => _catalogProgress;
+  bool isCatalogSaved(String catalogId) =>
+      _catalogSaves.any((s) => s.id == catalogId);
+  bool get catalogLikedByMe =>
+      _user != null && _catalogLikedBy.contains(_user!.id);
+
   /// All registered users (admin console). Empty until the users stream
   /// emits; see [usersResolved].
   List<AppUser> get users => _users;
@@ -495,6 +547,7 @@ class AppState extends ChangeNotifier {
       _subscribeMyNotifications(user.id);
     } else {
       _bookmarks = <String>{};
+      _catalogSaves = <CatalogSave>[];
       _readingHistory = <ReadEntry>[];
     }
     notifyListeners();
@@ -517,6 +570,15 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       },
       onError: (Object e, StackTrace s) => _retryUserData(user, 'history', e),
+    );
+    _catalogSavesSub = _repo!.watchCatalogSaves(user.id).listen(
+      (saves) {
+        _catalogSaves = saves;
+        _userDataRetries = 0;
+        notifyListeners();
+      },
+      onError: (Object e, StackTrace s) =>
+          _retryUserData(user, 'catalog saves', e),
     );
   }
 
@@ -543,6 +605,8 @@ class AppState extends ChangeNotifier {
     _bookmarksSub = null;
     _historySub?.cancel();
     _historySub = null;
+    _catalogSavesSub?.cancel();
+    _catalogSavesSub = null;
   }
 
   /// Signs in with email and password.
@@ -596,6 +660,7 @@ class AppState extends ChangeNotifier {
     _cancelNotificationSub();
     _seenOverride = null;
     _bookmarks = <String>{};
+    _catalogSaves = <CatalogSave>[];
     _readingHistory = <ReadEntry>[];
     _subscribePapers();
     navigate(AppView.browse);
@@ -691,6 +756,17 @@ class AppState extends ChangeNotifier {
     _innerBackHandler = null;
     _view = v;
     if (v != AppView.reader) _selectedPaperId = null;
+    // Leaving the catalog detail/reader closes the open item: its
+    // comment/like/progress streams stop and the downloaded text is
+    // dropped (re-downloaded on next open).
+    if (v != AppView.catalogDetail && v != AppView.catalogReader) {
+      _cancelCatalogItemSubs();
+      _selectedCatalogItem = null;
+      _catalogChapters = <CatalogChapter>[];
+      _selectedChapterIndex = 0;
+      _catalogTextLoading = false;
+      _catalogTextError = false;
+    }
     // Opening the Feed refetches the live headlines (the repo caches for
     // 5 minutes, so this is cheap). The Feed screen used to refetch from
     // its own initState, but the tab pages now stay alive between visits,
@@ -819,6 +895,234 @@ class AppState extends ChangeNotifier {
     } else {
       showToast('Removed from saved', Icons.bookmark_remove);
     }
+  }
+
+  // --------------------------------------------------------------- catalog
+
+  /// Fetches the e-books list from Open Library. [search] is free text;
+  /// empty means the default education list. Same shape as
+  /// [fetchLiveNews]: the repo caches for 5 minutes, the loading flag
+  /// only shows while the list is empty. Never throws.
+  Future<void> fetchEbooks({String? search, bool forceRefresh = false}) async {
+    if (_ebooksLoading) return;
+    _ebooksLoading = true;
+    _ebooksError = false;
+    notifyListeners();
+    try {
+      final items = await _catalogRepo.fetchEbooks(
+        search: search,
+        forceRefresh: forceRefresh,
+      );
+      _ebooks = items ?? <CatalogItem>[];
+      _ebooksQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      // Null means the fetch failed (not an empty search result).
+      _ebooksError = items == null;
+    } catch (e) {
+      debugPrint('[AppState] e-books fetch failed: $e');
+      _ebooksError = true;
+    }
+    _ebooksLoading = false;
+    notifyListeners();
+  }
+
+  /// Opens a catalog item's detail page and subscribes to its comments,
+  /// likes and (when signed in) reading progress.
+  void openCatalogItem(CatalogItem item) {
+    _cancelCatalogItemSubs();
+    _selectedCatalogItem = item;
+    _catalogChapters = <CatalogChapter>[];
+    _selectedChapterIndex = 0;
+    _catalogTextLoading = false;
+    _catalogTextError = false;
+    _catalogComments = <PaperComment>[];
+    _catalogLikedBy = <String>{};
+    _catalogProgress = null;
+    _subscribeCatalogItem(item.id);
+    navigate(AppView.catalogDetail);
+    // Start the chapter download now so the chapter list is ready on
+    // the detail screen (the reader reuses it on first chapter open).
+    unawaited(_ensureCatalogText());
+  }
+
+  void _subscribeCatalogItem(String catalogId) {
+    if (!_firebaseReady) return;
+    _catalogCommentsSub = _repo!.watchCatalogComments(catalogId).listen(
+      (comments) {
+        _catalogComments = comments;
+        notifyListeners();
+      },
+      onError: (Object e, StackTrace s) =>
+          debugPrint('[AppState] catalog comments error: $e'),
+    );
+    _catalogReactionsSub = _repo!.watchCatalogReactions(catalogId).listen(
+      (likedBy) {
+        _catalogLikedBy = likedBy;
+        notifyListeners();
+      },
+      onError: (Object e, StackTrace s) =>
+          debugPrint('[AppState] catalog reactions error: $e'),
+    );
+    final user = _user;
+    if (user != null) {
+      _catalogProgressSub =
+          _repo!.watchCatalogProgress(user.id, catalogId).listen(
+        (progress) {
+          _catalogProgress = progress;
+          notifyListeners();
+        },
+        onError: (Object e, StackTrace s) =>
+            debugPrint('[AppState] catalog progress error: $e'),
+      );
+    }
+  }
+
+  void _cancelCatalogItemSubs() {
+    _catalogCommentsSub?.cancel();
+    _catalogCommentsSub = null;
+    _catalogReactionsSub?.cancel();
+    _catalogReactionsSub = null;
+    _catalogProgressSub?.cancel();
+    _catalogProgressSub = null;
+  }
+
+  /// Downloads the open book's full text (once) and splits it into
+  /// chapters. Returns false when the download fails. The detail screen
+  /// calls this on open so the chapter list is ready; the reader calls
+  /// it too when opening a chapter directly. If the user opened another
+  /// book while this download was in flight, the result is dropped.
+  Future<bool> _ensureCatalogText() async {
+    final item = _selectedCatalogItem;
+    if (item == null) return false;
+    if (_catalogChapters.isNotEmpty) return true;
+    if (_catalogTextLoading) return false;
+    _catalogTextLoading = true;
+    _catalogTextError = false;
+    notifyListeners();
+    final text = await _catalogRepo.fetchFullText(item);
+    if (_selectedCatalogItem?.id != item.id) return false;
+    if (text == null || text.trim().isEmpty) {
+      _catalogTextLoading = false;
+      _catalogTextError = true;
+      notifyListeners();
+      return false;
+    }
+    _catalogChapters = splitChapters(text);
+    _catalogTextLoading = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Retries the chapter download from the detail screen's error state.
+  Future<void> reloadCatalogChapters() async {
+    await _ensureCatalogText();
+  }
+
+  /// Opens a chapter in the text reader. Downloads the book's full text
+  /// on first open (split into chapters afterwards) and marks the
+  /// chapter read. While downloading, the detail screen shows its
+  /// loading state; a failed download shows its error state instead.
+  Future<void> openCatalogChapter(int index) async {
+    final item = _selectedCatalogItem;
+    if (item == null) return;
+    if (!await _ensureCatalogText()) return;
+    if (index < 0 || index >= _catalogChapters.length) return;
+    _selectedChapterIndex = index;
+    navigate(AppView.catalogReader);
+    _markCatalogChapterRead(item.id, index);
+  }
+
+  /// Toggles the user's save (bookmark) on a catalog item.
+  void toggleCatalogSave(CatalogItem item) {
+    if (!_firebaseReady) return;
+    final user = _user;
+    if (user == null) return;
+    final saved = !isCatalogSaved(item.id);
+    unawaited(_repo!.setCatalogSave(user.id, item, saved));
+    if (saved) {
+      showToast('Book saved!', Icons.bookmark);
+    } else {
+      showToast('Removed from saved', Icons.bookmark_remove);
+    }
+  }
+
+  /// Toggles the user's like (heart) on a catalog item.
+  void reactToCatalogItem(String catalogId) {
+    if (!_firebaseReady) return;
+    final user = _user;
+    if (user == null) return;
+    final current = _catalogLikedBy.contains(user.id);
+    unawaited(_repo!.setCatalogReaction(
+      catalogId,
+      user.id,
+      current ? null : '❤️',
+    ));
+    if (!current) showToast('Liked', Icons.favorite);
+  }
+
+  void addCatalogComment(String catalogId, String text) {
+    if (!_firebaseReady) return;
+    final user = _user;
+    if (user == null || text.trim().isEmpty) return;
+    final comment = PaperComment(
+      id: '',
+      userId: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      text: text.trim(),
+      createdAt: DateTime.now(),
+      likes: 0,
+      likedBy: const [],
+    );
+    unawaited(_repo!.addCatalogComment(catalogId, comment));
+    showToast('Comment posted', Icons.chat_bubble);
+  }
+
+  void toggleCatalogCommentLike(String catalogId, String commentId) {
+    if (!_firebaseReady) return;
+    final user = _user;
+    if (user == null) return;
+    unawaited(
+      _repo!.toggleCatalogCommentLike(catalogId, commentId, user.id),
+    );
+  }
+
+  /// Marks a chapter read and remembers it as the last-read chapter.
+  void _markCatalogChapterRead(String catalogId, int index) {
+    final user = _user;
+    if (user == null || !_firebaseReady) return;
+    final read = {...?_catalogProgress?.readChapterIndices, index}.toList()
+      ..sort();
+    final progress = CatalogProgress(
+      lastChapterIndex: index,
+      lastCharOffset: 0,
+      readChapterIndices: read,
+      updatedAt: DateTime.now(),
+    );
+    _catalogProgress = progress;
+    unawaited(_repo!.saveCatalogProgress(user.id, catalogId, progress));
+  }
+
+  /// Saves the reader's position inside a chapter (scroll fraction ->
+  /// char offset). Fire-and-forget; the progress stream echoes it back.
+  void saveCatalogChapterPosition(
+    String catalogId,
+    int chapterIndex,
+    int charOffset,
+  ) {
+    final user = _user;
+    if (user == null || !_firebaseReady) return;
+    final read = {...?_catalogProgress?.readChapterIndices, chapterIndex}
+        .toList()
+      ..sort();
+    final progress = CatalogProgress(
+      lastChapterIndex: chapterIndex,
+      lastCharOffset: charOffset,
+      readChapterIndices: read,
+      updatedAt: DateTime.now(),
+    );
+    _catalogProgress = progress;
+    unawaited(_repo!.saveCatalogProgress(user.id, catalogId, progress));
   }
 
   // -------------------------------------------------------------------- news
@@ -1266,6 +1570,7 @@ class AppState extends ChangeNotifier {
     _notificationsSub?.cancel();
     _slowTimer?.cancel();
     _cancelUserSubs();
+    _cancelCatalogItemSubs();
     _repo?.dispose();
     super.dispose();
   }

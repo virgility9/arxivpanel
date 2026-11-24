@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/catalog.dart';
 import '../models/models.dart';
 
 /// Parses a Firestore timestamp-ish value tolerantly.
@@ -528,6 +529,171 @@ class FirestoreRepository {
       return ref.set({'bookmarkedAt': FieldValue.serverTimestamp()});
     }
     return ref.delete();
+  }
+
+  // ------------------------------------------------------------------
+  // Catalog (Browse tabs): comments, reactions, saves, progress
+  // ------------------------------------------------------------------
+
+  /// Streams comments on a catalog item, oldest first. Same shape as
+  /// paper comments ([PaperComment]) — only the collection differs.
+  Stream<List<PaperComment>> watchCatalogComments(String catalogId) {
+    return _firestore
+        .collection('catalog_items')
+        .doc(catalogId)
+        .collection('comments')
+        .orderBy('createdAt')
+        .snapshots()
+        .map(
+          (snap) => [
+            for (final doc in snap.docs)
+              PaperComment.fromJson(doc.id, doc.data()),
+          ],
+        );
+  }
+
+  /// Adds a comment to `catalog_items/{catalogId}/comments`.
+  Future<void> addCatalogComment(String catalogId, PaperComment comment) {
+    final data = comment.toJson()..['createdAt'] = FieldValue.serverTimestamp();
+    return _firestore
+        .collection('catalog_items')
+        .doc(catalogId)
+        .collection('comments')
+        .add(data);
+  }
+
+  /// Toggles [userId]'s like on a catalog comment inside a transaction.
+  Future<void> toggleCatalogCommentLike(
+    String catalogId,
+    String commentId,
+    String userId,
+  ) {
+    final ref = _firestore
+        .collection('catalog_items')
+        .doc(catalogId)
+        .collection('comments')
+        .doc(commentId);
+    return _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+      final data = snapshot.data() ?? <String, dynamic>{};
+      final likedBy =
+          (data['likedBy'] as List?)?.whereType<String>().toList() ??
+          <String>[];
+      var likes = (data['likes'] as num?)?.toInt() ?? likedBy.length;
+      if (likedBy.contains(userId)) {
+        likedBy.remove(userId);
+        likes = likes > 0 ? likes - 1 : 0;
+      } else {
+        likedBy.add(userId);
+        likes += 1;
+      }
+      transaction.update(ref, {'likedBy': likedBy, 'likes': likes});
+    });
+  }
+
+  /// Sets the user's like on a catalog item, or removes it when [emoji]
+  /// is null/empty. Stored as `catalog_items/{id}/reactions/{userId}`
+  /// shaped `{emoji, reactedAt}` — same as paper reactions.
+  Future<void> setCatalogReaction(
+    String catalogId,
+    String userId,
+    String? emoji,
+  ) {
+    final ref = _firestore
+        .collection('catalog_items')
+        .doc(catalogId)
+        .collection('reactions')
+        .doc(userId);
+    if (emoji == null || emoji.isEmpty) {
+      return ref.delete();
+    }
+    return ref.set({'emoji': emoji, 'reactedAt': FieldValue.serverTimestamp()});
+  }
+
+  /// Streams the set of user ids who liked a catalog item.
+  Stream<Set<String>> watchCatalogReactions(String catalogId) {
+    return _firestore
+        .collection('catalog_items')
+        .doc(catalogId)
+        .collection('reactions')
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => doc.id).toSet());
+  }
+
+  /// Streams the user's saved catalog items (snapshot docs, newest
+  /// first). Unknown types are dropped, never crash the list.
+  Stream<List<CatalogSave>> watchCatalogSaves(String uid) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('catalog_saves')
+        .orderBy('savedAt', descending: true)
+        .snapshots()
+        .map(
+          (snap) => [
+            for (final doc in snap.docs)
+              CatalogSave.fromJson(doc.id, doc.data()),
+          ].whereType<CatalogSave>().toList(),
+        );
+  }
+
+  /// Adds or removes a saved catalog item. The saved doc is a snapshot
+  /// (title/author/cover) so the Library tab renders without re-fetching
+  /// the source.
+  Future<void> setCatalogSave(String uid, CatalogItem item, bool saved) {
+    final ref = _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('catalog_saves')
+        .doc(item.id);
+    if (saved) {
+      return ref.set(
+        CatalogSave(
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          author: item.authorLabel,
+          coverUrl: item.coverUrl,
+          savedAt: DateTime.now(),
+          iaIds: item.iaIds,
+        ).toJson(),
+      );
+    }
+    return ref.delete();
+  }
+
+  /// Streams reading progress for one catalog item (null when the user
+  /// has never opened it).
+  Stream<CatalogProgress?> watchCatalogProgress(
+    String uid,
+    String catalogId,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('catalog_progress')
+        .doc(catalogId)
+        .snapshots()
+        .map((doc) {
+      final data = doc.data();
+      if (data == null) return null;
+      return CatalogProgress.fromJson(data);
+    });
+  }
+
+  /// Saves reading progress. Merge-set, so a partial update never wipes
+  /// the other fields.
+  Future<void> saveCatalogProgress(
+    String uid,
+    String catalogId,
+    CatalogProgress progress,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('catalog_progress')
+        .doc(catalogId)
+        .set(progress.toJson(), SetOptions(merge: true));
   }
 
   // ------------------------------------------------------------------
