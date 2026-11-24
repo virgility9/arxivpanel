@@ -25,7 +25,7 @@ class OnboardingTour {
       icon: Icons.search,
       title: 'Browse',
       body:
-          'Find papers in the Local Library, or read free e-books, novels, comics and manga. Tap a card to open it, tap the heart to like it, and tap the bookmark to save it.',
+          'Find papers in the Local Library, or read free e-books, novels, manga and comics. Tap a card to open it, tap the heart to like it, and tap the bookmark to save it.',
     ),
     (
       icon: Icons.bookmark,

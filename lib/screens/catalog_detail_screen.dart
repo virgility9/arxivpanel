@@ -1,6 +1,7 @@
-/// Detail page for one catalog item (e-book): cover + title + authors
-/// + subjects, Save + Like actions, chapter list with read marks and
-/// "Continue reading", and comments. The chapter list fills in once
+/// Detail page for one catalog item: cover + title + authors
+/// + subjects, Save + Like actions, synopsis, chapter list with read
+/// marks and "Continue reading" (books), chapter list (manga), or the
+/// Read button (comics), and comments. The chapter list fills in once
 /// the book's full text downloads (AppState starts that download when
 /// the item is opened); a failed download shows a retry instead of an
 /// empty list.
@@ -78,6 +79,7 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
               _topBar(p, item),
               _hero(p, item),
               _actions(p, item),
+              _synopsis(p, item),
               _chapters(p, item),
               _comments(p, item),
               const SizedBox(height: 80),
@@ -238,6 +240,56 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Synopsis from the source, when the source gives one. Books
+  /// fetch theirs from the Open Library work record when the detail
+  /// page opens (AppState `_ensureSynopsis`); manga and comics carry
+  /// theirs in the list item.
+  Widget _synopsis(AppPalette p, CatalogItem item) {
+    final c = p.c;
+    final appState = widget.appState;
+    final loading = appState.synopsisLoading;
+    final synopsis = item.synopsis;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(palette: p, text: 'Synopsis'),
+          const SizedBox(height: 10),
+          if (loading && synopsis == null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: p.accent.accent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Loading synopsis…',
+                  style: bodyStyle(p, size: 13, color: c.faint),
+                ),
+              ],
+            )
+          else if (synopsis == null || synopsis.isEmpty)
+            Text(
+              'No synopsis available for this title.',
+              style: bodyStyle(p, size: 13, color: c.faint),
+            )
+          else
+            SelectableText(
+              synopsis,
+              style: bodyStyle(p, size: 14, color: c.textSub, height: 1.7),
+            ),
         ],
       ),
     );

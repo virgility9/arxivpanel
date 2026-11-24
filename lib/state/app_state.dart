@@ -336,6 +336,7 @@ class AppState extends ChangeNotifier {
   bool _mangaPagesError = false;
   bool _comicPdfResolving = false;
   bool _comicPdfError = false;
+  bool _synopsisLoading = false;
   List<PaperComment> _catalogComments = <PaperComment>[];
   Set<String> _catalogLikedBy = <String>{};
   List<CatalogSave> _catalogSaves = <CatalogSave>[];
@@ -519,6 +520,10 @@ class AppState extends ChangeNotifier {
 
   /// The catalog item whose detail page (or reader) is open.
   CatalogItem? get selectedCatalogItem => _selectedCatalogItem;
+
+  /// True while the open book's synopsis is being fetched from Open
+  /// Library (manga and comics carry theirs in the list item).
+  bool get synopsisLoading => _synopsisLoading;
   List<CatalogChapter> get catalogChapters => _catalogChapters;
   int get selectedChapterIndex => _selectedChapterIndex;
 
@@ -835,6 +840,7 @@ class AppState extends ChangeNotifier {
       _mangaPagesError = false;
       _comicPdfResolving = false;
       _comicPdfError = false;
+      _synopsisLoading = false;
     }
     // Opening the Feed refetches the live headlines (the repo caches for
     // 5 minutes, so this is cheap). The Feed screen used to refetch from
@@ -1089,6 +1095,7 @@ class AppState extends ChangeNotifier {
     _mangaPagesError = false;
     _comicPdfResolving = false;
     _comicPdfError = false;
+    _synopsisLoading = false;
     _catalogComments = <PaperComment>[];
     _catalogLikedBy = <String>{};
     _catalogProgress = null;
@@ -1103,6 +1110,13 @@ class AppState extends ChangeNotifier {
       unawaited(_ensureComicPdf());
     } else if (item.iaIds.isNotEmpty) {
       unawaited(_ensureCatalogText());
+    }
+    // Books carry no synopsis in the search document — fetch the work
+    // record for it (manga and comics already carry theirs).
+    if ((item.type == CatalogType.ebook ||
+            item.type == CatalogType.novel) &&
+        item.synopsis == null) {
+      unawaited(_ensureSynopsis());
     }
   }
 
@@ -1126,6 +1140,24 @@ class AppState extends ChangeNotifier {
     }
     _selectedCatalogItem = item.copyWith(pdfUrl: url);
     _comicPdfResolving = false;
+    notifyListeners();
+  }
+
+  /// Fetches the open book's synopsis from its Open Library work
+  /// record (once). The detail screen shows a spinner while
+  /// [_synopsisLoading] is true; a work with no synopsis just leaves
+  /// the section saying so.
+  Future<void> _ensureSynopsis() async {
+    final item = _selectedCatalogItem;
+    if (item == null || item.synopsis != null || _synopsisLoading) return;
+    _synopsisLoading = true;
+    notifyListeners();
+    final synopsis = await _catalogRepo.fetchWorkSynopsis(item);
+    if (_selectedCatalogItem?.id != item.id) return;
+    _synopsisLoading = false;
+    if (synopsis != null) {
+      _selectedCatalogItem = item.copyWith(synopsis: synopsis);
+    }
     notifyListeners();
   }
 

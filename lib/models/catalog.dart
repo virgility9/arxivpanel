@@ -13,9 +13,10 @@ enum CatalogType { ebook, novel, comic, manga }
 
 /// One book / comic / manga from a public source. The id is namespaced
 /// by source (`ol:OL66554W` for Open Library) so ids never collide
-/// across sources. Only the fields the screens show are kept — the
-/// search document already carries everything the detail screen needs,
-/// so there is no separate detail fetch.
+/// across sources. Only the fields the screens show are kept. The
+/// search document carries almost everything the detail screen needs
+/// — the one exception is an Open Library book's synopsis, which
+/// AppState fetches per work when the detail page opens.
 class CatalogItem {
   const CatalogItem({
     required this.id,
@@ -26,6 +27,7 @@ class CatalogItem {
     required this.iaIds,
     this.coverUrl,
     this.pdfUrl,
+    this.synopsis,
   });
 
   final String id;
@@ -48,7 +50,18 @@ class CatalogItem {
   /// the detail screen opens (null until then, and null for books).
   final String? pdfUrl;
 
-  CatalogItem copyWith({List<String>? iaIds, String? pdfUrl}) {
+  /// Synopsis / description from the source, when the source gives
+  /// one: MangaDex and the Internet Archive carry it in the list
+  /// response; Open Library needs a per-work fetch (AppState loads it
+  /// when the detail page opens). Null means the source has none —
+  /// the detail screen says so instead of showing a blank section.
+  final String? synopsis;
+
+  CatalogItem copyWith({
+    List<String>? iaIds,
+    String? pdfUrl,
+    String? synopsis,
+  }) {
     return CatalogItem(
       id: id,
       type: type,
@@ -58,6 +71,7 @@ class CatalogItem {
       iaIds: iaIds ?? this.iaIds,
       coverUrl: coverUrl,
       pdfUrl: pdfUrl ?? this.pdfUrl,
+      synopsis: synopsis ?? this.synopsis,
     );
   }
 
@@ -108,9 +122,9 @@ class CatalogItem {
   }
 
   /// Builds a comic issue from one Internet Archive advancedsearch
-  /// document (identifier + title + restriction flag). The cover is
-  /// IA's thumbnail service; the PDF filename resolves from the
-  /// item's metadata when the detail screen opens.
+  /// document (identifier + title + restriction flag + description).
+  /// The cover is IA's thumbnail service; the PDF filename resolves
+  /// from the item's metadata when the detail screen opens.
   static CatalogItem? fromInternetArchive(Map<String, dynamic> json) {
     final identifier = json['identifier'] as String?;
     if (identifier == null || identifier.isEmpty) return null;
@@ -122,6 +136,7 @@ class CatalogItem {
       subjects: const [],
       iaIds: [identifier],
       coverUrl: 'https://archive.org/services/img/$identifier',
+      synopsis: _plainText(json['description'] as String?),
     );
   }
 
@@ -164,6 +179,9 @@ class CatalogItem {
             .take(6)
             .toList() ??
         const [];
+    final descriptions = attr['description'] as Map<String, dynamic>? ?? {};
+    final rawSynopsis = (descriptions['en'] as String?) ??
+        descriptions.values.whereType<String>().firstOrNull;
     return CatalogItem(
       id: 'md:$mangaId',
       type: CatalogType.manga,
@@ -174,8 +192,37 @@ class CatalogItem {
       coverUrl: coverFile != null
           ? 'https://uploads.mangadex.org/covers/$mangaId/$coverFile'
           : null,
+      synopsis: _plainText(rawSynopsis),
     );
   }
+}
+
+/// Strips HTML tags from a source description (Internet Archive
+/// descriptions often carry a little markup), drops MangaDex's
+/// trailing Links section (everything after a `---` divider or a
+/// `**Links:**` marker), turns markdown links into plain text, and
+/// collapses the whitespace, capped so a huge description does not
+/// flood the detail screen. Returns null when nothing readable is
+/// left.
+String? _plainText(String? raw, {int maxLength = 1500}) {
+  if (raw == null) return null;
+  var text = raw;
+  final divider = text.indexOf('\n---');
+  if (divider >= 0) text = text.substring(0, divider);
+  final linksAt = text.indexOf('**Links:**');
+  if (linksAt >= 0) text = text.substring(0, linksAt);
+  text = text.replaceAll(RegExp(r'<[^>]*>'), ' ');
+  text = text.replaceAllMapped(
+    RegExp(r'\[([^\]]*)\]\([^)]*\)'),
+    (m) => m.group(1) ?? '',
+  );
+  text = text.replaceAll('**', '');
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (text.isEmpty) return null;
+  if (text.length > maxLength) {
+    text = '${text.substring(0, maxLength).trim()}…';
+  }
+  return text;
 }
 
 /// One manga chapter from MangaDex. Only chapters with real pages are
@@ -408,8 +455,8 @@ class CatalogProgress {
 }
 
 /// A saved catalog item, stored at `users/{uid}/catalog_saves/{id}`
-/// as a SNAPSHOT (title/author/cover) so the Library tab renders
-/// without re-fetching the source.
+/// as a SNAPSHOT (title/author/cover/synopsis) so the Library tab
+/// renders without re-fetching the source.
 class CatalogSave {
   const CatalogSave({
     required this.id,
@@ -419,6 +466,7 @@ class CatalogSave {
     this.coverUrl,
     required this.savedAt,
     this.iaIds = const [],
+    this.synopsis,
   });
 
   final String id;
@@ -432,6 +480,10 @@ class CatalogSave {
   /// chapters without re-fetching the source.
   final List<String> iaIds;
 
+  /// Synopsis snapshot, so a saved item still shows one without
+  /// re-fetching the source (old saves have none — null is fine).
+  final String? synopsis;
+
   Map<String, dynamic> toJson() => {
     'type': type.name,
     'title': title,
@@ -439,6 +491,7 @@ class CatalogSave {
     'coverUrl': coverUrl,
     'savedAt': Timestamp.fromDate(savedAt),
     'iaIds': iaIds,
+    'synopsis': synopsis,
   };
 
   static CatalogSave? fromJson(String id, Map<String, dynamic> json) {
@@ -464,6 +517,7 @@ class CatalogSave {
       coverUrl: json['coverUrl'] as String?,
       savedAt: parsedSavedAt,
       iaIds: (json['iaIds'] as List?)?.whereType<String>().toList() ?? const [],
+      synopsis: json['synopsis'] as String?,
     );
   }
 }

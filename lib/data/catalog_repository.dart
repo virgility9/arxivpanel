@@ -240,7 +240,8 @@ class CatalogRepository {
     }
     final uri = Uri.parse(
       '$_iaSearchBase?q=${Uri.encodeQueryComponent(q.toString())}'
-      '&fl[]=identifier&fl[]=title&fl[]=access-restricted-item'
+      '&fl[]=identifier&fl[]=title&fl[]=description'
+      '&fl[]=access-restricted-item'
       '&rows=$_pageSize&page=1&output=json',
     );
     final data = await _getJson(uri);
@@ -399,6 +400,38 @@ class CatalogRepository {
         }
       }
     }
+    return null;
+  }
+
+  /// Synopsis for one Open Library book/novel. The search document
+  /// carries no description, so this fetches the work record
+  /// (`/works/{id}.json`) and reads `description` (a string, or a
+  /// `{value: ...}` object) — falling back to `first_sentence` when
+  /// the work has no description. Returns null when the work has
+  /// neither or the fetch fails. Never throws.
+  Future<String?> fetchWorkSynopsis(CatalogItem item) async {
+    if (item.type != CatalogType.ebook &&
+        item.type != CatalogType.novel) {
+      return null;
+    }
+    final workId =
+        item.id.startsWith('ol:') ? item.id.substring(3) : '';
+    if (workId.isEmpty) return null;
+    final data = await _getJson(
+      Uri.parse('https://openlibrary.org/works/$workId.json'),
+    );
+    if (data == null) return null;
+    final description = _textField(data['description']) ??
+        _textField(data['first_sentence']);
+    final text = description?.trim();
+    return (text == null || text.isEmpty) ? null : text;
+  }
+
+  /// An Open Library text field is either a plain string or a
+  /// `{value: "..."}` object.
+  static String? _textField(dynamic value) {
+    if (value is String) return value;
+    if (value is Map<String, dynamic>) return value['value'] as String?;
     return null;
   }
 }

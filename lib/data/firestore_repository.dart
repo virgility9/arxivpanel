@@ -656,6 +656,7 @@ class FirestoreRepository {
           coverUrl: item.coverUrl,
           savedAt: DateTime.now(),
           iaIds: item.iaIds,
+          synopsis: item.synopsis,
         ).toJson(),
       );
     }

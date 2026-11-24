@@ -52,7 +52,6 @@ class CatalogCard extends StatelessWidget {
     final a = palette.accent;
     final saved = appState.isCatalogSaved(item.id);
     final isNarrow = MediaQuery.of(context).size.width < 700;
-    final coverH = isNarrow ? 132.0 : 150.0;
     final titleStyle = displayStyle(palette, size: isNarrow ? 19 : 21)
         .copyWith(fontWeight: FontWeight.w700);
 
@@ -63,9 +62,13 @@ class CatalogCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Cover — framed figure, same as the paper card. No cover
-            // from the source? A plain block with a book icon instead
-            // of a broken-image icon.
+            // Cover — framed figure, same as the paper card. Portrait
+            // frame (3:4): covers are portrait art — book covers,
+            // manga covers, comic issues — so the frame matches them
+            // and NetImage's contain fit shows the whole image
+            // instead of stretching or cutting it. No cover from the
+            // source? A plain block with a book icon instead of a
+            // broken-image icon.
             GestureDetector(
               onTap: onOpen,
               child: Padding(
@@ -77,25 +80,26 @@ class CatalogCard extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(1),
-                    child: item.coverUrl != null
-                        ? NetImage(
-                            url: item.coverUrl!,
-                            width: double.infinity,
-                            height: coverH,
-                            borderRadius: BorderRadius.circular(7),
-                          )
-                        : Container(
-                            height: coverH,
-                            decoration: BoxDecoration(
-                              color: c.surface2,
+                    child: AspectRatio(
+                      aspectRatio: 3 / 4,
+                      child: item.coverUrl != null
+                          ? NetImage(
+                              url: item.coverUrl!,
+                              width: double.infinity,
                               borderRadius: BorderRadius.circular(7),
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                color: c.surface2,
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: Icon(
+                                Icons.menu_book,
+                                size: 36,
+                                color: c.muted,
+                              ),
                             ),
-                            child: Icon(
-                              Icons.menu_book,
-                              size: 36,
-                              color: c.muted,
-                            ),
-                          ),
+                    ),
                   ),
                 ),
               ),

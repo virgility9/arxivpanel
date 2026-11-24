@@ -451,11 +451,11 @@ class ReadEntry {
 enum AppView { browse, library, feed, reader, post, polls, profile, settings, admin, catalogDetail, catalogReader, mangaReader, catalogPdf }
 
 /// Inner tabs of the Browse view. [localLibrary] is the app's own
-/// submitted papers; the other four are read-only catalog tabs backed
-/// by free public sources (Open Library for e-books — Gutendex joins
-/// later when it recovers — MangaDex for manga, Internet Archive for
-/// comics).
-enum BrowseTab { localLibrary, ebooks, novels, comics, manga }
+/// submitted papers; the other three are read-only catalog tabs backed
+/// by free public sources (Open Library for e-books and novels,
+/// MangaDex for manga and the Internet Archive for comics — manga and
+/// comics share the one [manga] tab, "Manga and Comics").
+enum BrowseTab { localLibrary, ebooks, novels, manga }
 
 /// A transient toast notification. [icon] is a solid Material icon
 /// (never an emoji: emoji glyphs render as boxes on some Windows fonts).

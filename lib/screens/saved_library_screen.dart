@@ -304,6 +304,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           subjects: const [],
           iaIds: save.iaIds,
           coverUrl: save.coverUrl,
+          synopsis: save.synopsis,
         ),
     ];
     return LayoutBuilder(

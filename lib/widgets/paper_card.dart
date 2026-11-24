@@ -69,7 +69,6 @@ class _PaperCardState extends State<PaperCard> {
     final reacted = user == null ? null : paper.reactionOf(user.id);
     final bookmarked = widget.appState.isBookmarked(paper.id);
     final isNarrow = MediaQuery.of(context).size.width < 700;
-    final coverH = isNarrow ? 132.0 : 150.0;
     final titleStyle = displayStyle(palette, size: isNarrow ? 19 : 21)
         .copyWith(fontWeight: FontWeight.w700);
 
@@ -82,6 +81,12 @@ class _PaperCardState extends State<PaperCard> {
         children: [
           // Cover — framed figure, like the reference card: inset
           // with a hairline border, no badges overlaid on the image.
+          // Portrait frame (3:4): covers are portrait art — A4 paper
+          // pages, book covers, manga covers — so the frame matches
+          // them and NetImage's contain fit shows the whole image
+          // instead of stretching or cutting it. The old 132px
+          // landscape frame forced every portrait cover into a wide
+          // box (2026-11-24).
           GestureDetector(
             onTap: () => widget.appState.openPaper(paper),
             child: Padding(
@@ -93,11 +98,13 @@ class _PaperCardState extends State<PaperCard> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(1),
-                  child: NetImage(
-                    url: paper.coverImage,
-                    width: double.infinity,
-                    height: coverH,
-                    borderRadius: BorderRadius.circular(7),
+                  child: AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: NetImage(
+                      url: paper.coverImage,
+                      width: double.infinity,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
                   ),
                 ),
               ),
