@@ -12,6 +12,10 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+// ScrollCacheExtent is NOT in material.dart — it lives in rendering,
+// so this import is required to name it (the analyzer's Quick Fix
+// offers exactly this line).
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../models/catalog.dart';
