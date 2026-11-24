@@ -138,7 +138,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              widget.appState.navigate(AppView.library);
+              widget.appState.navigate(AppView.browse);
             },
             child: Text('Discard', style: TextStyle(color: p.danger)),
           ),
@@ -461,8 +461,8 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
             width: double.infinity,
             child: GoldButton(
               palette: p,
-              label: 'Back to Library',
-              onPressed: () => widget.appState.navigate(AppView.library),
+              label: 'Back to Browse',
+              onPressed: () => widget.appState.navigate(AppView.browse),
               minHeight: narrow ? 48 : 52,
             ),
           ),
@@ -504,7 +504,7 @@ class _PostPaperScreenState extends State<PostPaperScreen> {
               palette: p,
               icon: Icons.arrow_back,
               minHeight: 44,
-              onPressed: () => widget.appState.navigate(AppView.library),
+              onPressed: () => widget.appState.navigate(AppView.browse),
             ),
             const SizedBox(width: 12),
             Text(

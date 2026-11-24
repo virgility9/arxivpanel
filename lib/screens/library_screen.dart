@@ -1,5 +1,5 @@
-/// Library screen: the "Reading Room" archive view ported from
-/// `LibraryView.tsx`.
+/// Local Library tab inside Browse: the "Reading Room" archive view
+/// ported from `LibraryView.tsx` — the app's own submitted papers.
 ///
 /// Hero section (eyebrow, serif title, counts), a search field, horizontally
 /// scrollable field chips, a right-aligned sort row, then the filtered/sorted
@@ -20,8 +20,8 @@ import '../widgets/pagination_bar.dart';
 import '../widgets/paper_card.dart';
 import '../widgets/shared.dart';
 
-class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({
+class LocalLibraryTab extends StatefulWidget {
+  const LocalLibraryTab({
     super.key,
     required this.appState,
     required this.theme,
@@ -33,10 +33,10 @@ class LibraryScreen extends StatefulWidget {
   final VoidCallback onAuthPrompt;
 
   @override
-  State<LibraryScreen> createState() => _LibraryScreenState();
+  State<LocalLibraryTab> createState() => _LocalLibraryTabState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LocalLibraryTabState extends State<LocalLibraryTab> {
   String _field = AppConstants.fields[0];
   String _sort = 'newest';
   String _search = '';

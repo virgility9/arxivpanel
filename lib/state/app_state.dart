@@ -324,7 +324,25 @@ class AppState extends ChangeNotifier {
   bool _updateDownloading = false;
 
   AppUser? _user;
-  AppView _view = AppView.library;
+  AppView _view = AppView.browse;
+
+  /// Active inner tab of the Browse view. Lives in AppState (not in the
+  /// Browse screen's local state) so the shell's Submit button can hide
+  /// itself off the Local Library tab, and the tab survives swipes.
+  BrowseTab _browseTab = BrowseTab.localLibrary;
+  BrowseTab get browseTab => _browseTab;
+
+  void setBrowseTab(BrowseTab tab) {
+    if (_browseTab == tab) return;
+    _browseTab = tab;
+    notifyListeners();
+  }
+
+  /// Tab the reader was opened from (Browse or the saved Library), so
+  /// the reader's back button and the system back button return there
+  /// instead of always landing on Browse.
+  AppView _readerOrigin = AppView.browse;
+  AppView get readerOrigin => _readerOrigin;
 
   List<Paper> _papers = <Paper>[];
   bool _papersLoaded = false;
@@ -580,7 +598,7 @@ class AppState extends ChangeNotifier {
     _bookmarks = <String>{};
     _readingHistory = <ReadEntry>[];
     _subscribePapers();
-    navigate(AppView.library);
+    navigate(AppView.browse);
     notifyListeners();
     showToast('Signed out', Icons.logout);
   }
@@ -716,6 +734,7 @@ class AppState extends ChangeNotifier {
     _recordReadingTime();
     unawaited(_repo!.incrementViews(paper.id));
     _selectedPaperId = paper.id;
+    _readerOrigin = _view;
     _innerBackHandler = null;
     _view = AppView.reader;
     _readStart = DateTime.now();
@@ -1091,7 +1110,7 @@ class AppState extends ChangeNotifier {
     if (reason != null && reason.trim().isNotEmpty) {
       body += ' — ${reason.trim()}';
     } else if (status == PaperStatus.approved) {
-      body += ' is now published in the Library.';
+      body += ' is now published in the Local Library.';
     }
     try {
       await _repo!.createNotification(

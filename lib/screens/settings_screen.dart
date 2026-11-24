@@ -727,7 +727,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       icon: Icons.help,
                                       title: 'Help',
                                       subtitle:
-                                          'Take the tour again — Library, Feed, Contest, Submit',
+                                          'Take the tour again — Browse, Library, Feed, Contest, Submit',
                                       onTap: () => OnboardingTour.show(
                                         context,
                                         appState: appState,

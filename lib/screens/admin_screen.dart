@@ -940,7 +940,7 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Library Statistics',
+          'Local Library Statistics',
           style: displayStyle(p, size: 17, weight: FontWeight.w600),
         ),
         const SizedBox(height: 4),

@@ -445,7 +445,16 @@ class ReadEntry {
 }
 
 /// The top-level navigation views (mirrors the `View` union type).
-enum AppView { library, feed, reader, post, polls, profile, settings, admin }
+/// Top-level views the shell swaps between. [browse] is the home tab
+/// (Browse: Local Library + the read-only catalog tabs); [library] is
+/// the user's saved collection (saved papers and catalog items).
+enum AppView { browse, library, feed, reader, post, polls, profile, settings, admin }
+
+/// Inner tabs of the Browse view. [localLibrary] is the app's own
+/// submitted papers; the other four are read-only catalog tabs backed
+/// by free public sources (Gutendex for e-books/novels, MangaDex for
+/// manga, Internet Archive for comics).
+enum BrowseTab { localLibrary, ebooks, novels, comics, manga }
 
 /// A transient toast notification. [icon] is a solid Material icon
 /// (never an emoji: emoji glyphs render as boxes on some Windows fonts).

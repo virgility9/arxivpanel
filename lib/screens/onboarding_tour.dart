@@ -23,9 +23,15 @@ class OnboardingTour {
     ),
     (
       icon: Icons.search,
+      title: 'Browse',
+      body:
+          'Find papers in the Local Library, or read free e-books, novels, comics and manga. Tap a card to open it, tap the heart to like it, and tap the bookmark to save it.',
+    ),
+    (
+      icon: Icons.bookmark,
       title: 'Library',
       body:
-          'Find papers by field or search. Tap a card to open it, tap the heart to like it, and tap the bookmark to save it to your profile.',
+          'Everything you save lives here, grouped by type, so you never have to browse for it twice.',
     ),
     (
       icon: Icons.newspaper,
@@ -43,7 +49,7 @@ class OnboardingTour {
       icon: Icons.upload,
       title: 'Submit a paper',
       body:
-          'Tap the gold button at the bottom right to submit your own paper. Pick a PDF from your device — it is reviewed before it appears in the Library.',
+          'Tap the gold button at the bottom right to submit your own paper. Pick a PDF from your device — it is reviewed before it appears in the Local Library.',
     ),
   ];
 

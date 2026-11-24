@@ -172,7 +172,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   p,
                   minWidth: 44,
                   onPressed: () =>
-                      widget.appState.navigate(AppView.library),
+                      widget.appState.navigate(widget.appState.readerOrigin),
                   child: Icon(Icons.arrow_back, size: 18, color: c.muted),
                 ),
                 const SizedBox(width: 10),

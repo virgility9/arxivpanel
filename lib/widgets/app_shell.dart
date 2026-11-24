@@ -12,8 +12,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/constants.dart';
 import '../models/models.dart';
 import '../screens/admin_screen.dart';
+import '../screens/browse_screen.dart';
 import '../screens/feed_screen.dart';
-import '../screens/library_screen.dart';
+import '../screens/saved_library_screen.dart';
 import '../screens/onboarding_tour.dart';
 import '../screens/polls_screen.dart';
 import '../screens/post_paper_screen.dart';
@@ -58,24 +59,33 @@ class AppShell extends StatelessWidget {
 
     // Submit lives on a floating action button now (same upload icon as
     // the old tab), not in the bottom nav. Hidden for admins (they
-    // cannot submit) and on the submit form and reader themselves.
+    // cannot submit), and shown only on Browse's Local Library tab —
+    // papers are submitted to the local library, never to the saved
+    // collection or the read-only catalog tabs.
     final isAdmin = appState.user?.isAdmin == true;
     final showSubmitFab = !isAdmin &&
-        appState.view != AppView.post &&
-        appState.view != AppView.reader;
+        appState.view == AppView.browse &&
+        appState.browseTab == BrowseTab.localLibrary;
 
     return PopScope(
       // No router in this app, so intercept the system back button: first
       // unwind the visible view's own state (a settings detail page, a
       // reader tab, a dirty submit form — see AppState.tryInnerBack), then
-      // fall back to the library instead of exiting. (Browser back-button
+      // fall back to Browse instead of exiting. (Browser back-button
       // history is not wired; this covers Android system back and
       // programmatic pops.)
-      canPop: appState.view == AppView.library && !appState.hasInnerBack,
+      canPop: appState.view == AppView.browse && !appState.hasInnerBack,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (appState.tryInnerBack()) return;
-        _navigate(context, AppView.library);
+        // Back from the reader returns to the tab it was opened from
+        // (Browse or the saved Library); anywhere else falls back to
+        // Browse, the home tab.
+        if (appState.view == AppView.reader) {
+          _navigate(context, appState.readerOrigin);
+        } else {
+          _navigate(context, AppView.browse);
+        }
       },
       child: Scaffold(
         backgroundColor: c.bg,
@@ -163,6 +173,12 @@ class AppShell extends StatelessWidget {
   Widget _buildView(BuildContext context, AppView view) {
     void onAuthPrompt() => _promptAuth(context);
     switch (view) {
+      case AppView.browse:
+        return BrowseScreen(
+          appState: appState,
+          theme: theme,
+          onAuthPrompt: onAuthPrompt,
+        );
       case AppView.library:
         return LibraryScreen(
           appState: appState,
@@ -173,7 +189,7 @@ class AppShell extends StatelessWidget {
         return FeedScreen(appState: appState, theme: theme);
       case AppView.reader:
         if (appState.selectedPaper == null) {
-          return LibraryScreen(
+          return BrowseScreen(
             appState: appState,
             theme: theme,
             onAuthPrompt: onAuthPrompt,
@@ -194,7 +210,7 @@ class AppShell extends StatelessWidget {
         return PollsScreen(appState: appState, theme: theme);
       case AppView.profile:
         if (appState.user == null) {
-          return LibraryScreen(
+          return BrowseScreen(
             appState: appState,
             theme: theme,
             onAuthPrompt: onAuthPrompt,
@@ -206,7 +222,7 @@ class AppShell extends StatelessWidget {
         return SettingsScreen(theme: theme, appState: appState);
       case AppView.admin:
         if (appState.user?.isAdmin != true) {
-          return LibraryScreen(
+          return BrowseScreen(
             appState: appState,
             theme: theme,
             onAuthPrompt: onAuthPrompt,
@@ -308,6 +324,7 @@ class _TabPagesState extends State<_TabPages> {
   List<AppView> get _tabs {
     final isAdmin = widget.appState.user?.isAdmin == true;
     return [
+      AppView.browse,
       AppView.library,
       AppView.feed,
       AppView.polls,
@@ -487,9 +504,18 @@ class _Navbar extends StatelessWidget {
     final unreadCount = appState.unreadAnnouncementCount;
 
     Widget navLink(String label, AppView v,
-        {AppIcon? icon, bool feedIcon = false, int? badge}) {
-      final active =
-          view == v || (v == AppView.library && view == AppView.reader);
+        {AppIcon? icon,
+        IconData? materialIcon,
+        bool feedIcon = false,
+        int? badge}) {
+      // The reader belongs to the tab it was opened from (Browse or the
+      // saved Library), so it highlights that tab, not always Browse.
+      final active = view == v ||
+          (view == AppView.reader &&
+              ((v == AppView.browse &&
+                      appState.readerOrigin == AppView.browse) ||
+                  (v == AppView.library &&
+                      appState.readerOrigin == AppView.library)));
       return InkWell(
         onTap: () => onNavigate(v),
         borderRadius: BorderRadius.circular(6),
@@ -508,6 +534,13 @@ class _Navbar extends StatelessWidget {
             children: [
               if (feedIcon) ...[
                 FeedIconImage(
+                  size: 16,
+                  color: active ? a.accent : c.muted,
+                ),
+                const SizedBox(width: 6),
+              ] else if (materialIcon != null) ...[
+                Icon(
+                  materialIcon,
                   size: 16,
                   color: active ? a.accent : c.muted,
                 ),
@@ -576,12 +609,15 @@ class _Navbar extends StatelessWidget {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => onNavigate(AppView.library),
+                onTap: () => onNavigate(AppView.browse),
                 child: AppLogo(palette: palette, fontSize: isNarrow ? 17 : 20),
               ),
               if (!isNarrow) ...[
                 const SizedBox(width: 12),
-                navLink('Library', AppView.library, icon: AppIcon.library),
+                navLink('Browse', AppView.browse,
+                    materialIcon: Icons.explore),
+                navLink('Library', AppView.library,
+                    materialIcon: Icons.bookmark),
                 navLink('Feed', AppView.feed, feedIcon: true),
                 navLink(
                   'Contest',
@@ -872,14 +908,24 @@ class _BottomNav extends StatelessWidget {
           ({
             AppView view,
             AppIcon? icon,
+            IconData? materialIcon,
             String label,
             bool requiresAuth,
             int? badge,
           })
         >[
           (
+            view: AppView.browse,
+            icon: null,
+            materialIcon: Icons.explore,
+            label: 'Browse',
+            requiresAuth: false,
+            badge: null,
+          ),
+          (
             view: AppView.library,
-            icon: AppIcon.library,
+            icon: null,
+            materialIcon: Icons.bookmark,
             label: 'Library',
             requiresAuth: false,
             badge: null,
@@ -888,6 +934,7 @@ class _BottomNav extends StatelessWidget {
             view: AppView.feed,
             // Null icon means the custom newspaper icon below.
             icon: null,
+            materialIcon: null,
             label: 'Feed',
             requiresAuth: false,
             badge: null,
@@ -895,6 +942,7 @@ class _BottomNav extends StatelessWidget {
           (
             view: AppView.polls,
             icon: AppIcon.contest,
+            materialIcon: null,
             label: 'Contest',
             requiresAuth: false,
             badge: unreadCount > 0 ? unreadCount : null,
@@ -905,6 +953,7 @@ class _BottomNav extends StatelessWidget {
           (
             view: AppView.settings,
             icon: AppIcon.settings,
+            materialIcon: null,
             label: 'Settings',
             requiresAuth: false,
             badge: null,
@@ -913,6 +962,7 @@ class _BottomNav extends StatelessWidget {
             (
               view: AppView.admin,
               icon: AppIcon.admin,
+              materialIcon: null,
               label: 'Admin',
               requiresAuth: false,
               badge: appState.pendingPapers.isEmpty
@@ -922,7 +972,7 @@ class _BottomNav extends StatelessWidget {
         ];
 
     bool isActive(AppView v) {
-      if (v == AppView.library && view == AppView.reader) return true;
+      if (view == AppView.reader) return v == appState.readerOrigin;
       return view == v;
     }
 
@@ -956,20 +1006,28 @@ class _BottomNav extends StatelessWidget {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            item.icon != null
-                                ? AppIconImage(
-                                    item.icon!,
+                            item.materialIcon != null
+                                ? Icon(
+                                    item.materialIcon!,
                                     size: 20,
                                     color: active
                                         ? a.accent
                                         : c.muted.withValues(alpha: 0.7),
                                   )
-                                : FeedIconImage(
-                                    size: 20,
-                                    color: active
-                                        ? a.accent
-                                        : c.muted.withValues(alpha: 0.7),
-                                  ),
+                                : item.icon != null
+                                    ? AppIconImage(
+                                        item.icon!,
+                                        size: 20,
+                                        color: active
+                                            ? a.accent
+                                            : c.muted.withValues(alpha: 0.7),
+                                      )
+                                    : FeedIconImage(
+                                        size: 20,
+                                        color: active
+                                            ? a.accent
+                                            : c.muted.withValues(alpha: 0.7),
+                                      ),
                             if (item.badge != null)
                               Positioned(
                                 top: -6,

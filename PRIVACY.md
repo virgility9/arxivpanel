@@ -14,7 +14,7 @@ Where it is stored
 
 What we do not do
 • No ads, no analytics or tracking SDKs, and no selling or sharing your data with anyone else.
-• Papers you submit are reviewed by an admin before they appear in the Library. Rejected papers are not published.
+• Papers you submit are reviewed by an admin before they appear in the Local Library. Rejected papers are not published.
 
 Your choices
 • You can edit your profile, delete your own papers, and sign out at any time.
