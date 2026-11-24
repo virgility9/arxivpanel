@@ -16,6 +16,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/auth_repository.dart';
@@ -809,8 +810,23 @@ class AppState extends ChangeNotifier {
   bool get hasInnerBack => _innerBackHandler != null;
 
   void setInnerBackHandler(VoidCallback? handler) {
+    if (_innerBackHandler == handler) return;
     _innerBackHandler = handler;
-    notifyListeners();
+    // The field updates at once, so a back press sees the new handler
+    // immediately. The notification is deferred when this runs in the
+    // middle of a build — screens call this from initState/dispose,
+    // and notifying synchronously then crashes the app's setState
+    // listener in main.dart ("setState() called during build", detail
+    // screen mount 2026-11-24). Outside a build it notifies at once,
+    // so the shell's back-button state stays prompt.
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_disposed) notifyListeners();
+      });
+    } else {
+      notifyListeners();
+    }
   }
 
   /// Runs the registered inner back action, if any. Returns true when a
