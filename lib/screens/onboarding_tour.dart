@@ -19,19 +19,19 @@ class OnboardingTour {
       icon: Icons.library_books,
       title: 'Welcome to Arxiv',
       body:
-          'A paper library for students. Browse research papers, read them in the app, and save the ones you want to come back to.',
-    ),
-    (
-      icon: Icons.search,
-      title: 'Browse',
-      body:
-          'Find papers in the Local Library, or read free e-books, novels, manga and comics. Tap a card to open it, tap the heart to like it, and tap the bookmark to save it.',
+          'A library for students: research papers plus free e-books, novels, manga and comics. Read them in the app and save the ones you want to come back to.',
     ),
     (
       icon: Icons.bookmark,
       title: 'Library',
       body:
-          'Everything you save lives here, grouped by type, so you never have to browse for it twice.',
+          'This is home. Everything you save lives here, grouped by type, so you never have to browse for it twice.',
+    ),
+    (
+      icon: Icons.search,
+      title: 'Browse',
+      body:
+          'Find something new: papers in the Local Library, or free e-books, novels, manga and comics from the internet. Tap a card to open it, the heart to like it, the bookmark to save it.',
     ),
     (
       icon: Icons.newspaper,
@@ -46,10 +46,16 @@ class OnboardingTour {
           'See the most-liked papers and read announcements from the admins here. New announcements ping this tab.',
     ),
     (
+      icon: Icons.menu_book,
+      title: 'Reading',
+      body:
+          'Manga and comics open in a page reader, books in a text reader. While reading, tap the gear to change the reading mode, theme and brightness.',
+    ),
+    (
       icon: Icons.upload,
       title: 'Submit a paper',
       body:
-          'Tap the gold button at the bottom right to submit your own paper. Pick a PDF from your device — it is reviewed before it appears in the Local Library.',
+          'On Browse\'s Local Library tab, tap the gold button at the bottom right to submit your own paper. Pick a PDF from your device — it is reviewed before it appears in the Local Library.',
     ),
   ];
 
