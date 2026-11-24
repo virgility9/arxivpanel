@@ -1,16 +1,25 @@
-/// In-app page reader for one manga chapter: full-page images from
-/// MangaDex's at-home server, swiped horizontally, with a page
-/// indicator and prev/next chapter footer. The system back button
-/// returns to the detail screen, same as the back arrow. Page
-/// progress is not saved yet (a later update can add it).
+/// In-app page reader for one manga chapter, with Tachiyomi-style
+/// customization (per series, stored in Firestore): reading mode
+/// (paged LTR/RTL/vertical, long strip), scale type, background,
+/// tap zones, rotation lock, fullscreen, custom brightness and colour
+/// filters. Settings live in [AppState.mangaReaderSettings] and open
+/// in a bottom sheet from the gear button (or a long press on a page).
+/// The system back button returns to the detail screen, same as the
+/// back arrow. Page progress is not saved yet (a later update can
+/// add it).
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../models/catalog.dart';
 import '../models/models.dart';
+import '../models/reader_settings.dart';
 import '../state/app_state.dart';
+import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/shared.dart';
+import 'manga_reader_settings_sheet.dart';
 
 class MangaReaderScreen extends StatefulWidget {
   const MangaReaderScreen({
@@ -28,24 +37,44 @@ class MangaReaderScreen extends StatefulWidget {
 
 class _MangaReaderScreenState extends State<MangaReaderScreen> {
   final PageController _pages = PageController();
+  final ScrollController _strip = ScrollController();
+  final TransformationController _zoom = TransformationController();
   int _pageIndex = 0;
+  bool _menusVisible = true;
+  bool _zoomed = false;
+  bool _wasPaged = true;
 
   /// The chapter this State instance is showing. The shell keys the
   /// screen by chapter index, so a chapter change remounts the screen
   /// and the page index resets to the first page.
   late final int _chapterIndex;
 
+  ReaderRotation? _appliedRotation;
+  bool? _appliedFullscreen;
+
   @override
   void initState() {
     super.initState();
     _chapterIndex = widget.appState.selectedMangaChapterIndex;
     widget.appState.setInnerBackHandler(_backToDetail);
+    final s = widget.appState.mangaReaderSettings;
+    _menusVisible = !s.fullscreen;
+    _wasPaged = s.isPaged;
+    _zoom.addListener(_onZoomChanged);
+    _strip.addListener(_onStripScroll);
+    _applySystemSettings(s);
   }
 
   @override
   void dispose() {
+    _zoom.removeListener(_onZoomChanged);
+    _strip.removeListener(_onStripScroll);
     widget.appState.setInnerBackHandler(null);
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _pages.dispose();
+    _strip.dispose();
+    _zoom.dispose();
     super.dispose();
   }
 
@@ -53,137 +82,509 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
     widget.appState.navigate(AppView.catalogDetail);
   }
 
+  void _onZoomChanged() {
+    final zoomed = _zoom.value.getMaxScaleOnAxis() > 1.01;
+    if (zoomed != _zoomed) {
+      setState(() => _zoomed = zoomed);
+    }
+  }
+
+  /// Long strip: the page number is a scroll-fraction estimate (pages
+  /// have different heights, so there is no exact offset per page).
+  void _onStripScroll() {
+    if (!mounted || !_strip.hasClients) return;
+    final count = widget.appState.mangaPageUrls.length;
+    if (count <= 1) return;
+    final max = _strip.position.maxScrollExtent;
+    if (max <= 0) return;
+    final index = ((_strip.offset / max) * (count - 1)).round().clamp(
+      0,
+      count - 1,
+    ).toInt();
+    if (index != _pageIndex) {
+      setState(() => _pageIndex = index);
+    }
+  }
+
+  /// Applies the rotation lock and fullscreen system UI for the
+  /// current settings, but only when they changed (SystemChrome calls
+  /// on every build would fight the platform).
+  void _applySystemSettings(MangaReaderSettings s) {
+    if (s.rotation != _appliedRotation) {
+      _appliedRotation = s.rotation;
+      SystemChrome.setPreferredOrientations(_orientationsFor(s.rotation));
+    }
+    final immersive = s.fullscreen && !_menusVisible;
+    if (immersive != _appliedFullscreen) {
+      _appliedFullscreen = immersive;
+      SystemChrome.setEnabledSystemUIMode(
+        immersive ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+      );
+    }
+  }
+
+  List<DeviceOrientation> _orientationsFor(ReaderRotation r) => switch (r) {
+    ReaderRotation.def || ReaderRotation.free => DeviceOrientation.values,
+    ReaderRotation.portrait => const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ],
+    ReaderRotation.landscape => const [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ],
+    ReaderRotation.lockedPortrait => const [DeviceOrientation.portraitUp],
+    ReaderRotation.lockedLandscape => const [DeviceOrientation.landscapeLeft],
+    ReaderRotation.reversePortrait => const [DeviceOrientation.portraitDown],
+  };
+
+  void _openSettings() {
+    showMangaReaderSettingsSheet(
+      context: context,
+      appState: widget.appState,
+      theme: widget.theme,
+    );
+  }
+
+  void _resetZoom() {
+    _zoom.value = Matrix4.identity();
+  }
+
+  void _goToPage(int index, MangaReaderSettings s) {
+    final pageCount = widget.appState.mangaPageUrls.length;
+    if (pageCount == 0) return;
+    final target = index.clamp(0, pageCount - 1).toInt();
+    setState(() => _pageIndex = target);
+    if (s.isPaged) {
+      if (!_pages.hasClients) return;
+      if (s.animateTransitions) {
+        _pages.animateToPage(
+          target,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _pages.jumpToPage(target);
+      }
+    } else {
+      if (!_strip.hasClients) return;
+      final max = _strip.position.maxScrollExtent;
+      final offset = pageCount <= 1 || max <= 0
+          ? 0.0
+          : (target / (pageCount - 1)) * max;
+      if (s.animateTransitions) {
+        _strip.animateTo(
+          offset,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _strip.jumpTo(offset);
+      }
+    }
+  }
+
+  void _nextPage(int pageCount) {
+    if (_pageIndex + 1 >= pageCount) return;
+    _goToPage(_pageIndex + 1, widget.appState.mangaReaderSettings);
+  }
+
+  void _prevPage() {
+    if (_pageIndex <= 0) return;
+    _goToPage(_pageIndex - 1, widget.appState.mangaReaderSettings);
+  }
+
+  /// Tap zones: left/right (or top/bottom for vertical paging) turn
+  /// pages, the centre toggles the menus. RTL reading mirrors the
+  /// sides; the invert setting mirrors them again. While zoomed, taps
+  /// only toggle the menus — they never turn a page.
+  void _onTap(TapUpDetails details, MangaReaderSettings s, int pageCount) {
+    if (_zoomed) {
+      setState(() => _menusVisible = !_menusVisible);
+      return;
+    }
+    if (s.tapZones == TapZones.disabled) {
+      setState(() => _menusVisible = !_menusVisible);
+      return;
+    }
+    final size = MediaQuery.sizeOf(context);
+    final dx = details.globalPosition.dx / size.width;
+    final dy = details.globalPosition.dy / size.height;
+    final flipH =
+        s.invertTapZones == InvertTapZones.horizontal ||
+        s.invertTapZones == InvertTapZones.both;
+    final flipV =
+        s.invertTapZones == InvertTapZones.vertical ||
+        s.invertTapZones == InvertTapZones.both;
+    if (s.isVerticalPaging) {
+      // Top = previous, bottom = next (thirds); centre toggles menus.
+      if (dy < 1 / 3) {
+        flipV ? _nextPage(pageCount) : _prevPage();
+      } else if (dy > 2 / 3) {
+        flipV ? _prevPage() : _nextPage(pageCount);
+      } else {
+        setState(() => _menusVisible = !_menusVisible);
+      }
+      return;
+    }
+    // Left is "next" when reading right to left; the invert setting
+    // flips that again.
+    final leftIsNext = s.isRtl != flipH;
+    if (s.tapZones == TapZones.rightAndLeft) {
+      if (dx < 0.5) {
+        leftIsNext ? _nextPage(pageCount) : _prevPage();
+      } else {
+        leftIsNext ? _prevPage() : _nextPage(pageCount);
+      }
+      return;
+    }
+    // Default: edge thirds turn pages, centre toggles the menus.
+    if (dx < 1 / 3) {
+      leftIsNext ? _nextPage(pageCount) : _prevPage();
+    } else if (dx > 2 / 3) {
+      leftIsNext ? _prevPage() : _nextPage(pageCount);
+    } else {
+      setState(() => _menusVisible = !_menusVisible);
+    }
+  }
+
+  /// Grayscale / invert / tint, nested — one ColorFiltered each, so
+  /// any combination works.
+  Widget _applyFilters(Widget child, MangaReaderSettings s) {
+    var out = child;
+    if (s.tint != PageTint.none) {
+      out = ColorFiltered(
+        colorFilter: ColorFilter.matrix(_tintMatrix(s.tint)),
+        child: out,
+      );
+    }
+    if (s.inverted) {
+      out = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          -1, 0, 0, 0, 255,
+          0, -1, 0, 0, 255,
+          0, 0, -1, 0, 255,
+          0, 0, 0, 1, 0,
+        ]),
+        child: out,
+      );
+    }
+    if (s.grayscale) {
+      out = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0, 0, 0, 1, 0,
+        ]),
+        child: out,
+      );
+    }
+    return out;
+  }
+
+  List<double> _tintMatrix(PageTint tint) => switch (tint) {
+    PageTint.none => const <double>[
+      1, 0, 0, 0, 0,
+      0, 1, 0, 0, 0,
+      0, 0, 1, 0, 0,
+      0, 0, 0, 1, 0,
+    ],
+    PageTint.sepia => const <double>[
+      0.393, 0.769, 0.189, 0, 0,
+      0.349, 0.686, 0.168, 0, 0,
+      0.272, 0.534, 0.131, 0, 0,
+      0, 0, 0, 1, 0,
+    ],
+    PageTint.warm => const <double>[
+      1.08, 0, 0, 0, 0,
+      0, 1.0, 0, 0, 0,
+      0, 0, 0.92, 0, 0,
+      0, 0, 0, 1, 0,
+    ],
+    PageTint.cool => const <double>[
+      0.92, 0, 0, 0, 0,
+      0, 1.0, 0, 0, 0,
+      0, 0, 1.08, 0, 0,
+      0, 0, 0, 1, 0,
+    ],
+  };
+
   @override
   Widget build(BuildContext context) {
     final p = widget.theme.palette;
-    final c = p.c;
     final isNarrow = MediaQuery.of(context).size.width < 700;
     return AnimatedBuilder(
       animation: widget.appState,
       builder: (context, _) {
         final appState = widget.appState;
+        final s = appState.mangaReaderSettings;
         final item = appState.selectedCatalogItem;
         final chapter = appState.selectedMangaChapter;
         final pageUrls = appState.mangaPageUrls;
         final loading = appState.mangaPagesLoading;
+        _applySystemSettings(s);
+        // The reader switched between paged and long strip: land on
+        // the current page in the new mode (after this frame, once
+        // the new controller has clients).
+        if (s.isPaged != _wasPaged) {
+          _wasPaged = s.isPaged;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _goToPage(_pageIndex, s);
+          });
+        }
+        final bgColor = switch (s.background) {
+          ReaderBackground.black => Colors.black,
+          ReaderBackground.gray => const Color(0xFF2A2A2A),
+          ReaderBackground.white => Colors.white,
+          ReaderBackground.auto => p.c.surface,
+        };
+        final onBg = s.background == ReaderBackground.white
+            ? Colors.black87
+            : s.background == ReaderBackground.auto
+                ? p.c.text
+                : Colors.white;
+        final faintOnBg = onBg.withAlpha(150);
         if (item == null || chapter == null || pageUrls.isEmpty) {
-          return SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-              child: EmptyState(
-                palette: p,
-                icon: Icons.image,
-                title: loading ? 'Loading pages…' : 'No pages to show',
-                sub: loading
-                    ? 'Fetching this chapter from MangaDex.'
-                    : 'Try another chapter.',
+          return Container(
+            color: bgColor,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+                child: EmptyState(
+                  palette: p,
+                  icon: Icons.image,
+                  title: loading ? 'Loading pages…' : 'No pages to show',
+                  sub: loading
+                      ? 'Fetching this chapter from MangaDex.'
+                      : 'Try another chapter.',
+                ),
               ),
             ),
           );
         }
         final chapterCount = appState.mangaChapters.length;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Top bar: back + chapter label.
-            Container(
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: c.border)),
-              ),
-              padding: EdgeInsets.fromLTRB(
-                isNarrow ? 8 : 16,
-                isNarrow ? 8 : 12,
-                isNarrow ? 8 : 16,
-                isNarrow ? 8 : 12,
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Back to ${item.title}',
-                    icon: Icon(Icons.arrow_back, color: c.text, size: 22),
-                    onPressed: _backToDetail,
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          chapter.label,
-                          style: displayStyle(p,
-                              size: 16, weight: FontWeight.w700),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+        return Container(
+          color: bgColor,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_menusVisible) _topBar(p, s, item, chapter, pageUrls.length,
+                  onBg, faintOnBg, isNarrow),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (d) => _onTap(d, s, pageUrls.length),
+                  onLongPress: () {
+                    if (s.showActionsOnLongTap) _openSettings();
+                  },
+                  child: Stack(
+                    children: [
+                      _applyFilters(_pagesArea(s, pageUrls), s),
+                      if (s.dimOpacity > 0)
+                        IgnorePointer(
+                          child: Container(
+                            color: Colors.black.withOpacity(s.dimOpacity),
+                          ),
                         ),
-                        Text(
-                          item.title,
-                          style: monoStyle(p, size: 10, color: c.faint),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      if (_zoomed)
+                        Positioned(
+                          right: 12,
+                          bottom: 12,
+                          child: Material(
+                            color: p.c.surface,
+                            shape: const CircleBorder(),
+                            child: IconButton(
+                              tooltip: 'Reset zoom',
+                              icon: Icon(Icons.zoom_out_map, color: p.c.text),
+                              onPressed: _resetZoom,
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                  Text(
-                    'Page ${_pageIndex + 1} of ${pageUrls.length}',
-                    style: monoStyle(p, size: 10, color: c.faint),
-                  ),
-                ],
+                ),
               ),
-            ),
-            // Pages: swipe horizontally; NetImage defaults to contain,
-            // so the whole page shows, never cropped.
-            Expanded(
-              child: PageView.builder(
-                controller: _pages,
-                itemCount: pageUrls.length,
-                onPageChanged: (i) => setState(() => _pageIndex = i),
-                itemBuilder: (context, i) {
-                  return Center(
-                    child: NetImage(url: pageUrls[i]),
-                  );
-                },
-              ),
-            ),
-            // Footer: prev/next chapter.
-            Container(
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: c.border)),
-              ),
-              padding: EdgeInsets.fromLTRB(
-                isNarrow ? 16 : 24,
-                12,
-                isNarrow ? 16 : 24,
-                isNarrow ? 16 : 24,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GhostButton(
-                      palette: p,
-                      label: 'Previous',
-                      icon: Icons.chevron_left,
-                      onPressed: _chapterIndex > 0 && !loading
-                          ? () => appState.openMangaChapter(_chapterIndex - 1)
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GoldButton(
-                      palette: p,
-                      label: 'Next chapter',
-                      icon: Icons.chevron_right,
-                      onPressed: _chapterIndex < chapterCount - 1 && !loading
-                          ? () => appState.openMangaChapter(_chapterIndex + 1)
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              if (_menusVisible)
+                _footer(p, s, chapterCount, pageUrls.length, loading,
+                    onBg, faintOnBg, isNarrow),
+            ],
+          ),
         );
       },
+    );
+  }
+
+  Widget _topBar(
+    AppPalette p,
+    MangaReaderSettings s,
+    CatalogItem item,
+    MangaChapter chapter,
+    int pageCount,
+    Color onBg,
+    Color faintOnBg,
+    bool isNarrow,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: faintOnBg.withAlpha(60))),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        isNarrow ? 8 : 16,
+        isNarrow ? 8 : 12,
+        isNarrow ? 8 : 16,
+        isNarrow ? 8 : 12,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Back to ${item.title}',
+            icon: Icon(Icons.arrow_back, color: onBg, size: 22),
+            onPressed: _backToDetail,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  chapter.label,
+                  style: displayStyle(p, size: 16, weight: FontWeight.w700)
+                      .copyWith(color: onBg),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  item.title,
+                  style: monoStyle(p, size: 10, color: faintOnBg),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (s.showPageNumber)
+            Text(
+              'Page ${_pageIndex + 1} of $pageCount',
+              style: monoStyle(p, size: 10, color: faintOnBg),
+            ),
+          IconButton(
+            tooltip: 'Reader settings',
+            icon: Icon(Icons.settings, color: onBg, size: 22),
+            onPressed: _openSettings,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Paged modes: a PageView (LTR, RTL via reverse, or vertical).
+  /// Long strip: a ListView of full-width pages. Pinch zoom is paged
+  /// only — in long strip the list itself scrolls.
+  Widget _pagesArea(MangaReaderSettings s, List<String> pageUrls) {
+    if (s.isPaged) {
+      return PageView.builder(
+        controller: _pages,
+        reverse: s.isRtl,
+        scrollDirection:
+            s.isVerticalPaging ? Axis.vertical : Axis.horizontal,
+        physics: _zoomed
+            ? const NeverScrollableScrollPhysics()
+            : const PageScrollPhysics(),
+        itemCount: pageUrls.length,
+        onPageChanged: (i) {
+          setState(() => _pageIndex = i);
+          _resetZoom();
+        },
+        itemBuilder: (context, i) {
+          return InteractiveViewer(
+            transformationController: _zoom,
+            minScale: 1,
+            maxScale: 4,
+            panEnabled: _zoomed,
+            child: Center(
+              child: NetImage(url: pageUrls[i], fit: s.fit),
+            ),
+          );
+        },
+      );
+    }
+    return ListView.builder(
+      controller: _strip,
+      itemCount: pageUrls.length,
+      itemBuilder: (context, i) {
+        // Long strip is fit-width by nature: width only, the height
+        // follows the page's own aspect ratio.
+        final image = NetImage(
+          url: pageUrls[i],
+          width: double.infinity,
+          fit: BoxFit.fitWidth,
+        );
+        if (s.hasStripGaps && i < pageUrls.length - 1) {
+          return Column(
+            children: [image, const SizedBox(height: 12)],
+          );
+        }
+        return image;
+      },
+    );
+  }
+
+  /// Footer: previous chapter, page slider, next chapter — the
+  /// Tachiyomi reader bar. The slider jumps pages in paged modes and
+  /// scrolls in long strip.
+  Widget _footer(
+    AppPalette p,
+    MangaReaderSettings s,
+    int chapterCount,
+    int pageCount,
+    bool loading,
+    Color onBg,
+    Color faintOnBg,
+    bool isNarrow,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: faintOnBg.withAlpha(60))),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        isNarrow ? 8 : 16,
+        8,
+        isNarrow ? 8 : 16,
+        isNarrow ? 8 : 16,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Previous chapter',
+            icon: Icon(Icons.chevron_left, color: onBg, size: 26),
+            onPressed: _chapterIndex > 0 && !loading
+                ? () => widget.appState.openMangaChapter(_chapterIndex - 1)
+                : null,
+          ),
+          if (pageCount > 1)
+            Expanded(
+              child: Slider(
+                value: _pageIndex.clamp(0, pageCount - 1).toDouble(),
+                min: 0,
+                max: (pageCount - 1).toDouble(),
+                divisions: pageCount - 1,
+                activeColor: p.accent.accent,
+                inactiveColor: faintOnBg.withAlpha(80),
+                onChanged: (v) => _goToPage(v.round(), s),
+              ),
+            )
+          else
+            const Spacer(),
+          IconButton(
+            tooltip: 'Next chapter',
+            icon: Icon(Icons.chevron_right, color: onBg, size: 26),
+            onPressed: _chapterIndex < chapterCount - 1 && !loading
+                ? () => widget.appState.openMangaChapter(_chapterIndex + 1)
+                : null,
+          ),
+        ],
+      ),
     );
   }
 }

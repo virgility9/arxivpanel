@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/catalog.dart';
 import '../models/models.dart';
+import '../models/reader_settings.dart';
 
 /// Parses a Firestore timestamp-ish value tolerantly.
 DateTime _parseDateTime(dynamic value) {
@@ -695,6 +696,71 @@ class FirestoreRepository {
         .collection('catalog_progress')
         .doc(catalogId)
         .set(progress.toJson(), SetOptions(merge: true));
+  }
+
+  /// Streams one manga's reader settings (null when the user has never
+  /// changed them — the reader then uses the defaults).
+  Stream<MangaReaderSettings?> watchMangaReaderSettings(
+    String uid,
+    String catalogId,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('manga_reader_settings')
+        .doc(catalogId)
+        .snapshots()
+        .map((doc) {
+      final data = doc.data();
+      if (data == null) return null;
+      return MangaReaderSettings.fromJson(data);
+    });
+  }
+
+  /// Saves one manga's reader settings. Merge-set, so a partial update
+  /// never wipes the other fields.
+  Future<void> saveMangaReaderSettings(
+    String uid,
+    String catalogId,
+    MangaReaderSettings settings,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('manga_reader_settings')
+        .doc(catalogId)
+        .set(settings.toJson(), SetOptions(merge: true));
+  }
+
+  /// Streams the text reader's settings (null when the user has never
+  /// changed them — the reader then uses the defaults). One doc for
+  /// all books.
+  Stream<BookReaderSettings?> watchBookReaderSettings(String uid) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('book_reader_settings')
+        .doc('book')
+        .snapshots()
+        .map((doc) {
+      final data = doc.data();
+      if (data == null) return null;
+      return BookReaderSettings.fromJson(data);
+    });
+  }
+
+  /// Saves the text reader's settings. Merge-set, so a partial update
+  /// never wipes the other fields.
+  Future<void> saveBookReaderSettings(
+    String uid,
+    BookReaderSettings settings,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('book_reader_settings')
+        .doc('book')
+        .set(settings.toJson(), SetOptions(merge: true));
   }
 
   // ------------------------------------------------------------------

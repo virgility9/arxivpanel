@@ -28,6 +28,7 @@ import '../data/news_repository.dart';
 import '../firebase/firebase_config.dart';
 import '../models/catalog.dart';
 import '../models/models.dart';
+import '../models/reader_settings.dart';
 import '../services/app_updater.dart';
 import '../services/github_update.dart';
 
@@ -345,6 +346,17 @@ class AppState extends ChangeNotifier {
   StreamSubscription<Set<String>>? _catalogReactionsSub;
   StreamSubscription<CatalogProgress?>? _catalogProgressSub;
   StreamSubscription<List<CatalogSave>>? _catalogSavesSub;
+
+  // --------------------------------------------------- reader settings
+  // Manga settings are per series (one doc per manga id); book
+  // settings are one doc for all books. Both default when there is
+  // no saved doc (or no signed-in user — then they stay in memory).
+  MangaReaderSettings _mangaReaderSettings = const MangaReaderSettings();
+  StreamSubscription<MangaReaderSettings?>? _mangaReaderSettingsSub;
+  String? _mangaReaderSettingsId;
+  BookReaderSettings _bookReaderSettings = const BookReaderSettings();
+  StreamSubscription<BookReaderSettings?>? _bookReaderSettingsSub;
+  bool _bookReaderSettingsLoaded = false;
   List<NewsItem> _adminNews = <NewsItem>[];
   bool _adminNewsLoaded = false;
   List<NewsItem> _liveNews = <NewsItem>[];
@@ -520,6 +532,11 @@ class AppState extends ChangeNotifier {
 
   /// The catalog item whose detail page (or reader) is open.
   CatalogItem? get selectedCatalogItem => _selectedCatalogItem;
+
+  /// Reader customization: the open manga's settings (defaults when
+  /// the series has no saved doc) and the text reader's settings.
+  MangaReaderSettings get mangaReaderSettings => _mangaReaderSettings;
+  BookReaderSettings get bookReaderSettings => _bookReaderSettings;
 
   /// True while the open book's synopsis is being fetched from Open
   /// Library (manga and comics carry theirs in the list item).
@@ -841,6 +858,10 @@ class AppState extends ChangeNotifier {
       _comicPdfResolving = false;
       _comicPdfError = false;
       _synopsisLoading = false;
+      _mangaReaderSettingsSub?.cancel();
+      _mangaReaderSettingsSub = null;
+      _mangaReaderSettingsId = null;
+      _mangaReaderSettings = const MangaReaderSettings();
     }
     // Opening the Feed refetches the live headlines (the repo caches for
     // 5 minutes, so this is cheap). The Feed screen used to refetch from
@@ -1100,6 +1121,14 @@ class AppState extends ChangeNotifier {
     _catalogLikedBy = <String>{};
     _catalogProgress = null;
     _subscribeCatalogItem(item.id);
+    // Reader settings ride along: manga settings are per series,
+    // book settings are one doc for all books.
+    if (item.type == CatalogType.manga) {
+      _subscribeMangaReaderSettings(item.id);
+    } else if (item.type == CatalogType.ebook ||
+        item.type == CatalogType.novel) {
+      ensureBookReaderSettings();
+    }
     navigate(AppView.catalogDetail);
     // Start the content load now so the detail screen is ready: the
     // book's full text (the reader reuses it on first chapter open),
@@ -1210,6 +1239,83 @@ class AppState extends ChangeNotifier {
     _catalogReactionsSub = null;
     _catalogProgressSub?.cancel();
     _catalogProgressSub = null;
+  }
+
+  /// Applies new manga reader settings for the open series: updates
+  /// the screen at once, and saves them when signed in (fire-and-
+  /// forget — a failed save keeps the in-memory settings).
+  void setMangaReaderSettings(MangaReaderSettings settings) {
+    _mangaReaderSettings = settings;
+    notifyListeners();
+    final user = _user;
+    final id = _mangaReaderSettingsId;
+    if (_firebaseReady && user != null && id != null) {
+      unawaited(
+        _repo!.saveMangaReaderSettings(user.id, id, settings).catchError((
+          Object e,
+        ) {
+          debugPrint('[AppState] manga reader settings save failed: $e');
+        }),
+      );
+    }
+  }
+
+  /// Same, for the text reader (one doc for all books).
+  void setBookReaderSettings(BookReaderSettings settings) {
+    _bookReaderSettings = settings;
+    notifyListeners();
+    final user = _user;
+    if (_firebaseReady && user != null) {
+      unawaited(
+        _repo!.saveBookReaderSettings(user.id, settings).catchError((
+          Object e,
+        ) {
+          debugPrint('[AppState] book reader settings save failed: $e');
+        }),
+      );
+    }
+  }
+
+  /// Subscribes to one manga's reader settings (defaults until the
+  /// saved doc arrives). Called when a manga opens.
+  void _subscribeMangaReaderSettings(String catalogId) {
+    _mangaReaderSettingsSub?.cancel();
+    _mangaReaderSettingsSub = null;
+    _mangaReaderSettingsId = catalogId;
+    _mangaReaderSettings = const MangaReaderSettings();
+    final user = _user;
+    if (!_firebaseReady || user == null) return;
+    _mangaReaderSettingsSub = _repo!
+        .watchMangaReaderSettings(user.id, catalogId)
+        .listen(
+          (settings) {
+            if (settings != null) {
+              _mangaReaderSettings = settings;
+              notifyListeners();
+            }
+          },
+          onError: (Object e, StackTrace s) => debugPrint(
+            '[AppState] manga reader settings error: $e',
+          ),
+        );
+  }
+
+  /// Subscribes to the text reader's settings (once per session).
+  void ensureBookReaderSettings() {
+    if (_bookReaderSettingsLoaded) return;
+    _bookReaderSettingsLoaded = true;
+    final user = _user;
+    if (!_firebaseReady || user == null) return;
+    _bookReaderSettingsSub = _repo!.watchBookReaderSettings(user.id).listen(
+      (settings) {
+        if (settings != null) {
+          _bookReaderSettings = settings;
+          notifyListeners();
+        }
+      },
+      onError: (Object e, StackTrace s) =>
+          debugPrint('[AppState] book reader settings error: $e'),
+    );
   }
 
   /// Downloads the open book's full text (once) and splits it into
@@ -1875,6 +1981,8 @@ class AppState extends ChangeNotifier {
     _slowTimer?.cancel();
     _cancelUserSubs();
     _cancelCatalogItemSubs();
+    _mangaReaderSettingsSub?.cancel();
+    _bookReaderSettingsSub?.cancel();
     _repo?.dispose();
     super.dispose();
   }

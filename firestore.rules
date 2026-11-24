@@ -11,6 +11,8 @@ rules_version = '2';
 //   users/{uid}                           profile docs (username, email, avatar, bio, ...)
 //   users/{uid}/bookmarks/{paperId}       saved papers (doc id = paper id)
 //   users/{uid}/history/{entryId}         reading-history entries
+//   users/{uid}/manga_reader_settings/{catalogId}  per-series manga reader settings
+//   users/{uid}/book_reader_settings/book  text reader settings (one doc)
 //   polls/{pollId}                        poll docs
 //   polls/{pollId}/options/{optionId}     poll options
 //   polls/{pollId}/votes/{uid}            one vote per user (doc id = uid)
@@ -147,6 +149,19 @@ service cloud.firestore {
       }
 
       match /catalog_progress/{catalogId} {
+        allow read, write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
+      }
+
+      // Reader customization: manga settings are per series (one doc
+      // per manga id), book settings are one doc for all books.
+      // Same owner rule as catalog saves/progress.
+      match /manga_reader_settings/{catalogId} {
+        allow read, write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
+      }
+
+      match /book_reader_settings/{docId} {
         allow read, write: if isAdmin()
           || (signedIn() && uid == request.auth.uid);
       }

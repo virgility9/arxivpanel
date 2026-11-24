@@ -1,16 +1,21 @@
 /// In-app text reader for one catalog chapter: selectable text with
-/// A-/A+ font size, prev/next chapter footer, and reading position
-/// saved on exit (the detail screen's "Continue reading" resumes it).
-/// The system back button returns to the detail screen, same as the
-/// back arrow.
+/// reader customization (font size/family, line height, alignment,
+/// reading theme, margins, brightness — the settings sheet, same
+/// style as the manga reader), prev/next chapter footer, and reading
+/// position saved on exit (the detail screen's "Continue reading"
+/// resumes it). The system back button returns to the detail screen,
+/// same as the back arrow.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../models/reader_settings.dart';
 import '../state/app_state.dart';
+import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/shared.dart';
+import 'book_reader_settings_sheet.dart';
 
 class CatalogReaderScreen extends StatefulWidget {
   const CatalogReaderScreen({
@@ -28,7 +33,6 @@ class CatalogReaderScreen extends StatefulWidget {
 
 class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
   final ScrollController _scroll = ScrollController();
-  double _fontSize = 17;
   bool _restored = false;
 
   /// The chapter this State instance is showing. The shell keys the
@@ -43,6 +47,7 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
     super.initState();
     _chapterIndex = widget.appState.selectedChapterIndex;
     widget.appState.setInnerBackHandler(_backToDetail);
+    widget.appState.ensureBookReaderSettings();
     WidgetsBinding.instance.addPostFrameCallback((_) => _restorePosition());
   }
 
@@ -96,16 +101,49 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
     );
   }
 
+  /// A-/A+ write the same font-size setting the sheet's slider
+  /// writes, so the size now survives chapter changes (it used to
+  /// reset to 17 on every chapter).
   void _changeFontSize(double delta) {
-    setState(() {
-      _fontSize = (_fontSize + delta).clamp(14.0, 24.0);
-    });
+    final s = widget.appState.bookReaderSettings;
+    final next = (s.fontSize + delta).clamp(12.0, 28.0).toDouble();
+    widget.appState.setBookReaderSettings(s.copyWith(fontSize: next));
+  }
+
+  void _openSettings() {
+    showBookReaderSettingsSheet(
+      context: context,
+      appState: widget.appState,
+      theme: widget.theme,
+    );
+  }
+
+  /// Reading-theme colours. Auto follows the app theme; the rest are
+  /// fixed paper/dark/sepia pairs.
+  ({Color bg, Color text}) _readingColors(
+    BookReaderSettings s,
+    AppPalette p,
+  ) {
+    return switch (s.readingTheme) {
+      BookReadingTheme.auto => (bg: p.c.surface, text: p.c.text),
+      BookReadingTheme.paper => (
+        bg: const Color(0xFFF7F1E3),
+        text: const Color(0xFF2A2419),
+      ),
+      BookReadingTheme.dark => (
+        bg: const Color(0xFF121212),
+        text: const Color(0xFFE8E2D5),
+      ),
+      BookReadingTheme.sepia => (
+        bg: const Color(0xFFEFE3C8),
+        text: const Color(0xFF3A2E1F),
+      ),
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     final p = widget.theme.palette;
-    final c = p.c;
     return AnimatedBuilder(
       animation: widget.appState,
       builder: (context, _) {
@@ -124,100 +162,137 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
         }
         final chapters = appState.catalogChapters;
         final index = appState.selectedChapterIndex;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: c.borderFaint)),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back, color: c.text),
-                    onPressed: _backToDetail,
-                    tooltip: 'Back to book',
-                  ),
-                  Expanded(
-                    child: Text(
-                      chapter.title,
-                      style: displayStyle(p, size: 16).copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+        final s = appState.bookReaderSettings;
+        final colors = _readingColors(s, p);
+        final textColor = colors.text;
+        final faintColor = textColor.withAlpha(150);
+        final borderColor = textColor.withAlpha(40);
+        final margin = s.marginValue;
+        return Container(
+          color: colors.bg,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: borderColor)),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back, color: textColor),
+                      onPressed: _backToDetail,
+                      tooltip: 'Back to book',
                     ),
-                  ),
-                  GhostButton(
-                    palette: p,
-                    label: 'A-',
-                    onPressed:
-                        _fontSize > 14 ? () => _changeFontSize(-2) : null,
-                    minHeight: 40,
-                  ),
-                  const SizedBox(width: 4),
-                  GhostButton(
-                    palette: p,
-                    label: 'A+',
-                    onPressed:
-                        _fontSize < 24 ? () => _changeFontSize(2) : null,
-                    minHeight: 40,
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Text(
-                'CHAPTER ${index + 1} OF ${chapters.length}',
-                style: monoStyle(p, size: 10, color: c.faint),
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scroll,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: SelectableText(
-                    chapter.text,
-                    style: bodyStyle(p, size: _fontSize, height: 1.8),
-                  ),
+                    Expanded(
+                      child: Text(
+                        chapter.title,
+                        style: displayStyle(p, size: 16).copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    GhostButton(
+                      palette: p,
+                      label: 'A-',
+                      onPressed: s.fontSize > 12
+                          ? () => _changeFontSize(-2)
+                          : null,
+                      minHeight: 40,
+                    ),
+                    const SizedBox(width: 4),
+                    GhostButton(
+                      palette: p,
+                      label: 'A+',
+                      onPressed: s.fontSize < 28
+                          ? () => _changeFontSize(2)
+                          : null,
+                      minHeight: 40,
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.settings, color: textColor),
+                      onPressed: _openSettings,
+                      tooltip: 'Reader settings',
+                    ),
+                  ],
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: c.borderFaint)),
+              Padding(
+                padding: EdgeInsets.fromLTRB(margin, 12, margin, 0),
+                child: Text(
+                  'CHAPTER ${index + 1} OF ${chapters.length}',
+                  style: monoStyle(p, size: 10, color: faintColor),
+                ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GhostButton(
-                      palette: p,
-                      label: 'Previous',
-                      icon: Icons.chevron_left,
-                      onPressed: index > 0
-                          ? () => appState.openCatalogChapter(index - 1)
-                          : null,
+              Expanded(
+                child: Stack(
+                  children: [
+                    SingleChildScrollView(
+                      controller: _scroll,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(margin, 8, margin, 16),
+                        child: SelectableText(
+                          chapter.text,
+                          textAlign: s.align == BookAlignment.justify
+                              ? TextAlign.justify
+                              : TextAlign.left,
+                          style: bodyStyle(
+                            p,
+                            size: s.fontSize,
+                            height: s.lineHeightValue,
+                          ).copyWith(
+                            fontFamily: s.fontFamilyName,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GoldButton(
-                      palette: p,
-                      label: 'Next',
-                      icon: Icons.chevron_right,
-                      onPressed: index + 1 < chapters.length
-                          ? () => appState.openCatalogChapter(index + 1)
-                          : null,
-                    ),
-                  ),
-                ],
+                    if (s.dimOpacity > 0)
+                      IgnorePointer(
+                        child: Container(
+                          color: Colors.black.withOpacity(s.dimOpacity),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: borderColor)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GhostButton(
+                        palette: p,
+                        label: 'Previous',
+                        icon: Icons.chevron_left,
+                        onPressed: index > 0
+                            ? () => appState.openCatalogChapter(index - 1)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: GoldButton(
+                        palette: p,
+                        label: 'Next',
+                        icon: Icons.chevron_right,
+                        onPressed: index + 1 < chapters.length
+                            ? () => appState.openCatalogChapter(index + 1)
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
