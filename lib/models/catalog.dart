@@ -41,7 +41,8 @@ class CatalogItem {
   /// the source has no cover — the card then shows a book-icon block.
   final String? coverUrl;
 
-  String get authorLabel => authors.isEmpty ? 'Unknown author' : authors.join(', ');
+  String get authorLabel =>
+      authors.isEmpty ? 'Unknown author' : authors.join(', ');
 
   /// Plain-text URL for one IA item. IA answers 302 (its normal
   /// redirect); `package:http` follows it.
@@ -57,24 +58,20 @@ class CatalogItem {
         (json['ia'] as List?)?.whereType<String>().toList() ?? <String>[];
     if (!hasFullText || iaIds.isEmpty) return null;
     final key = json['key'] as String? ?? '';
-    final workId = key.split('/').lastWhere(
-          (part) => part.isNotEmpty,
-          orElse: () => '',
-        );
+    final workId = key
+        .split('/')
+        .lastWhere((part) => part.isNotEmpty, orElse: () => '');
     if (workId.isEmpty) return null;
     final coverId = json['cover_i'];
     return CatalogItem(
       id: 'ol:$workId',
       type: CatalogType.ebook,
       title: (json['title'] as String? ?? 'Untitled').trim(),
-      authors: (json['author_name'] as List?)
-              ?.whereType<String>()
-              .toList() ??
+      authors:
+          (json['author_name'] as List?)?.whereType<String>().toList() ??
           const [],
-      subjects: (json['subject'] as List?)
-              ?.whereType<String>()
-              .take(6)
-              .toList() ??
+      subjects:
+          (json['subject'] as List?)?.whereType<String>().take(6).toList() ??
           const [],
       iaIds: iaIds,
       coverUrl: coverId is num
@@ -150,18 +147,18 @@ List<CatalogChapter> splitChapters(String text) {
       final startOffset = bodyStart < endLine
           ? offsets[bodyStart]
           : offsets[startLine];
-      final endOffset = endLine < lines.length
-          ? offsets[endLine]
-          : text.length;
+      final endOffset = endLine < lines.length ? offsets[endLine] : text.length;
       final body = text.substring(startOffset, endOffset).trim();
       if (body.isEmpty) continue;
-      chapters.add(CatalogChapter(
-        index: chapters.length,
-        title: lines[startLine].trim(),
-        text: body,
-        startOffset: startOffset,
-        endOffset: endOffset,
-      ));
+      chapters.add(
+        CatalogChapter(
+          index: chapters.length,
+          title: lines[startLine].trim(),
+          text: body,
+          startOffset: startOffset,
+          endOffset: endOffset,
+        ),
+      );
     }
     if (chapters.isNotEmpty) return chapters;
     // Every "chapter" was empty (headings with no body) — fall through
@@ -192,13 +189,15 @@ List<CatalogChapter> splitChapters(String text) {
       final breakAt = body.lastIndexOf('\n', end);
       if (breakAt > cursor + chunkSize ~/ 2) end = breakAt;
     }
-    chunks.add(CatalogChapter(
-      index: chunks.length,
-      title: 'Part ${chunks.length + 1}',
-      text: body.substring(cursor, end).trim(),
-      startOffset: cursor,
-      endOffset: end,
-    ));
+    chunks.add(
+      CatalogChapter(
+        index: chunks.length,
+        title: 'Part ${chunks.length + 1}',
+        text: body.substring(cursor, end).trim(),
+        startOffset: cursor,
+        endOffset: end,
+      ),
+    );
     cursor = end;
   }
   return chunks;
@@ -223,11 +222,11 @@ class CatalogProgress {
   final DateTime updatedAt;
 
   Map<String, dynamic> toJson() => {
-        'lastChapterIndex': lastChapterIndex,
-        'lastCharOffset': lastCharOffset,
-        'readChapterIndices': readChapterIndices,
-        'updatedAt': Timestamp.fromDate(updatedAt),
-      };
+    'lastChapterIndex': lastChapterIndex,
+    'lastCharOffset': lastCharOffset,
+    'readChapterIndices': readChapterIndices,
+    'updatedAt': Timestamp.fromDate(updatedAt),
+  };
 
   static CatalogProgress fromJson(Map<String, dynamic> json) {
     final updatedAt = json['updatedAt'];
@@ -242,7 +241,8 @@ class CatalogProgress {
     return CatalogProgress(
       lastChapterIndex: (json['lastChapterIndex'] as num?)?.toInt() ?? 0,
       lastCharOffset: (json['lastCharOffset'] as num?)?.toInt() ?? 0,
-      readChapterIndices: (json['readChapterIndices'] as List?)
+      readChapterIndices:
+          (json['readChapterIndices'] as List?)
               ?.whereType<num>()
               .map((n) => n.toInt())
               .toList() ??
@@ -278,13 +278,13 @@ class CatalogSave {
   final List<String> iaIds;
 
   Map<String, dynamic> toJson() => {
-        'type': type.name,
-        'title': title,
-        'author': author,
-        'coverUrl': coverUrl,
-        'savedAt': Timestamp.fromDate(savedAt),
-        'iaIds': iaIds,
-      };
+    'type': type.name,
+    'title': title,
+    'author': author,
+    'coverUrl': coverUrl,
+    'savedAt': Timestamp.fromDate(savedAt),
+    'iaIds': iaIds,
+  };
 
   static CatalogSave? fromJson(String id, Map<String, dynamic> json) {
     final typeName = json['type'] as String?;
@@ -308,8 +308,7 @@ class CatalogSave {
       author: json['author'] as String? ?? 'Unknown author',
       coverUrl: json['coverUrl'] as String?,
       savedAt: parsedSavedAt,
-      iaIds: (json['iaIds'] as List?)?.whereType<String>().toList() ??
-          const [],
+      iaIds: (json['iaIds'] as List?)?.whereType<String>().toList() ?? const [],
     );
   }
 }

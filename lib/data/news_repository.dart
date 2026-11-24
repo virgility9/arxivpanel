@@ -70,18 +70,15 @@ class NewsRepository {
   /// Latest arXiv papers, newest first. Same cache rules as
   /// [fetchLiveNews] but a separate cache, so the two tabs refresh
   /// independently. Never throws — a failure returns an empty list.
-  Future<List<NewsItem>> fetchArxivPapers({
-    bool forceRefresh = false,
-  }) async {
+  Future<List<NewsItem>> fetchArxivPapers({bool forceRefresh = false}) async {
     if (!forceRefresh &&
         _arxivCache != null &&
         _arxivCacheAt != null &&
         DateTime.now().difference(_arxivCacheAt!) < _cacheTtl) {
       return _arxivCache!;
     }
-    final items =
-        await _fetchSource((feedUrl: _arxivFeedUrl, name: 'arXiv'))
-          ..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    final items = await _fetchSource((feedUrl: _arxivFeedUrl, name: 'arXiv'))
+      ..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
     final trimmed = items.take(_arxivMaxItems).toList();
     _arxivCache = trimmed;
     _arxivCacheAt = DateTime.now();
@@ -92,11 +89,8 @@ class NewsRepository {
     ({String feedUrl, String name}) source,
   ) async {
     try {
-      final uri = Uri.parse(
-        '$_proxy${Uri.encodeComponent(source.feedUrl)}',
-      );
-      final res =
-          await _client.get(uri).timeout(const Duration(seconds: 12));
+      final uri = Uri.parse('$_proxy${Uri.encodeComponent(source.feedUrl)}');
+      final res = await _client.get(uri).timeout(const Duration(seconds: 12));
       if (res.statusCode != 200) return <NewsItem>[];
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (data['status'] != 'ok') return <NewsItem>[];

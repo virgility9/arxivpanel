@@ -16,8 +16,8 @@ class ThemeProvider extends ChangeNotifier {
   ThemeProvider({
     AppMode mode = AppMode.dark,
     AppAccent accent = AppAccent.gold,
-  })  : _mode = mode,
-        _accent = accent;
+  }) : _mode = mode,
+       _accent = accent;
 
   AppMode _mode;
   AppAccent _accent;
@@ -26,10 +26,8 @@ class ThemeProvider extends ChangeNotifier {
   AppAccent get accent => _accent;
 
   /// Resolved color palette for the current mode + accent.
-  AppPalette get palette => AppPalette(
-        mode: _mode,
-        accent: AccentPalette.of(_accent),
-      );
+  AppPalette get palette =>
+      AppPalette(mode: _mode, accent: AccentPalette.of(_accent));
 
   /// Material 3 theme built from the resolved palette.
   ThemeData get themeData => buildThemeData(palette, textScale: 1.0);

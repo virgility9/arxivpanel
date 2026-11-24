@@ -143,10 +143,12 @@ class _ArxivAppState extends State<ArxivApp> {
         user.themeAccent == _theme.accent.name) {
       return;
     }
-    unawaited(appState.saveThemeSettings(
-      mode: _theme.mode.name,
-      accent: _theme.accent.name,
-    ));
+    unawaited(
+      appState.saveThemeSettings(
+        mode: _theme.mode.name,
+        accent: _theme.accent.name,
+      ),
+    );
   }
 
   /// Applies the signed-in user's saved theme, once per sign-in for a
@@ -170,10 +172,12 @@ class _ArxivAppState extends State<ArxivApp> {
       // Never customized: the theme on screen right now becomes theirs.
       if (_themeSyncedForUid == user.id) return;
       _themeSyncedForUid = user.id;
-      unawaited(appState.saveThemeSettings(
-        mode: _theme.mode.name,
-        accent: _theme.accent.name,
-      ));
+      unawaited(
+        appState.saveThemeSettings(
+          mode: _theme.mode.name,
+          accent: _theme.accent.name,
+        ),
+      );
       return;
     }
     if ((savedMode == null || savedMode == _theme.mode) &&
@@ -218,8 +222,7 @@ class _ArxivAppState extends State<ArxivApp> {
         _BootPhase.splash => SplashScreen(palette: _theme.palette),
         _BootPhase.ready => AppShell(appState: _appState!, theme: _theme),
         _BootPhase.notConfigured => const FirebaseSetupPrompt(),
-        _BootPhase.initFailed =>
-          FirebaseInitFailedScreen(onRetry: _retryBoot),
+        _BootPhase.initFailed => FirebaseInitFailedScreen(onRetry: _retryBoot),
       },
     );
   }
@@ -295,8 +298,10 @@ class _SplashScreenState extends State<SplashScreen>
               const SizedBox(height: 20),
               Text(
                 'Arxiv',
-                style: displayStyle(palette, size: 32)
-                    .copyWith(fontWeight: FontWeight.w600),
+                style: displayStyle(
+                  palette,
+                  size: 32,
+                ).copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -313,8 +318,10 @@ class FirebaseSetupPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const palette =
-        AppPalette(mode: AppMode.dark, accent: AccentPalette.terracotta);
+    const palette = AppPalette(
+      mode: AppMode.dark,
+      accent: AccentPalette.terracotta,
+    );
     final c = palette.c;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -373,8 +380,10 @@ class FirebaseInitFailedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const palette =
-        AppPalette(mode: AppMode.dark, accent: AccentPalette.terracotta);
+    const palette = AppPalette(
+      mode: AppMode.dark,
+      accent: AccentPalette.terracotta,
+    );
     final c = palette.c;
     return MaterialApp(
       debugShowCheckedModeBanner: false,

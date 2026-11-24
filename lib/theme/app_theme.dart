@@ -167,31 +167,27 @@ class AppColors {
   /// Soft, layered card shadow: a tight contact shadow plus a wide, faint
   /// ambient one. Reads as paper resting on a desk, not a floating glow.
   List<BoxShadow> get cardShadow => [
-        BoxShadow(
-          color: shadow.withValues(alpha: shadow.a * 0.55),
-          blurRadius: 3,
-          offset: const Offset(0, 1),
-        ),
-        BoxShadow(
-          color: shadow.withValues(alpha: shadow.a * 0.35),
-          blurRadius: 18,
-          offset: const Offset(0, 8),
-        ),
-      ];
+    BoxShadow(
+      color: shadow.withValues(alpha: shadow.a * 0.55),
+      blurRadius: 3,
+      offset: const Offset(0, 1),
+    ),
+    BoxShadow(
+      color: shadow.withValues(alpha: shadow.a * 0.35),
+      blurRadius: 18,
+      offset: const Offset(0, 8),
+    ),
+  ];
 
   /// Slightly stronger shadow for popovers, menus and toasts.
   List<BoxShadow> get raisedShadow => [
-        BoxShadow(
-          color: shadow.withValues(alpha: shadow.a * 0.6),
-          blurRadius: 4,
-          offset: const Offset(0, 2),
-        ),
-        BoxShadow(
-          color: shadow,
-          blurRadius: 28,
-          offset: const Offset(0, 12),
-        ),
-      ];
+    BoxShadow(
+      color: shadow.withValues(alpha: shadow.a * 0.6),
+      blurRadius: 4,
+      offset: const Offset(0, 2),
+    ),
+    BoxShadow(color: shadow, blurRadius: 28, offset: const Offset(0, 12)),
+  ];
 
   // ── DARK PALETTE ──
   // 60% Canvas: Deep obsidian slate (0xFF111317)
@@ -253,9 +249,12 @@ class AppPalette {
   bool get isDark => mode == AppMode.dark;
 
   // ── 10% ACCENT: SEMANTIC FEEDBACK COLORS ──
-  Color get success => isDark ? const Color(0xFF34D399) : const Color(0xFF16A34A);
-  Color get danger => isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
-  Color get warning => isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+  Color get success =>
+      isDark ? const Color(0xFF34D399) : const Color(0xFF16A34A);
+  Color get danger =>
+      isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+  Color get warning =>
+      isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
   Color get info => isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
 
   /// Unified status color mapped directly to the 60/30/10 palette.

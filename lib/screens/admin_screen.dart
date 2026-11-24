@@ -228,8 +228,9 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildRail(AppPalette p) {
     final c = p.c;
-    final userCount =
-        widget.appState.usersResolved ? widget.appState.users.length : 0;
+    final userCount = widget.appState.usersResolved
+        ? widget.appState.users.length
+        : 0;
     return Container(
       width: 230,
       color: c.surface,
@@ -430,8 +431,11 @@ class _AdminScreenState extends State<AdminScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (!narrow) ...[
-                  Icon(icon, size: 16,
-                      color: active ? p.accent.accent : c.muted),
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: active ? p.accent.accent : c.muted,
+                  ),
                   const SizedBox(width: 8),
                 ],
                 Flexible(
@@ -777,9 +781,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
                 child: icon == null
                     ? null
-                    : Center(
-                        child: AppIconImage(icon, size: 16, color: chip),
-                      ),
+                    : Center(child: AppIconImage(icon, size: 16, color: chip)),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -869,8 +871,10 @@ class _AdminScreenState extends State<AdminScreen> {
   ) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final days =
-        List<DateTime>.generate(range, (i) => today.subtract(Duration(days: range - 1 - i)));
+    final days = List<DateTime>.generate(
+      range,
+      (i) => today.subtract(Duration(days: range - 1 - i)),
+    );
     final paperCounts = List<int>.filled(range, 0);
     final userCounts = List<int>.filled(range, 0);
     for (final paper in _allPapers) {
@@ -900,9 +904,7 @@ class _AdminScreenState extends State<AdminScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: selected ? p.accent.accent : Colors.transparent,
-          border: Border.all(
-            color: selected ? p.accent.accent : p.c.border,
-          ),
+          border: Border.all(color: selected ? p.accent.accent : p.c.border),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -969,7 +971,10 @@ class _AdminScreenState extends State<AdminScreen> {
           children: [
             wide
                 ? Row(
-                    children: [Expanded(child: header), chips],
+                    children: [
+                      Expanded(child: header),
+                      chips,
+                    ],
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1082,11 +1087,7 @@ class _AdminScreenState extends State<AdminScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.check_circle,
-                    size: 20,
-                    color: p.success,
-                  ),
+                  Icon(Icons.check_circle, size: 20, color: p.success),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1148,8 +1149,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       palette: p,
                       label: 'Approve',
                       minHeight: 36,
-                      onPressed: () =>
-                          widget.appState.approvePaper(paper.id),
+                      onPressed: () => widget.appState.approvePaper(paper.id),
                     ),
                   ],
                 ),
@@ -1498,8 +1498,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     style: monoStyle(p, size: 11, color: p.c.textSub),
                   ),
                   const SizedBox(height: 2),
-                  Text('${paper.pages} pages',
-                      style: monoStyle(p, size: 10)),
+                  Text('${paper.pages} pages', style: monoStyle(p, size: 10)),
                 ],
               ),
               const SizedBox(width: 12),
@@ -1747,7 +1746,8 @@ class _AdminScreenState extends State<AdminScreen> {
                     onPressed: () async {
                       final ok = await _confirmAction(
                         title: 'Delete announcement?',
-                        body: '“${a.title}” will disappear from the Contest tab for everyone.',
+                        body:
+                            '“${a.title}” will disappear from the Contest tab for everyone.',
                       );
                       if (ok) {
                         await appState.deleteAnnouncement(a.id);
@@ -1787,8 +1787,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     Flexible(
                       child: Text(
                         u.username,
-                        style:
-                            bodyStyle(p, size: 14, weight: FontWeight.w600),
+                        style: bodyStyle(p, size: 14, weight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1868,11 +1867,7 @@ class _AdminScreenState extends State<AdminScreen> {
           else
             IconButton(
               tooltip: 'Delete ${u.username}',
-              icon: Icon(
-                Icons.delete_outline,
-                size: 18,
-                color: p.danger,
-              ),
+              icon: Icon(Icons.delete_outline, size: 18, color: p.danger),
               onPressed: () async {
                 final ok = await _confirmAction(
                   title: 'Delete user?',
@@ -1914,7 +1909,10 @@ class _AdminScreenState extends State<AdminScreen> {
               }
               final ok = reviewAction == 'reject'
                   ? await widget.appState.rejectPaper(cur.id, reason.trim())
-                  : await widget.appState.requestRevision(cur.id, reason.trim());
+                  : await widget.appState.requestRevision(
+                      cur.id,
+                      reason.trim(),
+                    );
               // The write may fail (e.g. unpublished rules) — AppState already
               // toasted the error, so keep the dialog open for a retry.
               if (ok && ctx.mounted) Navigator.of(ctx).pop();
@@ -1945,11 +1943,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       width: 108,
                       child: Text(
                         label.toUpperCase(),
-                        style: monoStyle(
-                          p,
-                          size: 10,
-                          color: c.faint,
-                        ).copyWith(
+                        style: monoStyle(p, size: 10, color: c.faint).copyWith(
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.08,
                         ),
@@ -1958,11 +1952,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     Expanded(
                       child: Text(
                         value,
-                        style: bodyStyle(
-                          p,
-                          size: 13,
-                          weight: FontWeight.w600,
-                        ),
+                        style: bodyStyle(p, size: 13, weight: FontWeight.w600),
                         textAlign: TextAlign.right,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -2001,8 +1991,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                           MainAxisAlignment.center,
                                       children: [
                                         Icon(
-                                          Icons
-                                              .picture_as_pdf_outlined,
+                                          Icons.picture_as_pdf_outlined,
                                           size: 32,
                                           color: c.faint,
                                         ),
@@ -2089,11 +2078,12 @@ class _AdminScreenState extends State<AdminScreen> {
                                   detailDivider(),
                                   detailRow('Academic year', cur.year),
                                   detailDivider(),
-                                  detailRow(
-                                      'Length', '${cur.pages} pages'),
+                                  detailRow('Length', '${cur.pages} pages'),
                                   detailDivider(),
-                                  detailRow('Submitted',
-                                      timeAgo(cur.submittedAt)),
+                                  detailRow(
+                                    'Submitted',
+                                    timeAgo(cur.submittedAt),
+                                  ),
                                 ],
                               ),
                             ),
@@ -2359,7 +2349,12 @@ class _AdminScreenState extends State<AdminScreen> {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: bodyStyle(p, size: 13, weight: FontWeight.w500, color: color),
+                style: bodyStyle(
+                  p,
+                  size: 13,
+                  weight: FontWeight.w500,
+                  color: color,
+                ),
               ),
             ],
           ),
@@ -2478,12 +2473,17 @@ class _StatsChartPainter extends CustomPainter {
 
     // X labels: every day for a week, weekly ticks at 30D, every 15
     // days at 90D — 13 weekly labels crowd a phone-width chart.
-    final step = days.length <= 7 ? 1 : days.length <= 31 ? 7 : 15;
+    final step = days.length <= 7
+        ? 1
+        : days.length <= 31
+        ? 7
+        : 15;
     for (var i = 0; i < days.length; i++) {
       if (i % step != 0 && i != days.length - 1) continue;
       final d = days[i];
-      final text =
-          days.length <= 7 ? _weekdays[d.weekday - 1] : '${d.month}/${d.day}';
+      final text = days.length <= 7
+          ? _weekdays[d.weekday - 1]
+          : '${d.month}/${d.day}';
       final tp = TextPainter(
         text: TextSpan(text: text, style: labelStyle),
         textDirection: TextDirection.ltr,

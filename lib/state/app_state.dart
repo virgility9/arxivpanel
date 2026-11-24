@@ -53,13 +53,16 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     });
     _subscribeAuth();
-    _newsSub = _repo!.watchNews().listen((news) {
-      _adminNews = news;
-      _adminNewsLoaded = true;
-      notifyListeners();
-    }, onError: (Object e) {
-      debugPrint('[AppState] news stream error: $e');
-    });
+    _newsSub = _repo!.watchNews().listen(
+      (news) {
+        _adminNews = news;
+        _adminNewsLoaded = true;
+        notifyListeners();
+      },
+      onError: (Object e) {
+        debugPrint('[AppState] news stream error: $e');
+      },
+    );
     _subscribeAnnouncements();
     unawaited(checkForUpdate());
   }
@@ -67,13 +70,16 @@ class AppState extends ChangeNotifier {
   /// Subscribes to the public announcements feed (Contest tab).
   void _subscribeAnnouncements() {
     if (_repo == null) return;
-    _announcementsSub = _repo!.watchAnnouncements().listen((items) {
-      _announcements = items;
-      _announcementsLoaded = true;
-      notifyListeners();
-    }, onError: (Object e) {
-      debugPrint('[AppState] announcements stream error: $e');
-    });
+    _announcementsSub = _repo!.watchAnnouncements().listen(
+      (items) {
+        _announcements = items;
+        _announcementsLoaded = true;
+        notifyListeners();
+      },
+      onError: (Object e) {
+        debugPrint('[AppState] announcements stream error: $e');
+      },
+    );
   }
 
   /// Subscribes to one user's paper-status notifications. A notice that
@@ -84,21 +90,26 @@ class AppState extends ChangeNotifier {
     _notificationsSub?.cancel();
     _notificationsSub = null;
     _notificationsFirstEmission = true;
-    _notificationsSub = _repo!.watchMyNotifications(uid).listen((items) {
-      if (!_notificationsFirstEmission) {
-        final known = _myNotifications.map((n) => n.id).toSet();
-        for (final n in items) {
-          if (!known.contains(n.id)) {
-            showToast(n.title, Icons.campaign);
-          }
-        }
-      }
-      _notificationsFirstEmission = false;
-      _myNotifications = items;
-      notifyListeners();
-    }, onError: (Object e) {
-      debugPrint('[AppState] notifications stream error: $e');
-    });
+    _notificationsSub = _repo!
+        .watchMyNotifications(uid)
+        .listen(
+          (items) {
+            if (!_notificationsFirstEmission) {
+              final known = _myNotifications.map((n) => n.id).toSet();
+              for (final n in items) {
+                if (!known.contains(n.id)) {
+                  showToast(n.title, Icons.campaign);
+                }
+              }
+            }
+            _notificationsFirstEmission = false;
+            _myNotifications = items;
+            notifyListeners();
+          },
+          onError: (Object e) {
+            debugPrint('[AppState] notifications stream error: $e');
+          },
+        );
   }
 
   void _cancelNotificationSub() {
@@ -113,9 +124,9 @@ class AppState extends ChangeNotifier {
   /// work because [logout] clears state manually) until a page refresh.
   void _subscribeAuth() {
     _authSub = _authRepo!.watchAuthUser().listen(
-          _onAuthUser,
-          onError: _onAuthError,
-        );
+      _onAuthUser,
+      onError: _onAuthError,
+    );
   }
 
   void _onAuthError(Object e, StackTrace s) {
@@ -182,16 +193,13 @@ class AppState extends ChangeNotifier {
     _papersAdmin = admin;
     final feed = _repo!.watchPapers(admin: admin);
     _papersDispose = feed.dispose;
-    _papersSub = feed.stream.listen(
-      (papers) {
-        _papers = papers;
-        _papersLoaded = true;
-        _connectionStatus = ConnectionStatus.online;
-        _slowTimer?.cancel();
-        notifyListeners();
-      },
-      onError: _onPapersError,
-    );
+    _papersSub = feed.stream.listen((papers) {
+      _papers = papers;
+      _papersLoaded = true;
+      _connectionStatus = ConnectionStatus.online;
+      _slowTimer?.cancel();
+      notifyListeners();
+    }, onError: _onPapersError);
     // No first emission after 8s on a slow connection — say so instead of
     // spinning on "Loading the archive…" forever.
     _slowTimer?.cancel();
@@ -220,13 +228,10 @@ class AppState extends ChangeNotifier {
     if (uid == null) return;
     final feed = _repo!.watchOwnPapers(uid);
     _ownDispose = feed.dispose;
-    _ownSub = feed.stream.listen(
-      (papers) {
-        _ownPapers = papers;
-        notifyListeners();
-      },
-      onError: (Object e) => debugPrint('[AppState] own papers error: $e'),
-    );
+    _ownSub = feed.stream.listen((papers) {
+      _ownPapers = papers;
+      notifyListeners();
+    }, onError: (Object e) => debugPrint('[AppState] own papers error: $e'));
   }
 
   /// The signed-in user's papers in every status, newest submission first.
@@ -560,17 +565,13 @@ class AppState extends ChangeNotifier {
         _userDataRetries = 0;
         notifyListeners();
       },
-      onError: (Object e, StackTrace s) =>
-          _retryUserData(user, 'bookmarks', e),
+      onError: (Object e, StackTrace s) => _retryUserData(user, 'bookmarks', e),
     );
-    _historySub = _repo!.watchHistory(user.id).listen(
-      (history) {
-        _readingHistory = history;
-        _userDataRetries = 0;
-        notifyListeners();
-      },
-      onError: (Object e, StackTrace s) => _retryUserData(user, 'history', e),
-    );
+    _historySub = _repo!.watchHistory(user.id).listen((history) {
+      _readingHistory = history;
+      _userDataRetries = 0;
+      notifyListeners();
+    }, onError: (Object e, StackTrace s) => _retryUserData(user, 'history', e));
     _catalogSavesSub = _repo!.watchCatalogSaves(user.id).listen(
       (saves) {
         _catalogSaves = saves;
@@ -613,10 +614,7 @@ class AppState extends ChangeNotifier {
   ///
   /// Returns `null` on success, otherwise a user-friendly error message.
   /// The [AppUser] profile arrives asynchronously via [watchAuthUser].
-  Future<String?> signIn({
-    required String email,
-    required String password,
-  }) {
+  Future<String?> signIn({required String email, required String password}) {
     if (!_firebaseReady) return Future.value('Firebase is not configured.');
     return _authRepo!.signIn(email: email, password: password);
   }
@@ -631,8 +629,11 @@ class AppState extends ChangeNotifier {
     required String password,
   }) {
     if (!_firebaseReady) return Future.value('Firebase is not configured.');
-    return _authRepo!
-        .signUp(username: username, email: email, password: password);
+    return _authRepo!.signUp(
+      username: username,
+      email: email,
+      password: password,
+    );
   }
 
   /// Sends a password-reset email.
@@ -684,21 +685,14 @@ class AppState extends ChangeNotifier {
   /// screen, and the next change retries the save. The local [_user]
   /// copy is updated first so the next sync check sees the saved values
   /// instead of re-applying the old ones.
-  Future<void> saveThemeSettings({
-    String? mode,
-    String? accent,
-  }) async {
+  Future<void> saveThemeSettings({String? mode, String? accent}) async {
     final user = _user;
     if (!_firebaseReady || user == null) return;
     final newMode = mode ?? user.themeMode;
     final newAccent = accent ?? user.themeAccent;
     _user = user.copyWith(themeMode: newMode, themeAccent: newAccent);
     try {
-      await _repo!.saveThemeSettings(
-        user.id,
-        mode: newMode,
-        accent: newAccent,
-      );
+      await _repo!.saveThemeSettings(user.id, mode: newMode, accent: newAccent);
     } catch (e) {
       debugPrint('[AppState] saveThemeSettings failed: $e');
     }
@@ -824,14 +818,16 @@ class AppState extends ChangeNotifier {
     if (_view == AppView.reader && paper != null && start != null) {
       final seconds = DateTime.now().difference(start).inSeconds;
       if (seconds > 5 && user != null && _firebaseReady) {
-        unawaited(_repo!.addHistoryEntry(
-          user.id,
-          ReadEntry(
-            paperId: paper.id,
-            readAt: DateTime.now(),
-            secondsSpent: seconds,
+        unawaited(
+          _repo!.addHistoryEntry(
+            user.id,
+            ReadEntry(
+              paperId: paper.id,
+              readAt: DateTime.now(),
+              secondsSpent: seconds,
+            ),
           ),
-        ));
+        );
       }
       _readStart = null;
     }
@@ -914,8 +910,9 @@ class AppState extends ChangeNotifier {
         forceRefresh: forceRefresh,
       );
       _ebooks = items ?? <CatalogItem>[];
-      _ebooksQuery =
-          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _ebooksQuery = (search == null || search.trim().isEmpty)
+          ? ''
+          : search.trim();
       // Null means the fetch failed (not an empty search result).
       _ebooksError = items == null;
     } catch (e) {
@@ -965,15 +962,16 @@ class AppState extends ChangeNotifier {
     );
     final user = _user;
     if (user != null) {
-      _catalogProgressSub =
-          _repo!.watchCatalogProgress(user.id, catalogId).listen(
-        (progress) {
-          _catalogProgress = progress;
-          notifyListeners();
-        },
-        onError: (Object e, StackTrace s) =>
-            debugPrint('[AppState] catalog progress error: $e'),
-      );
+      _catalogProgressSub = _repo!
+          .watchCatalogProgress(user.id, catalogId)
+          .listen(
+            (progress) {
+              _catalogProgress = progress;
+              notifyListeners();
+            },
+            onError: (Object e, StackTrace s) =>
+                debugPrint('[AppState] catalog progress error: $e'),
+          );
     }
   }
 
@@ -1052,11 +1050,9 @@ class AppState extends ChangeNotifier {
     final user = _user;
     if (user == null) return;
     final current = _catalogLikedBy.contains(user.id);
-    unawaited(_repo!.setCatalogReaction(
-      catalogId,
-      user.id,
-      current ? null : '❤️',
-    ));
+    unawaited(
+      _repo!.setCatalogReaction(catalogId, user.id, current ? null : '❤️'),
+    );
     if (!current) showToast('Liked', Icons.favorite);
   }
 
@@ -1082,9 +1078,7 @@ class AppState extends ChangeNotifier {
     if (!_firebaseReady) return;
     final user = _user;
     if (user == null) return;
-    unawaited(
-      _repo!.toggleCatalogCommentLike(catalogId, commentId, user.id),
-    );
+    unawaited(_repo!.toggleCatalogCommentLike(catalogId, commentId, user.id));
   }
 
   /// Marks a chapter read and remembers it as the last-read chapter.
@@ -1112,9 +1106,10 @@ class AppState extends ChangeNotifier {
   ) {
     final user = _user;
     if (user == null || !_firebaseReady) return;
-    final read = {...?_catalogProgress?.readChapterIndices, chapterIndex}
-        .toList()
-      ..sort();
+    final read = {
+      ...?_catalogProgress?.readChapterIndices,
+      chapterIndex,
+    }.toList()..sort();
     final progress = CatalogProgress(
       lastChapterIndex: chapterIndex,
       lastCharOffset: charOffset,
@@ -1162,8 +1157,9 @@ class AppState extends ChangeNotifier {
     _arxivPapersError = false;
     notifyListeners();
     try {
-      final items =
-          await _newsRepo.fetchArxivPapers(forceRefresh: forceRefresh);
+      final items = await _newsRepo.fetchArxivPapers(
+        forceRefresh: forceRefresh,
+      );
       _arxivPapers = items;
       _arxivPapersError = items.isEmpty;
     } catch (e) {
@@ -1256,8 +1252,7 @@ class AppState extends ChangeNotifier {
 
   /// True when the signed-in user has never seen (or skipped) the
   /// first-time help tour. The tour shows once per account.
-  bool get shouldShowOnboarding =>
-      _user != null && !_user!.hasSeenOnboarding;
+  bool get shouldShowOnboarding => _user != null && !_user!.hasSeenOnboarding;
 
   /// Marks the help tour as seen, on the profile and locally, so it
   /// never shows again for this account. Fire-and-forget: a failed
@@ -1300,7 +1295,10 @@ class AppState extends ChangeNotifier {
       return true;
     }
     if (_updateDownloading) {
-      showToast('Update is already downloading — check the notification.', Icons.download);
+      showToast(
+        'Update is already downloading — check the notification.',
+        Icons.download,
+      );
       return true;
     }
     _updateDownloading = true;
@@ -1311,10 +1309,16 @@ class AppState extends ChangeNotifier {
     _updateDownloading = false;
     switch (result) {
       case 'started':
-        showToast('Downloading update — watch the notification.', Icons.download);
+        showToast(
+          'Downloading update — watch the notification.',
+          Icons.download,
+        );
         return true;
       case 'already_downloading':
-        showToast('Update is already downloading — check the notification.', Icons.download);
+        showToast(
+          'Update is already downloading — check the notification.',
+          Icons.download,
+        );
         return true;
       case 'needs_unknown_sources':
         showToast(
@@ -1455,8 +1459,11 @@ class AppState extends ChangeNotifier {
     if (!_firebaseReady) return false;
     final paper = paperById(paperId);
     try {
-      await _repo!.updatePaperStatus(paperId, PaperStatus.rejected,
-          reason: reason);
+      await _repo!.updatePaperStatus(
+        paperId,
+        PaperStatus.rejected,
+        reason: reason,
+      );
       showToast('Paper rejected.', Icons.cancel);
       if (paper != null) {
         unawaited(
@@ -1475,8 +1482,11 @@ class AppState extends ChangeNotifier {
     if (!_firebaseReady) return false;
     final paper = paperById(paperId);
     try {
-      await _repo!.updatePaperStatus(paperId, PaperStatus.revision,
-          reason: reason);
+      await _repo!.updatePaperStatus(
+        paperId,
+        PaperStatus.revision,
+        reason: reason,
+      );
       showToast('Revision request sent.');
       if (paper != null) {
         unawaited(
