@@ -180,7 +180,7 @@ class NetImage extends StatelessWidget {
     required this.url,
     this.width,
     this.height,
-    this.fit = BoxFit.cover,
+    this.fit = BoxFit.contain,
     this.borderRadius,
     this.onError,
   });
@@ -202,9 +202,12 @@ class NetImage extends StatelessWidget {
     // often 1200px+ but display at 130-360px, and decoding the full
     // bitmap on a phone wastes CPU and memory on every scroll. The
     // layout width is the real display width (cell width for cards,
-    // full width for feed images). 2x headroom: the images use
-    // BoxFit.cover, which can upscale a too-small decode, so the cache
-    // box is twice the display size to stay sharp in both orientations.
+    // full width for feed images). 2x headroom keeps the image sharp
+    // on high-density screens. Thumbnails use BoxFit.contain: the
+    // whole image shows, never stretched and never cut off — a
+    // portrait book page in a wide frame letterboxes instead of
+    // losing its top and bottom. (Avatars keep BoxFit.cover in their
+    // own widget: a square crop of a face is what a circle wants.)
     return LayoutBuilder(
       builder: (context, constraints) {
         final dpr = MediaQuery.devicePixelRatioOf(context);

@@ -1,12 +1,13 @@
 /// Catalog source client for the Browse tabs: e-books (and later novels)
 /// from Open Library + the Internet Archive, no new dependency — only
 /// `package:http`, already in the app. Mirrors [NewsRepository]: a
-/// 5-minute cache per list, 12s timeout for JSON, 30s for full text,
-/// never throws (empty list / null on failure). Gutendex was the
-/// original e-books source but it timed out on every attempt on
-/// 2026-11-24 and Gutenberg was down for maintenance; Open Library is
-/// the verified-live source. When Gutendex recovers, add it behind the
-/// same [CatalogItem] shape — the screens never see the source.
+/// 5-minute cache per list, 20s timeout for JSON with 3 attempts, 90s
+/// for full text with 2 attempts per IA id, never throws (empty list /
+/// null on failure). Gutendex was the original e-books source but it
+/// timed out on every attempt on 2026-11-24 and Gutenberg was down for
+/// maintenance; Open Library is the verified-live source. When Gutendex
+/// recovers, add it behind the same [CatalogItem] shape — the screens
+/// never see the source.
 library;
 
 import 'dart:convert';
@@ -22,8 +23,9 @@ class CatalogRepository {
   static const _fields = 'key,title,author_name,cover_i,subject,has_fulltext,ia';
   static const _pageSize = 32;
   static const _cacheTtl = Duration(minutes: 5);
-  static const _jsonTimeout = Duration(seconds: 12);
-  static const _textTimeout = Duration(seconds: 30);
+  static const _jsonTimeout = Duration(seconds: 20);
+  static const _textTimeout = Duration(seconds: 90);
+  static const _maxAttempts = 3;
 
   final http.Client _client;
   List<CatalogItem>? _ebooksCache;
@@ -59,23 +61,33 @@ class CatalogRepository {
   }
 
   Future<List<CatalogItem>?> _fetchSearch(String query) async {
-    try {
-      final uri = Uri.parse(
-        '$_searchBase?q=${Uri.encodeQueryComponent(query)}'
-        '&limit=$_pageSize&fields=$_fields',
-      );
-      final res = await _client.get(uri).timeout(_jsonTimeout);
-      if (res.statusCode != 200) return null;
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      final docs = data['docs'] as List? ?? <dynamic>[];
-      return docs
-          .whereType<Map<String, dynamic>>()
-          .map(CatalogItem.fromOpenLibrary)
-          .whereType<CatalogItem>()
-          .toList();
-    } catch (_) {
-      return null;
+    // One slow or flaky connection can stall a single attempt (virgil's
+    // network times out on hosts that answer fine elsewhere — both the
+    // search and the chapter download showed "check your connection"
+    // on his connection while the same URLs answered in ~2s/6s here),
+    // so retry a few times before giving up. The tab only shows its
+    // error state after every attempt fails.
+    for (var attempt = 0; attempt < _maxAttempts; attempt++) {
+      if (attempt > 0) await Future.delayed(const Duration(seconds: 1));
+      try {
+        final uri = Uri.parse(
+          '$_searchBase?q=${Uri.encodeQueryComponent(query)}'
+          '&limit=$_pageSize&fields=$_fields',
+        );
+        final res = await _client.get(uri).timeout(_jsonTimeout);
+        if (res.statusCode != 200) continue;
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final docs = data['docs'] as List? ?? <dynamic>[];
+        return docs
+            .whereType<Map<String, dynamic>>()
+            .map(CatalogItem.fromOpenLibrary)
+            .whereType<CatalogItem>()
+            .toList();
+      } catch (_) {
+        // Transient stall / DNS failure: retry, then give up.
+      }
     }
+    return null;
   }
 
   /// Full plain text for a book. Tries each IA id in order and takes
