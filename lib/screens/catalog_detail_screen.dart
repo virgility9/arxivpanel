@@ -335,14 +335,34 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
               padding: const EdgeInsets.only(bottom: 10),
               child: GoldButton(
                 palette: p,
-                label: 'Continue reading — '
-                    '${chapters[progress.lastChapterIndex.clamp(0, chapters.length - 1)].title}',
+                label: progress.wholeBook
+                    ? 'Continue reading the whole book'
+                    : 'Continue reading — '
+                        '${chapters[progress.lastChapterIndex.clamp(0, chapters.length - 1)].title}',
                 icon: Icons.play_arrow,
-                onPressed: () => appState.openCatalogChapter(
-                  progress.lastChapterIndex,
-                ),
+                onPressed: () => progress.wholeBook
+                    ? appState.openWholeBook()
+                    : appState.openCatalogChapter(
+                        progress.lastChapterIndex,
+                      ),
               ),
             ),
+          // One tap reads the whole book in one scroll — no picking
+          // chapters first. Opens at the saved whole-book position
+          // when there is one, else at the top.
+          if (chapters.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GoldButton(
+                palette: p,
+                label: 'Read whole book',
+                icon: Icons.menu_book,
+                onPressed: () => appState.openWholeBook(),
+              ),
+            ),
+          // Bookmark: tap the row to jump back to it, X to remove it.
+          if (progress?.bookmarkCharOffset != null)
+            _bookmarkRow(p, item, progress!, chapters),
           if (loading && chapters.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
@@ -452,10 +472,63 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
     );
   }
 
+  /// Bookmark row: tap to jump back to the bookmarked spot, X to
+  /// remove it. Only shown when the book has a bookmark.
+  Widget _bookmarkRow(
+    AppPalette p,
+    CatalogItem item,
+    CatalogProgress progress,
+    List<CatalogChapter> chapters,
+  ) {
+    final c = p.c;
+    final label = progress.bookmarkWholeBook
+        ? 'Whole book'
+        : chapters[progress.bookmarkChapterIndex.clamp(0, chapters.length - 1)]
+            .title;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => widget.appState.openCatalogBookmark(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: c.borderFaint),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.bookmark, size: 18, color: p.accent.accent),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Bookmark — $label',
+                    style: bodyStyle(p, size: 13, color: c.text),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Remove bookmark',
+                  icon: Icon(Icons.close, size: 18, color: c.muted),
+                  onPressed: () =>
+                      widget.appState.clearCatalogBookmark(item.id),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Manga chapter list (English chapters with real pages, from
-  /// MangaDex). Same shape as the book chapters above, without read
-  /// marks — page-level progress is not tracked yet. Tapping a
-  /// chapter opens the page reader.
+  /// MangaDex). Same shape as the book chapters above. Each row shows
+  /// when the chapter was uploaded and, when you have started it, the
+  /// page you left off at — tapping it resumes there.
   Widget _mangaChapters(AppPalette p, CatalogItem item) {
     final c = p.c;
     final appState = widget.appState;
@@ -542,12 +615,32 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
             ...chapters.asMap().entries.map((entry) {
               final index = entry.key;
               final chapter = entry.value;
+              final chapterProgress =
+                  appState.mangaProgress?.chapters[chapter.id];
+              // Finished chapters restart from the top; anything else
+              // resumes at the last-read page.
+              final finished = chapterProgress != null &&
+                  chapterProgress.page >= chapter.pages - 1;
+              final resumePage =
+                  chapterProgress == null || finished ? 0 : chapterProgress.page;
+              final subParts = <String>[
+                if (chapter.publishedAt != null)
+                  timeAgo(chapter.publishedAt!),
+                if (chapterProgress != null)
+                  finished
+                      ? 'Finished'
+                      : 'Page ${chapterProgress.page + 1} of ${chapter.pages}',
+              ];
+              final sub = subParts.join(' · ');
               return Material(
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: loading
                       ? null
-                      : () => appState.openMangaChapter(index),
+                      : () => appState.openMangaChapter(
+                            index,
+                            startPage: resumePage,
+                          ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 4, vertical: 12),
@@ -563,11 +656,27 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            chapter.label,
-                            style: bodyStyle(p, size: 14, color: c.text),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                chapter.label,
+                                style:
+                                    bodyStyle(p, size: 14, color: c.text),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (sub.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  sub,
+                                  style: monoStyle(
+                                      p, size: 10, color: c.faint),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                         Text(

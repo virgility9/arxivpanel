@@ -235,12 +235,14 @@ class AppShell extends StatelessWidget {
             onAuthPrompt: onAuthPrompt,
           );
         }
-        // Keyed by chapter index: a chapter change remounts the reader
-        // so the scroll resets to the top and the saved position for
-        // the new chapter restores (see _CatalogReaderScreenState).
+        // Keyed by chapter index and whole-book mode: a chapter change
+        // or a switch between chapter and whole-book reading remounts
+        // the reader so the scroll resets and the saved position for
+        // the new view restores (see _CatalogReaderScreenState).
         return CatalogReaderScreen(
           key: ValueKey(
-            'catalogReader:${appState.selectedChapterIndex}',
+            'catalogReader:${appState.selectedChapterIndex}:'
+            '${appState.catalogWholeBook ? 'whole' : 'chapter'}',
           ),
           appState: appState,
           theme: theme,
@@ -323,7 +325,8 @@ class AppShell extends StatelessWidget {
     }
     if (view == AppView.catalogReader) {
       return 'catalogReader:${appState.selectedCatalogItem?.id}:'
-          '${appState.selectedChapterIndex}';
+          '${appState.selectedChapterIndex}:'
+          '${appState.catalogWholeBook ? 'whole' : 'chapter'}';
     }
     if (view == AppView.mangaReader) {
       return 'mangaReader:${appState.selectedCatalogItem?.id}:'

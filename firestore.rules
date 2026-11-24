@@ -153,6 +153,13 @@ service cloud.firestore {
           || (signedIn() && uid == request.auth.uid);
       }
 
+      // Last-read page per manga chapter (one doc per manga, keyed by
+      // chapter id inside). Same owner rule as catalog progress.
+      match /manga_progress/{catalogId} {
+        allow read, write: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
+      }
+
       // Reader customization: manga settings are per series (one doc
       // per manga id), book settings are one doc for all books.
       // Same owner rule as catalog saves/progress.

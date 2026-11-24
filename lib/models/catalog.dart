@@ -83,6 +83,11 @@ class CatalogItem {
   static String textUrlForIa(String iaId) =>
       'https://archive.org/download/$iaId/${iaId}_djvu.txt';
 
+  /// Open Library work id (the part after `ol:`), for books. Used to
+  /// look up other editions when the listed copies fail to load.
+  String? get openLibraryWorkId =>
+      id.startsWith('ol:') && id.length > 3 ? id.substring(3) : null;
+
   /// Builds an e-book or novel from one Open Library search.json
   /// document. Returns null when the document has no usable full text
   /// (`has_fulltext` false or no `ia` ids) — the repo filters those
@@ -235,6 +240,7 @@ class MangaChapter {
     required this.number,
     required this.title,
     required this.pages,
+    this.publishedAt,
   });
 
   final String id;
@@ -244,6 +250,10 @@ class MangaChapter {
   final String number;
   final String title;
   final int pages;
+
+  /// When MangaDex says this chapter was uploaded (null when the feed
+  /// does not carry a date — the chapter still lists, just dateless).
+  final DateTime? publishedAt;
 
   String get label {
     final num = number.isEmpty ? 'Oneshot' : 'Ch. $number';
@@ -262,6 +272,7 @@ class MangaChapter {
       number: (attr['chapter'] as String?) ?? '',
       title: (attr['title'] as String? ?? '').trim(),
       pages: pages,
+      publishedAt: DateTime.tryParse((attr['publishAt'] as String?) ?? ''),
     );
   }
 }
@@ -415,6 +426,34 @@ List<CatalogChapter> splitChapters(String text) {
   return chunks;
 }
 
+/// Joins chapters into one continuous text for whole-book reading:
+/// each chapter's title as its heading, then its body.
+String joinWholeText(List<CatalogChapter> chapters) {
+  final out = StringBuffer();
+  for (final chapter in chapters) {
+    if (out.isNotEmpty) out.write('\n\n');
+    out.write(chapter.title);
+    out.write('\n\n');
+    out.write(chapter.text);
+  }
+  return out.toString();
+}
+
+/// Index of the chapter containing [offset] in [joinWholeText]
+/// coordinates. (The join inserts title + blank lines, so chapter
+/// spans are computed the same way the join builds them.)
+int wholeTextChapterIndex(List<CatalogChapter> chapters, int offset) {
+  var cursor = 0;
+  for (var i = 0; i < chapters.length; i++) {
+    final chapter = chapters[i];
+    final span = chapter.title.length + 2 + chapter.text.length;
+    final next = cursor + span + (i + 1 < chapters.length ? 2 : 0);
+    if (offset < next) return i;
+    cursor = next;
+  }
+  return chapters.isEmpty ? 0 : chapters.length - 1;
+}
+
 /// Reading progress for one catalog item, stored at
 /// `users/{uid}/catalog_progress/{catalogId}`.
 class CatalogProgress {
@@ -423,21 +462,47 @@ class CatalogProgress {
     required this.lastCharOffset,
     required this.readChapterIndices,
     required this.updatedAt,
+    this.wholeBook = false,
+    this.bookmarkCharOffset,
+    this.bookmarkChapterIndex = 0,
+    this.bookmarkWholeBook = false,
   });
 
   final int lastChapterIndex;
 
   /// Char offset inside the last-read chapter's text (approximate:
-  /// derived from the scroll fraction).
+  /// derived from the scroll fraction). When [wholeBook] is true,
+  /// the offset is into the joined whole-book text instead.
   final int lastCharOffset;
   final List<int> readChapterIndices;
   final DateTime updatedAt;
+
+  /// True when the saved position is in the whole-book reader rather
+  /// than one chapter. Old progress docs have no such field and read
+  /// back as chapter mode.
+  final bool wholeBook;
+
+  /// User-set bookmark: char offset to jump back to (null = no
+  /// bookmark). Separate from the auto-saved position above — the
+  /// reader sets it, the detail screen jumps to it and clears it.
+  final int? bookmarkCharOffset;
+
+  /// Chapter the bookmark sits in (or the chapter containing the
+  /// whole-book offset when [bookmarkWholeBook] is true).
+  final int bookmarkChapterIndex;
+
+  /// True when the bookmark was set in whole-book mode.
+  final bool bookmarkWholeBook;
 
   Map<String, dynamic> toJson() => {
     'lastChapterIndex': lastChapterIndex,
     'lastCharOffset': lastCharOffset,
     'readChapterIndices': readChapterIndices,
     'updatedAt': Timestamp.fromDate(updatedAt),
+    'wholeBook': wholeBook,
+    'bookmarkCharOffset': bookmarkCharOffset,
+    'bookmarkChapterIndex': bookmarkChapterIndex,
+    'bookmarkWholeBook': bookmarkWholeBook,
   };
 
   static CatalogProgress fromJson(Map<String, dynamic> json) {
@@ -460,7 +525,83 @@ class CatalogProgress {
               .toList() ??
           const [],
       updatedAt: parsedUpdatedAt,
+      wholeBook: json['wholeBook'] as bool? ?? false,
+      bookmarkCharOffset: (json['bookmarkCharOffset'] as num?)?.toInt(),
+      bookmarkChapterIndex:
+          (json['bookmarkChapterIndex'] as num?)?.toInt() ?? 0,
+      bookmarkWholeBook: json['bookmarkWholeBook'] as bool? ?? false,
     );
+  }
+}
+
+/// Last-read page inside one manga chapter (0-based page index).
+class MangaChapterProgress {
+  const MangaChapterProgress({
+    required this.page,
+    required this.pages,
+    required this.updatedAt,
+  });
+
+  final int page;
+  final int pages;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {
+    'page': page,
+    'pages': pages,
+    'updatedAt': Timestamp.fromDate(updatedAt),
+  };
+
+  static MangaChapterProgress? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    final updatedAt = json['updatedAt'];
+    final parsedUpdatedAt = updatedAt is Timestamp
+        ? updatedAt.toDate()
+        : updatedAt is DateTime
+            ? updatedAt
+            : DateTime.now();
+    return MangaChapterProgress(
+      page: (json['page'] as num?)?.toInt() ?? 0,
+      pages: (json['pages'] as num?)?.toInt() ?? 0,
+      updatedAt: parsedUpdatedAt,
+    );
+  }
+}
+
+/// Last-read page per chapter for one manga, stored at
+/// `users/{uid}/manga_progress/{mangaCatalogId}` as one doc with a
+/// `chapters` map (chapter id -> progress). One doc per manga keeps
+/// the chapter list to a single stream.
+class MangaProgress {
+  const MangaProgress({required this.chapters, required this.updatedAt});
+
+  final Map<String, MangaChapterProgress> chapters;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {
+    'chapters': chapters.map((id, p) => MapEntry(id, p.toJson())),
+    'updatedAt': Timestamp.fromDate(updatedAt),
+  };
+
+  static MangaProgress fromJson(Map<String, dynamic> json) {
+    final updatedAt = json['updatedAt'];
+    final parsedUpdatedAt = updatedAt is Timestamp
+        ? updatedAt.toDate()
+        : updatedAt is DateTime
+            ? updatedAt
+            : DateTime.now();
+    final raw = json['chapters'] as Map? ?? {};
+    final chapters = <String, MangaChapterProgress>{};
+    for (final entry in raw.entries) {
+      final value = entry.value;
+      final parsed = value is Map
+          ? MangaChapterProgress.fromJson(
+              Map<String, dynamic>.from(value),
+            )
+          : null;
+      if (parsed != null) chapters[entry.key.toString()] = parsed;
+    }
+    return MangaProgress(chapters: chapters, updatedAt: parsedUpdatedAt);
   }
 }
 

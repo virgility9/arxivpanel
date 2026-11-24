@@ -343,6 +343,16 @@ class AppState extends ChangeNotifier {
   CatalogItem? _selectedCatalogItem;
   List<CatalogChapter> _catalogChapters = <CatalogChapter>[];
   int _selectedChapterIndex = 0;
+
+  /// Whole-book reading: the text reader shows all chapters joined
+  /// into one scroll instead of one chapter at a time.
+  bool _catalogWholeBook = false;
+  String _catalogWholeText = '';
+
+  /// Set by [openCatalogBookmark]: the next reader open jumps to the
+  /// bookmark offset instead of the auto-saved position. Consumed by
+  /// the reader's restore (and cleared by any normal open).
+  bool _catalogJumpToBookmark = false;
   bool _catalogTextLoading = false;
   bool _catalogTextError = false;
   List<MangaChapter> _mangaChapters = <MangaChapter>[];
@@ -352,6 +362,10 @@ class AppState extends ChangeNotifier {
   List<String> _mangaPageUrls = <String>[];
   bool _mangaPagesLoading = false;
   bool _mangaPagesError = false;
+
+  /// Page the manga reader opens at (a resumed chapter's last-read
+  /// page, else 0).
+  int _mangaStartPage = 0;
   bool _comicPdfResolving = false;
   bool _comicPdfError = false;
   bool _synopsisLoading = false;
@@ -359,9 +373,11 @@ class AppState extends ChangeNotifier {
   Set<String> _catalogLikedBy = <String>{};
   List<CatalogSave> _catalogSaves = <CatalogSave>[];
   CatalogProgress? _catalogProgress;
+  MangaProgress? _mangaProgress;
   StreamSubscription<List<PaperComment>>? _catalogCommentsSub;
   StreamSubscription<Set<String>>? _catalogReactionsSub;
   StreamSubscription<CatalogProgress?>? _catalogProgressSub;
+  StreamSubscription<MangaProgress?>? _mangaProgressSub;
   StreamSubscription<List<CatalogSave>>? _catalogSavesSub;
 
   // --------------------------------------------------- reader settings
@@ -569,6 +585,13 @@ class AppState extends ChangeNotifier {
   List<CatalogChapter> get catalogChapters => _catalogChapters;
   int get selectedChapterIndex => _selectedChapterIndex;
 
+  /// True while the book reader shows the whole book in one scroll.
+  bool get catalogWholeBook => _catalogWholeBook;
+
+  /// All chapters joined with their titles, for whole-book reading.
+  /// Empty until the book's text has downloaded and split.
+  String get catalogWholeText => _catalogWholeText;
+
   /// Manga chapters + page URLs for the open manga (empty unless a
   /// manga detail/reader is open). Page URLs are the full-size
   /// at-home image URLs for the selected chapter.
@@ -582,6 +605,8 @@ class AppState extends ChangeNotifier {
   }
 
   List<String> get mangaPageUrls => _mangaPageUrls;
+  MangaProgress? get mangaProgress => _mangaProgress;
+  int get mangaStartPage => _mangaStartPage;
   bool get mangaChaptersLoading => _mangaChaptersLoading;
   bool get mangaChaptersError => _mangaChaptersError;
   bool get mangaPagesLoading => _mangaPagesLoading;
@@ -886,6 +911,8 @@ class AppState extends ChangeNotifier {
       _selectedCatalogItem = null;
       _catalogChapters = <CatalogChapter>[];
       _selectedChapterIndex = 0;
+      _catalogWholeBook = false;
+      _catalogWholeText = '';
       _catalogTextLoading = false;
       _catalogTextError = false;
       _mangaChapters = <MangaChapter>[];
@@ -893,6 +920,7 @@ class AppState extends ChangeNotifier {
       _mangaChaptersLoading = false;
       _mangaChaptersError = false;
       _mangaPageUrls = <String>[];
+      _mangaStartPage = 0;
       _mangaPagesLoading = false;
       _mangaPagesError = false;
       _comicPdfResolving = false;
@@ -1350,6 +1378,8 @@ class AppState extends ChangeNotifier {
     _selectedCatalogItem = item;
     _catalogChapters = <CatalogChapter>[];
     _selectedChapterIndex = 0;
+    _catalogWholeBook = false;
+    _catalogWholeText = '';
     _catalogTextLoading = false;
     _catalogTextError = false;
     _mangaChapters = <MangaChapter>[];
@@ -1357,6 +1387,7 @@ class AppState extends ChangeNotifier {
     _mangaChaptersLoading = false;
     _mangaChaptersError = false;
     _mangaPageUrls = <String>[];
+    _mangaStartPage = 0;
     _mangaPagesLoading = false;
     _mangaPagesError = false;
     _comicPdfResolving = false;
@@ -1365,6 +1396,7 @@ class AppState extends ChangeNotifier {
     _catalogComments = <PaperComment>[];
     _catalogLikedBy = <String>{};
     _catalogProgress = null;
+    _mangaProgress = null;
     _subscribeCatalogItem(item.id);
     // Reader settings ride along: manga settings are per series,
     // book settings are one doc for all books.
@@ -1475,6 +1507,18 @@ class AppState extends ChangeNotifier {
                 debugPrint('[AppState] catalog progress error: $e'),
           );
     }
+    if (user != null && _selectedCatalogItem?.type == CatalogType.manga) {
+      _mangaProgressSub = _repo!
+          .watchMangaProgress(user.id, catalogId)
+          .listen(
+            (progress) {
+              _mangaProgress = progress;
+              notifyListeners();
+            },
+            onError: (Object e, StackTrace s) =>
+                debugPrint('[AppState] manga progress error: $e'),
+          );
+    }
   }
 
   void _cancelCatalogItemSubs() {
@@ -1484,6 +1528,8 @@ class AppState extends ChangeNotifier {
     _catalogReactionsSub = null;
     _catalogProgressSub?.cancel();
     _catalogProgressSub = null;
+    _mangaProgressSub?.cancel();
+    _mangaProgressSub = null;
   }
 
   /// Applies new manga reader settings for the open series: updates
@@ -1585,6 +1631,17 @@ class AppState extends ChangeNotifier {
       return false;
     }
     _catalogChapters = splitChapters(text);
+    // A downloaded text that splits into zero chapters is a load
+    // failure, not an empty book — the detail screen's "No chapters
+    // found" line used to hide it. (In practice the chunk fallback
+    // makes this near-impossible for non-empty text.)
+    if (_catalogChapters.isEmpty) {
+      _catalogTextLoading = false;
+      _catalogTextError = true;
+      notifyListeners();
+      return false;
+    }
+    _catalogWholeText = joinWholeText(_catalogChapters);
     _catalogTextLoading = false;
     notifyListeners();
     return true;
@@ -1653,7 +1710,9 @@ class AppState extends ChangeNotifier {
   /// Opens a manga chapter in the page reader. Downloads the chapter's
   /// page URLs first (at-home server); a failed download leaves the
   /// user on the detail screen with its error state instead.
-  Future<void> openMangaChapter(int index) async {
+  /// [startPage] resumes a chapter at its last-read page (0-based);
+  /// the detail screen passes the saved page when there is one.
+  Future<void> openMangaChapter(int index, {int startPage = 0}) async {
     final item = _selectedCatalogItem;
     if (item == null || item.type != CatalogType.manga) return;
     if (index < 0 || index >= _mangaChapters.length) return;
@@ -1672,6 +1731,8 @@ class AppState extends ChangeNotifier {
     }
     _selectedMangaChapterIndex = index;
     _mangaPageUrls = pages.pageUrls;
+    _mangaStartPage =
+        startPage.clamp(0, pages.pageUrls.length - 1).toInt();
     _mangaPagesLoading = false;
     notifyListeners();
     navigate(AppView.mangaReader);
@@ -1686,9 +1747,24 @@ class AppState extends ChangeNotifier {
     if (item == null) return;
     if (!await _ensureCatalogText()) return;
     if (index < 0 || index >= _catalogChapters.length) return;
+    _catalogWholeBook = false;
+    _catalogJumpToBookmark = false;
     _selectedChapterIndex = index;
     navigate(AppView.catalogReader);
     _markCatalogChapterRead(item.id, index);
+  }
+
+  /// Opens the whole book in the text reader: all chapters joined
+  /// into one scroll (see [catalogWholeText]). Restores the saved
+  /// whole-book position when there is one. One tap from the detail
+  /// screen's "Read whole book" button.
+  Future<void> openWholeBook() async {
+    final item = _selectedCatalogItem;
+    if (item == null) return;
+    if (!await _ensureCatalogText()) return;
+    _catalogWholeBook = true;
+    _catalogJumpToBookmark = false;
+    navigate(AppView.catalogReader);
   }
 
   /// Toggles the user's save (bookmark) on a catalog item.
@@ -1786,6 +1862,134 @@ class AppState extends ChangeNotifier {
     );
     _catalogProgress = progress;
     unawaited(_repo!.saveCatalogProgress(user.id, catalogId, progress));
+  }
+
+  /// Saves the reader's position in the whole book (scroll fraction
+  /// -> char offset in the joined text). Also records which chapter
+  /// the offset falls in, so read marks and "Continue reading" stay
+  /// meaningful. Fire-and-forget; the progress stream echoes it back.
+  void saveCatalogWholeBookPosition(String catalogId, int charOffset) {
+    final user = _user;
+    if (user == null || !_firebaseReady) return;
+    final chapterIndex = _catalogChapters.isEmpty
+        ? 0
+        : wholeTextChapterIndex(_catalogChapters, charOffset);
+    final read = {
+      ...?_catalogProgress?.readChapterIndices,
+      chapterIndex,
+    }.toList()..sort();
+    final progress = CatalogProgress(
+      lastChapterIndex: chapterIndex,
+      lastCharOffset: charOffset,
+      readChapterIndices: read,
+      updatedAt: DateTime.now(),
+      wholeBook: true,
+    );
+    _catalogProgress = progress;
+    unawaited(_repo!.saveCatalogProgress(user.id, catalogId, progress));
+  }
+
+  /// Sets (or moves) the bookmark at the reader's current spot:
+  /// [charOffset] into the chapter text, or into the joined whole-
+  /// book text when [wholeBook]. Keeps the auto-saved position and
+  /// read marks. Fire-and-forget; the progress stream echoes it back.
+  void setCatalogBookmark(
+    String catalogId,
+    int charOffset,
+    bool wholeBook,
+  ) {
+    final user = _user;
+    if (user == null || !_firebaseReady) return;
+    final chapterIndex = _catalogChapters.isEmpty
+        ? 0
+        : wholeBook
+            ? wholeTextChapterIndex(_catalogChapters, charOffset)
+            : _selectedChapterIndex.clamp(0, _catalogChapters.length - 1);
+    final old = _catalogProgress;
+    final progress = CatalogProgress(
+      lastChapterIndex: old?.lastChapterIndex ?? chapterIndex,
+      lastCharOffset: old?.lastCharOffset ?? 0,
+      readChapterIndices: old?.readChapterIndices ?? const [],
+      updatedAt: DateTime.now(),
+      wholeBook: old?.wholeBook ?? false,
+      bookmarkCharOffset: charOffset,
+      bookmarkChapterIndex: chapterIndex,
+      bookmarkWholeBook: wholeBook,
+    );
+    _catalogProgress = progress;
+    unawaited(_repo!.saveCatalogProgress(user.id, catalogId, progress));
+    showToast('Bookmarked', Icons.bookmark);
+  }
+
+  /// Removes the bookmark, keeping the auto-saved position and read
+  /// marks. No-op when there is no bookmark. Fire-and-forget.
+  void clearCatalogBookmark(String catalogId) {
+    final user = _user;
+    final old = _catalogProgress;
+    if (user == null || !_firebaseReady || old == null) return;
+    if (old.bookmarkCharOffset == null) return;
+    final progress = CatalogProgress(
+      lastChapterIndex: old.lastChapterIndex,
+      lastCharOffset: old.lastCharOffset,
+      readChapterIndices: old.readChapterIndices,
+      updatedAt: DateTime.now(),
+      wholeBook: old.wholeBook,
+    );
+    _catalogProgress = progress;
+    unawaited(_repo!.saveCatalogProgress(user.id, catalogId, progress));
+  }
+
+  /// Opens the reader at the saved bookmark (chapter or whole-book
+  /// mode, as stored). No-op when there is no bookmark.
+  Future<void> openCatalogBookmark() async {
+    final item = _selectedCatalogItem;
+    final progress = _catalogProgress;
+    if (item == null || progress?.bookmarkCharOffset == null) return;
+    if (!await _ensureCatalogText()) return;
+    _catalogWholeBook = progress!.bookmarkWholeBook;
+    _selectedChapterIndex = progress.bookmarkChapterIndex.clamp(
+      0,
+      _catalogChapters.length - 1,
+    );
+    _catalogJumpToBookmark = true;
+    navigate(AppView.catalogReader);
+  }
+
+  /// Returns the bookmark offset for a reader opened via
+  /// [openCatalogBookmark], and clears it so later opens restore the
+  /// auto-saved position instead. Returns null otherwise.
+  int? consumeBookmarkJump() {
+    if (!_catalogJumpToBookmark) return null;
+    _catalogJumpToBookmark = false;
+    return _catalogProgress?.bookmarkCharOffset;
+  }
+
+  /// Saves the last-read page inside one manga chapter (0-based page
+  /// index). Fire-and-forget; the progress stream echoes it back.
+  /// Called when the reader closes or the chapter changes — not on
+  /// every page turn, so fast swiping does not spam Firestore.
+  void saveMangaPagePosition(
+    String mangaId,
+    String chapterId,
+    int page,
+    int pages,
+  ) {
+    final user = _user;
+    if (user == null || !_firebaseReady) return;
+    final chapters = Map<String, MangaChapterProgress>.of(
+      _mangaProgress?.chapters ?? {},
+    );
+    chapters[chapterId] = MangaChapterProgress(
+      page: page,
+      pages: pages,
+      updatedAt: DateTime.now(),
+    );
+    final progress = MangaProgress(
+      chapters: chapters,
+      updatedAt: DateTime.now(),
+    );
+    _mangaProgress = progress;
+    unawaited(_repo!.saveMangaProgress(user.id, mangaId, progress));
   }
 
   // -------------------------------------------------------------------- news

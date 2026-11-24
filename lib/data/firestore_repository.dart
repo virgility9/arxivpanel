@@ -698,6 +698,41 @@ class FirestoreRepository {
         .set(progress.toJson(), SetOptions(merge: true));
   }
 
+  /// Streams last-read pages for one manga (null when the user has
+  /// never opened a chapter of it). One doc per manga, keyed by
+  /// chapter id inside.
+  Stream<MangaProgress?> watchMangaProgress(
+    String uid,
+    String catalogId,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('manga_progress')
+        .doc(catalogId)
+        .snapshots()
+        .map((doc) {
+      final data = doc.data();
+      if (data == null) return null;
+      return MangaProgress.fromJson(data);
+    });
+  }
+
+  /// Saves last-read pages for one manga. Merge-set, so updating one
+  /// chapter's page never wipes the others.
+  Future<void> saveMangaProgress(
+    String uid,
+    String catalogId,
+    MangaProgress progress,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('manga_progress')
+        .doc(catalogId)
+        .set(progress.toJson(), SetOptions(merge: true));
+  }
+
   /// Streams one manga's reader settings (null when the user has never
   /// changed them — the reader then uses the defaults).
   Stream<MangaReaderSettings?> watchMangaReaderSettings(

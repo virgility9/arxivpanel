@@ -1,10 +1,12 @@
-/// In-app text reader for one catalog chapter: selectable text with
-/// reader customization (font size/family, line height, alignment,
-/// reading theme, margins, brightness — the settings sheet, same
-/// style as the manga reader), prev/next chapter footer, and reading
-/// position saved on exit (the detail screen's "Continue reading"
-/// resumes it). The system back button returns to the detail screen,
-/// same as the back arrow.
+/// In-app text reader for one catalog chapter, or for the whole book
+/// in one scroll (whole-book mode, from the detail screen's "Read
+/// whole book" button): selectable text with reader customization
+/// (font size/family, line height, alignment, reading theme, margins,
+/// brightness — the settings sheet, same style as the manga reader),
+/// prev/next chapter footer in chapter mode, and reading position
+/// saved on exit (the detail screen's "Continue reading" resumes it).
+/// The system back button returns to the detail screen, same as the
+/// back arrow.
 library;
 
 import 'package:flutter/material.dart';
@@ -64,41 +66,92 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
     widget.appState.navigate(AppView.catalogDetail);
   }
 
-  /// Jumps to the saved position inside this chapter (once). Runs after
-  /// the first frame so the scroll extent is known.
+  /// Jumps to the saved position (once). Runs after the first frame
+  /// so the scroll extent is known. A bookmark jump (from the detail
+  /// screen) lands on the bookmark offset; otherwise whole-book
+  /// positions restore into the joined text and chapter positions
+  /// only restore when the saved chapter is the one open.
   void _restorePosition() {
     if (_restored || !mounted) return;
     _restored = true;
-    final progress = widget.appState.catalogProgress;
-    final chapter = widget.appState.selectedChapter;
-    if (progress == null || chapter == null) return;
-    if (progress.lastChapterIndex != _chapterIndex) {
-      return;
-    }
-    if (progress.lastCharOffset <= 0 || chapter.text.isEmpty) return;
+    final appState = widget.appState;
     if (!_scroll.hasClients) return;
     final max = _scroll.position.maxScrollExtent;
     if (max <= 0) return;
+    final bookmarkOffset = appState.consumeBookmarkJump();
+    if (bookmarkOffset != null && bookmarkOffset > 0) {
+      final length = appState.catalogWholeBook
+          ? appState.catalogWholeText.length
+          : (appState.selectedChapter?.text.length ?? 0);
+      if (length > 0) {
+        final fraction = (bookmarkOffset / length).clamp(0.0, 1.0);
+        _scroll.jumpTo(fraction * max);
+      }
+      return;
+    }
+    final progress = appState.catalogProgress;
+    if (progress == null || progress.lastCharOffset <= 0) return;
+    if (appState.catalogWholeBook) {
+      if (!progress.wholeBook) return;
+      final wholeText = appState.catalogWholeText;
+      if (wholeText.isEmpty) return;
+      final fraction =
+          (progress.lastCharOffset / wholeText.length).clamp(0.0, 1.0);
+      _scroll.jumpTo(fraction * max);
+      return;
+    }
+    final chapter = appState.selectedChapter;
+    if (chapter == null) return;
+    if (progress.wholeBook || progress.lastChapterIndex != _chapterIndex) {
+      return;
+    }
+    if (chapter.text.isEmpty) return;
     final fraction =
         (progress.lastCharOffset / chapter.text.length).clamp(0.0, 1.0);
     _scroll.jumpTo(fraction * max);
   }
 
-  /// Saves the scroll fraction as a char offset inside the chapter.
+  /// Saves the scroll fraction as a char offset — into the joined
+  /// whole-book text in whole-book mode, into the chapter otherwise.
   void _savePosition() {
     if (!_scroll.hasClients) return;
     final appState = widget.appState;
-    final chapter = appState.selectedChapter;
     final item = appState.selectedCatalogItem;
-    if (chapter == null || item == null || chapter.text.isEmpty) return;
+    if (item == null) return;
     final max = _scroll.position.maxScrollExtent;
     final fraction =
         max <= 0 ? 0.0 : (_scroll.offset / max).clamp(0.0, 1.0);
+    if (appState.catalogWholeBook) {
+      final wholeText = appState.catalogWholeText;
+      if (wholeText.isEmpty) return;
+      appState.saveCatalogWholeBookPosition(
+        item.id,
+        (fraction * wholeText.length).round(),
+      );
+      return;
+    }
+    final chapter = appState.selectedChapter;
+    if (chapter == null || chapter.text.isEmpty) return;
     appState.saveCatalogChapterPosition(
       item.id,
       _chapterIndex,
       (fraction * chapter.text.length).round(),
     );
+  }
+
+  /// Char offset of the current scroll position, in the text being
+  /// shown (joined whole-book text, or the chapter text). The
+  /// bookmark button saves this as the bookmark.
+  int _currentCharOffset() {
+    if (!_scroll.hasClients) return 0;
+    final appState = widget.appState;
+    final max = _scroll.position.maxScrollExtent;
+    final fraction =
+        max <= 0 ? 0.0 : (_scroll.offset / max).clamp(0.0, 1.0);
+    final length = appState.catalogWholeBook
+        ? appState.catalogWholeText.length
+        : (appState.selectedChapter?.text.length ?? 0);
+    return (fraction * length).round();
   }
 
   /// A-/A+ write the same font-size setting the sheet's slider
@@ -162,6 +215,13 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
         }
         final chapters = appState.catalogChapters;
         final index = appState.selectedChapterIndex;
+        // Whole-book mode shows every chapter joined into one scroll
+        // (chapter titles stay as headings inside the text); chapter
+        // mode shows one chapter with prev/next.
+        final wholeBook = appState.catalogWholeBook;
+        final text = wholeBook ? appState.catalogWholeText : chapter.text;
+        final hasBookmark =
+            appState.catalogProgress?.bookmarkCharOffset != null;
         final s = appState.bookReaderSettings;
         final colors = _readingColors(s, p);
         final textColor = colors.text;
@@ -187,7 +247,7 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        chapter.title,
+                        wholeBook ? item.title : chapter.title,
                         style: displayStyle(p, size: 16).copyWith(
                           fontWeight: FontWeight.w700,
                           color: textColor,
@@ -213,6 +273,25 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
                           : null,
                       minHeight: 40,
                     ),
+                    // Bookmark: gold when this book has one. Tapping
+                    // sets (or moves) it to the current spot.
+                    IconButton(
+                      tooltip: hasBookmark
+                          ? 'Bookmark set — tap to move it here'
+                          : 'Bookmark this spot',
+                      icon: Icon(
+                        hasBookmark
+                            ? Icons.bookmark
+                            : Icons.bookmark_border,
+                        color: hasBookmark ? p.accent.accent : textColor,
+                        size: 20,
+                      ),
+                      onPressed: () => appState.setCatalogBookmark(
+                        item.id,
+                        _currentCharOffset(),
+                        wholeBook,
+                      ),
+                    ),
                     IconButton(
                       icon: Icon(Icons.settings, color: textColor),
                       onPressed: _openSettings,
@@ -224,7 +303,9 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
               Padding(
                 padding: EdgeInsets.fromLTRB(margin, 12, margin, 0),
                 child: Text(
-                  'CHAPTER ${index + 1} OF ${chapters.length}',
+                  wholeBook
+                      ? 'WHOLE BOOK'
+                      : 'CHAPTER ${index + 1} OF ${chapters.length}',
                   style: monoStyle(p, size: 10, color: faintColor),
                 ),
               ),
@@ -236,7 +317,7 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(margin, 8, margin, 16),
                         child: SelectableText(
-                          chapter.text,
+                          text,
                           textAlign: s.align == BookAlignment.justify
                               ? TextAlign.justify
                               : TextAlign.left,
@@ -262,37 +343,40 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: borderColor)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GhostButton(
-                        palette: p,
-                        label: 'Previous',
-                        icon: Icons.chevron_left,
-                        onPressed: index > 0
-                            ? () => appState.openCatalogChapter(index - 1)
-                            : null,
+              // No prev/next footer in whole-book mode — there are no
+              // chapters to move between, the whole book is one scroll.
+              if (!wholeBook)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: borderColor)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GhostButton(
+                          palette: p,
+                          label: 'Previous',
+                          icon: Icons.chevron_left,
+                          onPressed: index > 0
+                              ? () => appState.openCatalogChapter(index - 1)
+                              : null,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: GoldButton(
-                        palette: p,
-                        label: 'Next',
-                        icon: Icons.chevron_right,
-                        onPressed: index + 1 < chapters.length
-                            ? () => appState.openCatalogChapter(index + 1)
-                            : null,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GoldButton(
+                          palette: p,
+                          label: 'Next',
+                          icon: Icons.chevron_right,
+                          onPressed: index + 1 < chapters.length
+                              ? () => appState.openCatalogChapter(index + 1)
+                              : null,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         );

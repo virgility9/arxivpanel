@@ -42,7 +42,7 @@ class MangaReaderScreen extends StatefulWidget {
 }
 
 class _MangaReaderScreenState extends State<MangaReaderScreen> {
-  final PageController _pages = PageController();
+  late final PageController _pages;
   final ScrollController _strip = ScrollController();
   final TransformationController _zoom = TransformationController();
   int _pageIndex = 0;
@@ -52,8 +52,14 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
 
   /// The chapter this State instance is showing. The shell keys the
   /// screen by chapter index, so a chapter change remounts the screen
-  /// and the page index resets to the first page.
+  /// and the page index resets to the chapter's last-read page (or
+  /// the first page when opening fresh).
   late final int _chapterIndex;
+
+  /// Page count of this chapter, captured at open. (The app-wide page
+  /// URLs move on to the next chapter before dispose runs, so the
+  /// last-read save uses this copy.)
+  late final int _pageCount;
 
   ReaderRotation? _appliedRotation;
   bool? _appliedFullscreen;
@@ -62,6 +68,13 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
   void initState() {
     super.initState();
     _chapterIndex = widget.appState.selectedMangaChapterIndex;
+    _pageCount = widget.appState.mangaPageUrls.length;
+    // Resume at the last-read page (0 when opening fresh — the
+    // detail screen passes the saved page as the start page).
+    _pageIndex = _pageCount == 0
+        ? 0
+        : widget.appState.mangaStartPage.clamp(0, _pageCount - 1).toInt();
+    _pages = PageController(initialPage: _pageIndex);
     widget.appState.setInnerBackHandler(_backToDetail);
     final s = widget.appState.mangaReaderSettings;
     _menusVisible = !s.fullscreen;
@@ -69,10 +82,19 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
     _zoom.addListener(_onZoomChanged);
     _strip.addListener(_onStripScroll);
     _applySystemSettings(s);
+    // Long strip: jump to the resumed page after the first frame
+    // (the strip's scroll extent is only known once laid out).
+    // Paged mode needs no jump — the PageController starts there.
+    if (_pageIndex > 0 && !s.isPaged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _goToPage(_pageIndex, s);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _savePagePosition();
     _zoom.removeListener(_onZoomChanged);
     _strip.removeListener(_onStripScroll);
     widget.appState.setInnerBackHandler(null);
@@ -85,7 +107,28 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
   }
 
   void _backToDetail() {
+    _savePagePosition();
     widget.appState.navigate(AppView.catalogDetail);
+  }
+
+  /// Saves the last-read page for this chapter (fire-and-forget).
+  /// Called when the reader closes or the chapter changes — the shell
+  /// remounts this screen per chapter, so dispose runs on every
+  /// chapter switch too. Uses this screen's own chapter index and
+  /// page count: by the time dispose runs, the app-wide chapter
+  /// index and page URLs have already moved on to the next chapter.
+  void _savePagePosition() {
+    final appState = widget.appState;
+    final item = appState.selectedCatalogItem;
+    final chapters = appState.mangaChapters;
+    if (item == null || _chapterIndex >= chapters.length) return;
+    if (_pageCount == 0) return;
+    appState.saveMangaPagePosition(
+      item.id,
+      chapters[_chapterIndex].id,
+      _pageIndex.clamp(0, _pageCount - 1).toInt(),
+      _pageCount,
+    );
   }
 
   void _onZoomChanged() {

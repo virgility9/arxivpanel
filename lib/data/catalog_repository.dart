@@ -145,12 +145,31 @@ class CatalogRepository {
     List<String> iaIds, {
     http.Client? client,
   }) async {
-    final capped = iaIds.take(100).toList();
-    final q = 'identifier:(${capped.join(' OR ')})';
+    // The IA query stays bounded (100 ids per call); a page with
+    // more ids is checked in chunks instead of silently leaving the
+    // rest unchecked (unchecked ids used to slip through as
+    // "readable" and then fail to load).
+    final restricted = <String>{};
+    for (var i = 0; i < iaIds.length; i += 100) {
+      final chunk = iaIds.skip(i).take(100).toList();
+      final part = await _fetchRestrictedChunk(chunk, client: client);
+      if (part == null) return null;
+      restricted.addAll(part);
+    }
+    return restricted;
+  }
+
+  /// One bounded chunk of the restricted check (see
+  /// [_fetchRestrictedIds]). Returns null when the check fails.
+  Future<Set<String>?> _fetchRestrictedChunk(
+    List<String> iaIds, {
+    http.Client? client,
+  }) async {
+    final q = 'identifier:(${iaIds.join(' OR ')})';
     final uri = Uri.parse(
       '$_iaSearchBase?q=${Uri.encodeQueryComponent(q)}'
       '&fl[]=identifier&fl[]=access-restricted-item'
-      '&rows=${capped.length}&page=1&output=json',
+      '&rows=${iaIds.length}&page=1&output=json',
     );
     final data = await _getJson(uri, client: client);
     if (data == null) return null;
@@ -165,7 +184,7 @@ class CatalogRepository {
       seen.add(id);
       if (doc['access-restricted-item'] == true) restricted.add(id);
     }
-    for (final id in capped) {
+    for (final id in iaIds) {
       if (!seen.contains(id)) restricted.add(id);
     }
     return restricted;
@@ -508,31 +527,124 @@ class CatalogRepository {
   /// `http` follows it). Retries once per id on timeout. The text is
   /// cached per book, so re-opening it never re-downloads ~700KB.
   /// Returns null when no id yields text. Never throws.
+  ///
+  /// The usual file is `{id}_djvu.txt`, but not every IA item has
+  /// one — some OCR files are named differently, or the item has no
+  /// OCR at all. When the direct file fails, the item's metadata
+  /// is asked for its actual `.txt` files and the largest one is
+  /// tried instead. When every listed copy fails, the work's other
+  /// editions are tried too (Open Library's editions list — each
+  /// edition has its own IA scan). That is the fix for books whose
+  /// chapters "don't load" even though the book is listed: the list
+  /// only proves the item exists; the old code only proved one
+  /// filename exists.
   Future<String?> fetchFullText(CatalogItem item) async {
     final cached = _fullTextCache[item.id];
     if (cached != null) return cached;
     for (final iaId in item.iaIds) {
-      final url = CatalogItem.textUrlForIa(iaId);
-      for (var attempt = 0; attempt < 2; attempt++) {
-        try {
-          final res =
-              await _client.get(Uri.parse(url)).timeout(_textTimeout);
-          if (res.statusCode == 200 && res.body.trim().isNotEmpty) {
-            _cachePut(
-              _fullTextCache,
-              item.id,
-              res.body,
-              _fullTextCacheCap,
-            );
-            return res.body;
-          }
-          break; // Non-200 or empty: try the next IA id, not a retry.
-        } catch (_) {
-          if (attempt == 1) break; // Retried once already: next IA id.
+      final text = await _downloadTextForIaId(iaId);
+      if (text != null) {
+        _cachePut(_fullTextCache, item.id, text, _fullTextCacheCap);
+        return text;
+      }
+    }
+    // Last resort: other editions of the same work, each with its own
+    // IA scan. Capped at 5 — more would keep a failing book loading
+    // for minutes (each id costs up to two 90s attempts).
+    final workId = item.openLibraryWorkId;
+    if (workId != null) {
+      final tried = item.iaIds.toSet();
+      final editionIds = (await _fetchEditionIaIds(workId))
+          .where((id) => !tried.contains(id))
+          .take(5);
+      for (final iaId in editionIds) {
+        final text = await _downloadTextForIaId(iaId);
+        if (text != null) {
+          _cachePut(_fullTextCache, item.id, text, _fullTextCacheCap);
+          return text;
         }
       }
     }
     return null;
+  }
+
+  /// Tries one IA id: the usual `{id}_djvu.txt` first, then the
+  /// item's metadata for its actual `.txt` file. Returns the text or
+  /// null. Never throws.
+  Future<String?> _downloadTextForIaId(String iaId) async {
+    final direct = await _downloadText(CatalogItem.textUrlForIa(iaId));
+    if (direct != null) return direct;
+    return _downloadTextViaMetadata(iaId);
+  }
+
+  /// IA ids of a work's other editions, from Open Library
+  /// (`/works/{workId}/editions.json`, each edition's `ocaid` is its
+  /// IA item id). Returns an empty list on any failure. Never throws.
+  Future<List<String>> _fetchEditionIaIds(String workId) async {
+    final data = await _getJson(
+      Uri.parse(
+        'https://openlibrary.org/works/$workId/editions.json?limit=50',
+      ),
+    );
+    final entries =
+        (data?['entries'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+            <Map<String, dynamic>>[];
+    final ids = <String>[];
+    for (final entry in entries) {
+      final ocaid = entry['ocaid'] as String?;
+      if (ocaid != null && ocaid.isNotEmpty && !ids.contains(ocaid)) {
+        ids.add(ocaid);
+      }
+    }
+    return ids;
+  }
+
+  /// Downloads one URL as text: 200 + non-empty body, or null.
+  /// Retries once on timeout/transport failure; a non-200 answer is
+  /// not retried (a 404 stays a 404).
+  Future<String?> _downloadText(String url) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final res = await _client.get(Uri.parse(url)).timeout(_textTimeout);
+        if (res.statusCode == 200 && res.body.trim().isNotEmpty) {
+          return res.body;
+        }
+        return null;
+      } catch (_) {
+        if (attempt == 1) return null;
+      }
+    }
+    return null;
+  }
+
+  /// Finds the actual plain-text file for one IA item from its
+  /// metadata and downloads it. Skips `{id}_djvu.txt` (already tried
+  /// directly) and otherwise takes the largest `.txt` file — the OCR
+  /// text is the big one, small `.txt` files are usually checksums
+  /// or notes. Returns null when the item has no text file, the
+  /// metadata call fails, or the download fails. Never throws.
+  Future<String?> _downloadTextViaMetadata(String iaId) async {
+    final data = await _getJson(
+      Uri.parse('https://archive.org/metadata/$iaId'),
+    );
+    final files =
+        (data?['files'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+            <Map<String, dynamic>>[];
+    String? bestName;
+    var bestSize = -1;
+    for (final file in files) {
+      final name = file['name'] as String?;
+      if (name == null || !name.endsWith('.txt')) continue;
+      if (name == '${iaId}_djvu.txt') continue;
+      final size = (file['size'] as num?)?.toInt() ?? 0;
+      if (size > bestSize) {
+        bestSize = size;
+        bestName = name;
+      }
+    }
+    if (bestName == null) return null;
+    final encoded = Uri.encodeComponent(bestName);
+    return _downloadText('https://archive.org/download/$iaId/$encoded');
   }
 
   /// Synopsis for one Open Library book/novel. The search document
