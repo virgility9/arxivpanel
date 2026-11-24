@@ -105,15 +105,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
               save.title.toLowerCase().contains(q) ||
               save.author.toLowerCase().contains(q);
         }).toList();
-        final comicSaves = widget.appState.catalogSaves
-            .where((save) => save.type == CatalogType.comic)
-            .where((save) {
-          return q.isEmpty ||
-              save.title.toLowerCase().contains(q) ||
-              save.author.toLowerCase().contains(q);
-        }).toList();
-        final mangaSaves = widget.appState.catalogSaves
-            .where((save) => save.type == CatalogType.manga)
+        // Manga and comics are one Browse tab ("Manga and Comics"), so
+        // they are one Library group too — no separate COMICS section.
+        // The type stays on each save (the detail screen and reader
+        // still branch on comic vs manga); only the grouping merges.
+        final mangaComicSaves = widget.appState.catalogSaves
+            .where((save) =>
+                save.type == CatalogType.comic ||
+                save.type == CatalogType.manga)
             .where((save) {
           return q.isEmpty ||
               save.title.toLowerCase().contains(q) ||
@@ -121,8 +120,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         }).toList();
         final hasCatalogSaves = ebookSaves.isNotEmpty ||
             novelSaves.isNotEmpty ||
-            comicSaves.isNotEmpty ||
-            mangaSaves.isNotEmpty;
+            mangaComicSaves.isNotEmpty;
 
         return SingleChildScrollView(
           child: Column(
@@ -253,19 +251,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 const SizedBox(height: 14),
                                 _catalogGrid(novelSaves),
                               ],
-                              if (comicSaves.isNotEmpty) ...[
+                              if (mangaComicSaves.isNotEmpty) ...[
                                 const SizedBox(height: 28),
-                                _sectionLabel(
-                                    p, 'COMICS · ${comicSaves.length}'),
+                                _sectionLabel(p,
+                                    'MANGA AND COMICS · ${mangaComicSaves.length}'),
                                 const SizedBox(height: 14),
-                                _catalogGrid(comicSaves),
-                              ],
-                              if (mangaSaves.isNotEmpty) ...[
-                                const SizedBox(height: 28),
-                                _sectionLabel(
-                                    p, 'MANGA · ${mangaSaves.length}'),
-                                const SizedBox(height: 14),
-                                _catalogGrid(mangaSaves),
+                                _catalogGrid(mangaComicSaves),
                               ],
                             ],
                           ),
