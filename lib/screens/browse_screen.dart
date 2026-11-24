@@ -15,6 +15,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../utils/debouncer.dart';
 import '../widgets/catalog_card.dart';
 import '../widgets/shared.dart';
 import 'library_screen.dart';
@@ -137,10 +138,49 @@ class BrowseScreen extends StatelessWidget {
 
 }
 
+/// Load-more row under a catalog grid: a spinner while the next page
+/// loads, else a Load more button when the source has more pages.
+Widget _loadMoreRow(
+  AppPalette p,
+  bool loadingMore,
+  VoidCallback onLoadMore,
+) {
+  if (loadingMore) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: p.accent.accent,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'Loading more…',
+          style: bodyStyle(p, size: 13, color: p.c.faint),
+        ),
+      ],
+    );
+  }
+  return Center(
+    child: GoldButton(
+      palette: p,
+      label: 'Load more',
+      icon: Icons.expand_more,
+      onPressed: onLoadMore,
+    ),
+  );
+}
+
 /// E-books tab: free books from Open Library (full text from the
 /// Internet Archive), read-only — users browse and read here, they
-/// never post. Search is by title/author; Enter runs the search, the
-/// clear button returns to the default education list.
+/// never post. Search is debounced typeahead: typing pauses 300ms
+/// then the search runs (Enter runs it at once); a repeat query is
+/// answered from the 5-minute cache, so backspacing feels instant.
+/// The clear button returns to the default education list.
 class _EbooksTab extends StatefulWidget {
   const _EbooksTab({
     required this.appState,
@@ -158,6 +198,7 @@ class _EbooksTab extends StatefulWidget {
 
 class _EbooksTabState extends State<_EbooksTab> {
   final TextEditingController _searchController = TextEditingController();
+  final Debouncer _debouncer = Debouncer();
   String _search = '';
 
   @override
@@ -170,21 +211,26 @@ class _EbooksTabState extends State<_EbooksTab> {
 
   @override
   void dispose() {
+    _debouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _runSearch() {
+  /// Runs the search for the current field text. No force-refresh by
+  /// default, so a repeat query is answered from the cache; Retry
+  /// passes forceRefresh to go to the network.
+  void _runSearch({bool forceRefresh = false}) {
     widget.appState.fetchEbooks(
       search: _search,
-      forceRefresh: true,
+      forceRefresh: forceRefresh,
     );
   }
 
   void _clearSearch() {
+    _debouncer.cancel();
     _searchController.clear();
     setState(() => _search = '');
-    widget.appState.fetchEbooks(forceRefresh: true);
+    widget.appState.fetchEbooks();
   }
 
   @override
@@ -216,8 +262,14 @@ class _EbooksTabState extends State<_EbooksTab> {
               constraints: const BoxConstraints(maxWidth: 1280),
               child: TextField(
                 controller: _searchController,
-                onChanged: (v) => setState(() => _search = v),
-                onSubmitted: (_) => _runSearch(),
+                onChanged: (v) {
+                  setState(() => _search = v);
+                  _debouncer(() => _runSearch());
+                },
+                onSubmitted: (_) {
+                  _debouncer.cancel();
+                  _runSearch();
+                },
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: 'Search free e-books…',
@@ -249,7 +301,15 @@ class _EbooksTabState extends State<_EbooksTab> {
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1280),
-                  child: _body(p, books, loading, failed),
+                  child: _body(
+                    p,
+                    books,
+                    loading,
+                    failed,
+                    appState.ebooksHasMore,
+                    appState.ebooksLoadingMore,
+                    widget.appState.loadMoreEbooks,
+                  ),
                 ),
               ),
             ),
@@ -264,6 +324,9 @@ class _EbooksTabState extends State<_EbooksTab> {
     List<CatalogItem> books,
     bool loading,
     bool failed,
+    bool hasMore,
+    bool loadingMore,
+    VoidCallback onLoadMore,
   ) {
     if (loading && books.isEmpty) {
       return Padding(
@@ -303,7 +366,7 @@ class _EbooksTabState extends State<_EbooksTab> {
               palette: p,
               label: 'Retry',
               icon: Icons.refresh,
-              onPressed: _runSearch,
+              onPressed: () => _runSearch(forceRefresh: true),
             ),
           ],
         ),
@@ -320,37 +383,46 @@ class _EbooksTabState extends State<_EbooksTab> {
         ),
       );
     }
-    return LayoutBuilder(
-      builder: (context, listConstraints) {
-        final width = listConstraints.maxWidth;
-        final columns = width < 700 ? 2 : width < 1100 ? 3 : 4;
-        const spacing = 12.0;
-        final cellWidth = (width - spacing * (columns - 1)) / columns;
-        return SizedBox(
-          width: double.infinity,
-          child: Wrap(
-            alignment: WrapAlignment.start,
-            spacing: spacing,
-            runSpacing: spacing,
-            children: [
-              for (final book in books)
-                SizedBox(
-                  width: cellWidth,
-                  child: RepaintBoundary(
-                    child: CatalogCard(
-                      key: ValueKey(book.id),
-                      item: book,
-                      appState: widget.appState,
-                      theme: widget.theme,
-                      onAuthPrompt: widget.onAuthPrompt,
-                      onOpen: () => widget.appState.openCatalogItem(book),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, listConstraints) {
+            final width = listConstraints.maxWidth;
+            final columns = width < 700 ? 2 : width < 1100 ? 3 : 4;
+            const spacing = 12.0;
+            final cellWidth = (width - spacing * (columns - 1)) / columns;
+            return SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.start,
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final book in books)
+                    SizedBox(
+                      width: cellWidth,
+                      child: RepaintBoundary(
+                        child: CatalogCard(
+                          key: ValueKey(book.id),
+                          item: book,
+                          appState: widget.appState,
+                          theme: widget.theme,
+                          onAuthPrompt: widget.onAuthPrompt,
+                          onOpen: () => widget.appState.openCatalogItem(book),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
+                ],
+              ),
+            );
+          },
+        ),
+        if (hasMore || loadingMore) ...[
+          const SizedBox(height: 20),
+          _loadMoreRow(p, loadingMore, onLoadMore),
+        ],
+      ],
     );
   }
 }
@@ -375,6 +447,7 @@ class _NovelsTab extends StatefulWidget {
 
 class _NovelsTabState extends State<_NovelsTab> {
   final TextEditingController _searchController = TextEditingController();
+  final Debouncer _debouncer = Debouncer();
   String _search = '';
 
   @override
@@ -387,21 +460,23 @@ class _NovelsTabState extends State<_NovelsTab> {
 
   @override
   void dispose() {
+    _debouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _runSearch() {
+  void _runSearch({bool forceRefresh = false}) {
     widget.appState.fetchNovels(
       search: _search,
-      forceRefresh: true,
+      forceRefresh: forceRefresh,
     );
   }
 
   void _clearSearch() {
+    _debouncer.cancel();
     _searchController.clear();
     setState(() => _search = '');
-    widget.appState.fetchNovels(forceRefresh: true);
+    widget.appState.fetchNovels();
   }
 
   @override
@@ -433,8 +508,14 @@ class _NovelsTabState extends State<_NovelsTab> {
               constraints: const BoxConstraints(maxWidth: 1280),
               child: TextField(
                 controller: _searchController,
-                onChanged: (v) => setState(() => _search = v),
-                onSubmitted: (_) => _runSearch(),
+                onChanged: (v) {
+                  setState(() => _search = v);
+                  _debouncer(() => _runSearch());
+                },
+                onSubmitted: (_) {
+                  _debouncer.cancel();
+                  _runSearch();
+                },
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: 'Search free novels…',
@@ -466,7 +547,15 @@ class _NovelsTabState extends State<_NovelsTab> {
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1280),
-                  child: _body(p, books, loading, failed),
+                  child: _body(
+                    p,
+                    books,
+                    loading,
+                    failed,
+                    appState.novelsHasMore,
+                    appState.novelsLoadingMore,
+                    widget.appState.loadMoreNovels,
+                  ),
                 ),
               ),
             ),
@@ -481,6 +570,9 @@ class _NovelsTabState extends State<_NovelsTab> {
     List<CatalogItem> books,
     bool loading,
     bool failed,
+    bool hasMore,
+    bool loadingMore,
+    VoidCallback onLoadMore,
   ) {
     if (loading && books.isEmpty) {
       return Padding(
@@ -520,7 +612,7 @@ class _NovelsTabState extends State<_NovelsTab> {
               palette: p,
               label: 'Retry',
               icon: Icons.refresh,
-              onPressed: _runSearch,
+              onPressed: () => _runSearch(forceRefresh: true),
             ),
           ],
         ),
@@ -537,37 +629,46 @@ class _NovelsTabState extends State<_NovelsTab> {
         ),
       );
     }
-    return LayoutBuilder(
-      builder: (context, listConstraints) {
-        final width = listConstraints.maxWidth;
-        final columns = width < 700 ? 2 : width < 1100 ? 3 : 4;
-        const spacing = 12.0;
-        final cellWidth = (width - spacing * (columns - 1)) / columns;
-        return SizedBox(
-          width: double.infinity,
-          child: Wrap(
-            alignment: WrapAlignment.start,
-            spacing: spacing,
-            runSpacing: spacing,
-            children: [
-              for (final book in books)
-                SizedBox(
-                  width: cellWidth,
-                  child: RepaintBoundary(
-                    child: CatalogCard(
-                      key: ValueKey(book.id),
-                      item: book,
-                      appState: widget.appState,
-                      theme: widget.theme,
-                      onAuthPrompt: widget.onAuthPrompt,
-                      onOpen: () => widget.appState.openCatalogItem(book),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, listConstraints) {
+            final width = listConstraints.maxWidth;
+            final columns = width < 700 ? 2 : width < 1100 ? 3 : 4;
+            const spacing = 12.0;
+            final cellWidth = (width - spacing * (columns - 1)) / columns;
+            return SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.start,
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final book in books)
+                    SizedBox(
+                      width: cellWidth,
+                      child: RepaintBoundary(
+                        child: CatalogCard(
+                          key: ValueKey(book.id),
+                          item: book,
+                          appState: widget.appState,
+                          theme: widget.theme,
+                          onAuthPrompt: widget.onAuthPrompt,
+                          onOpen: () => widget.appState.openCatalogItem(book),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
+                ],
+              ),
+            );
+          },
+        ),
+        if (hasMore || loadingMore) ...[
+          const SizedBox(height: 20),
+          _loadMoreRow(p, loadingMore, onLoadMore),
+        ],
+      ],
     );
   }
 }
@@ -594,6 +695,7 @@ class _MangaComicsTab extends StatefulWidget {
 
 class _MangaComicsTabState extends State<_MangaComicsTab> {
   final TextEditingController _searchController = TextEditingController();
+  final Debouncer _debouncer = Debouncer();
   String _search = '';
 
   @override
@@ -607,26 +709,28 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
 
   @override
   void dispose() {
+    _debouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _runSearch() {
+  void _runSearch({bool forceRefresh = false}) {
     widget.appState.fetchManga(
       search: _search,
-      forceRefresh: true,
+      forceRefresh: forceRefresh,
     );
     widget.appState.fetchComics(
       search: _search,
-      forceRefresh: true,
+      forceRefresh: forceRefresh,
     );
   }
 
   void _clearSearch() {
+    _debouncer.cancel();
     _searchController.clear();
     setState(() => _search = '');
-    widget.appState.fetchManga(forceRefresh: true);
-    widget.appState.fetchComics(forceRefresh: true);
+    widget.appState.fetchManga();
+    widget.appState.fetchComics();
   }
 
   @override
@@ -653,8 +757,14 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
               constraints: const BoxConstraints(maxWidth: 1280),
               child: TextField(
                 controller: _searchController,
-                onChanged: (v) => setState(() => _search = v),
-                onSubmitted: (_) => _runSearch(),
+                onChanged: (v) {
+                  setState(() => _search = v);
+                  _debouncer(() => _runSearch());
+                },
+                onSubmitted: (_) {
+                  _debouncer.cancel();
+                  _runSearch();
+                },
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: 'Search manga and comics…',
@@ -747,7 +857,7 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
               palette: p,
               label: 'Retry',
               icon: Icons.refresh,
-              onPressed: _runSearch,
+              onPressed: () => _runSearch(forceRefresh: true),
             ),
           ],
         ),
@@ -777,6 +887,9 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
           manga,
           mangaLoading,
           mangaFailed,
+          appState.mangaHasMore,
+          appState.mangaLoadingMore,
+          widget.appState.loadMoreManga,
           () => widget.appState.fetchManga(
             search: _search,
             forceRefresh: true,
@@ -789,6 +902,9 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
           comics,
           comicsLoading,
           comicsFailed,
+          appState.comicsHasMore,
+          appState.comicsLoadingMore,
+          widget.appState.loadMoreComics,
           () => widget.appState.fetchComics(
             search: _search,
             forceRefresh: true,
@@ -806,6 +922,9 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
     List<CatalogItem> items,
     bool loading,
     bool failed,
+    bool hasMore,
+    bool loadingMore,
+    VoidCallback onLoadMore,
     VoidCallback onRetry,
   ) {
     final c = p.c;
@@ -872,7 +991,16 @@ class _MangaComicsTabState extends State<_MangaComicsTab> {
             style: bodyStyle(p, size: 13, color: c.faint),
           )
         else
-          _grid(p, items),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _grid(p, items),
+              if (hasMore || loadingMore) ...[
+                const SizedBox(height: 20),
+                _loadMoreRow(p, loadingMore, onLoadMore),
+              ],
+            ],
+          ),
       ],
     );
   }

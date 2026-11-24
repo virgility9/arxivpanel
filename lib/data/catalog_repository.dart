@@ -2,11 +2,12 @@
 /// Open Library + the Internet Archive, comics from the Internet
 /// Archive, manga from MangaDex — no new dependency, only
 /// `package:http`, already in the app. Mirrors [NewsRepository]: a
-/// 5-minute cache per list, 20s timeout for JSON with 3 attempts, 90s
-/// for full text with 2 attempts per IA id, never throws (empty list /
-/// null on failure). Gutendex was the original e-books source but it
-/// timed out on every attempt on 2026-11-24 and Gutenberg was down for
-/// maintenance; Open Library is the verified-live source.
+/// 5-minute cache per list (page 1), 20-item pages with Load more,
+/// 20s timeout for JSON with 3 attempts, 90s for full text with 2
+/// attempts per IA id, never throws (empty page / null on failure).
+/// Searches are debounced in the tabs and cancellable here: a new
+/// search for a list closes the previous search's client, aborting
+/// it in flight, and a repeat query is answered from the cache.
 ///
 /// READABLE-ONLY (2026-11-24): Open Library's `has_fulltext` does NOT
 /// mean the text can be downloaded — many IA texts are
@@ -29,7 +30,7 @@ class CatalogRepository {
 
   static const _searchBase = 'https://openlibrary.org/search.json';
   static const _fields = 'key,title,author_name,cover_i,subject,has_fulltext,ia';
-  static const _pageSize = 32;
+  static const _pageSize = 20;
   static const _cacheTtl = Duration(minutes: 5);
   static const _jsonTimeout = Duration(seconds: 20);
   static const _textTimeout = Duration(seconds: 90);
@@ -38,31 +39,71 @@ class CatalogRepository {
   static const _mangaBase = 'https://api.mangadex.org';
 
   final http.Client _client;
-  List<CatalogItem>? _ebooksCache;
+  CatalogPage? _ebooksCache;
   DateTime? _ebooksCacheAt;
   String? _ebooksQuery;
-  List<CatalogItem>? _novelsCache;
+  CatalogPage? _novelsCache;
   DateTime? _novelsCacheAt;
   String? _novelsQuery;
-  List<CatalogItem>? _comicsCache;
+  CatalogPage? _comicsCache;
   DateTime? _comicsCacheAt;
   String? _comicsQuery;
-  List<CatalogItem>? _mangaCache;
+  CatalogPage? _mangaCache;
   DateTime? _mangaCacheAt;
   String? _mangaQuery;
+
+  /// One live search client per list. A new search for a list closes
+  /// the previous one first, so an outdated in-flight request is
+  /// aborted on the spot instead of finishing late and overwriting
+  /// the newer results (its retry loop fails fast on the closed
+  /// client). The shared [_client] keeps serving everything else
+  /// (texts, chapters, synopses).
+  http.Client? _ebooksSearchClient;
+  http.Client? _novelsSearchClient;
+  http.Client? _comicsSearchClient;
+  http.Client? _mangaSearchClient;
+
+  /// Local cache for the heavy per-item downloads, so re-opening a
+  /// book / manga / chapter is instant instead of re-downloading:
+  /// full book texts (capped — each is ~700KB), manga chapter lists
+  /// and chapter page lists (small JSON). Source data is immutable,
+  /// so no TTL is needed; the caps keep memory bounded.
+  final Map<String, String> _fullTextCache = <String, String>{};
+  final Map<String, List<MangaChapter>> _mangaChaptersCache =
+      <String, List<MangaChapter>>{};
+  final Map<String, MangaPages> _mangaPagesCache = <String, MangaPages>{};
+  static const _fullTextCacheCap = 8;
+  static const _mangaCacheCap = 20;
+
+  /// Stores [value] under [key], dropping the oldest entry when the
+  /// cache is at its cap (insertion-ordered map: the first key is
+  /// the oldest).
+  void _cachePut<K, V>(Map<K, V> cache, K key, V value, int cap) {
+    cache.remove(key);
+    if (cache.length >= cap) cache.remove(cache.keys.first);
+    cache[key] = value;
+  }
 
   /// One JSON GET with retries (slow/flaky connections stall single
   /// attempts). Returns the decoded object, or null after every
   /// attempt fails (non-200, timeout, bad JSON). Never throws.
-  Future<Map<String, dynamic>?> _getJson(Uri uri) async {
+  /// [client] defaults to the shared client; list searches pass their
+  /// own per-list client so a superseding search can close it.
+  Future<Map<String, dynamic>?> _getJson(
+    Uri uri, {
+    http.Client? client,
+  }) async {
+    final c = client ?? _client;
     for (var attempt = 0; attempt < _maxAttempts; attempt++) {
       if (attempt > 0) await Future.delayed(const Duration(seconds: 1));
       try {
-        final res = await _client.get(uri).timeout(_jsonTimeout);
+        final res = await c.get(uri).timeout(_jsonTimeout);
         if (res.statusCode != 200) continue;
         return jsonDecode(res.body) as Map<String, dynamic>;
       } catch (_) {
-        // Transient stall / DNS failure: retry, then give up.
+        // Transient stall / DNS failure — or the client was closed
+        // because a newer search superseded this one: retry, then
+        // give up (a closed client fails every attempt at once).
       }
     }
     return null;
@@ -77,11 +118,12 @@ class CatalogRepository {
   /// unfiltered (fail open — the per-id download fallback still
   /// applies) rather than dropping everything.
   Future<List<CatalogItem>> _filterReadable(
-    List<CatalogItem> items,
-  ) async {
+    List<CatalogItem> items, {
+    http.Client? client,
+  }) async {
     final allIds = items.expand((i) => i.iaIds).toSet().toList();
     if (allIds.isEmpty) return items;
-    final restricted = await _fetchRestrictedIds(allIds);
+    final restricted = await _fetchRestrictedIds(allIds, client: client);
     if (restricted == null) return items;
     final out = <CatalogItem>[];
     for (final item in items) {
@@ -99,7 +141,10 @@ class CatalogRepository {
   /// search response count as restricted (a lending-only item can be
   /// absent from the search index — e.g. `isbn_9780593091876`).
   /// Returns null when the check itself fails.
-  Future<Set<String>?> _fetchRestrictedIds(List<String> iaIds) async {
+  Future<Set<String>?> _fetchRestrictedIds(
+    List<String> iaIds, {
+    http.Client? client,
+  }) async {
     final capped = iaIds.take(100).toList();
     final q = 'identifier:(${capped.join(' OR ')})';
     final uri = Uri.parse(
@@ -107,7 +152,7 @@ class CatalogRepository {
       '&fl[]=identifier&fl[]=access-restricted-item'
       '&rows=${capped.length}&page=1&output=json',
     );
-    final data = await _getJson(uri);
+    final data = await _getJson(uri, client: client);
     if (data == null) return null;
     final docs =
         (data['response'] as Map<String, dynamic>?)?['docs'] as List? ??
@@ -127,12 +172,16 @@ class CatalogRepository {
   }
 
   /// Shared Open Library fetch: decode, parse into items of [type],
-  /// then drop the unreadable ones. Returns null on failure.
-  Future<List<CatalogItem>?> _fetchOpenLibrary(
+  /// then drop the unreadable ones. Returns the page plus whether the
+  /// source has more pages (`numFound` vs this page's end). Returns
+  /// null on failure.
+  Future<CatalogPage?> _fetchOpenLibrary(
     Uri uri,
     CatalogType type,
-  ) async {
-    final data = await _getJson(uri);
+    int page, {
+    http.Client? client,
+  }) async {
+    final data = await _getJson(uri, client: client);
     if (data == null) return null;
     final docs = data['docs'] as List? ?? <dynamic>[];
     final items = docs
@@ -140,74 +189,105 @@ class CatalogRepository {
         .map((d) => CatalogItem.fromOpenLibrary(d, type: type))
         .whereType<CatalogItem>()
         .toList();
-    return _filterReadable(items);
+    final readable = await _filterReadable(items, client: client);
+    final numFound = (data['numFound'] as num?)?.toInt() ?? 0;
+    return CatalogPage(
+      items: readable,
+      hasMore: page * _pageSize < numFound,
+    );
   }
 
   /// E-books list, most relevant first. [search] is free text; the
   /// default list is education books (`q=education`). Only books with
   /// a usable AND readable full text are returned (the source marks
   /// the rest, and the restriction filter drops the lending-only
-  /// ones). The cache is keyed by query; a new query refetches.
+  /// ones). Results come in pages of [_pageSize]; [page] is 1-based.
+  /// The cache is keyed by query and covers page 1 only — later pages
+  /// always fetch (a repeat search resets to page 1, so cached page 1
+  /// is what backspacing and re-searching hits). A superseding search
+  /// closes the previous search's client, aborting it in flight.
   /// Returns null on failure (non-200, timeout, bad JSON) — an empty
-  /// list means the search genuinely found nothing. Never throws.
-  Future<List<CatalogItem>?> fetchEbooks({
+  /// page means the search genuinely found nothing. Never throws.
+  Future<CatalogPage?> fetchEbooks({
     String? search,
+    int page = 1,
     bool forceRefresh = false,
   }) async {
     final query = (search == null || search.trim().isEmpty)
         ? 'education'
         : search.trim();
-    if (!forceRefresh &&
+    if (page == 1 &&
+        !forceRefresh &&
         _ebooksCache != null &&
         _ebooksCacheAt != null &&
         _ebooksQuery == query &&
         DateTime.now().difference(_ebooksCacheAt!) < _cacheTtl) {
       return _ebooksCache!;
     }
+    _ebooksSearchClient?.close();
+    final client = _ebooksSearchClient = http.Client();
     final uri = Uri.parse(
       '$_searchBase?q=${Uri.encodeQueryComponent(query)}'
-      '&limit=$_pageSize&fields=$_fields',
+      '&limit=$_pageSize&page=$page&fields=$_fields',
     );
-    final items = await _fetchOpenLibrary(uri, CatalogType.ebook);
-    if (items == null) return null;
-    _ebooksCache = items;
-    _ebooksCacheAt = DateTime.now();
-    _ebooksQuery = query;
-    return items;
+    final result = await _fetchOpenLibrary(
+      uri,
+      CatalogType.ebook,
+      page,
+      client: client,
+    );
+    if (result == null) return null;
+    if (page == 1) {
+      _ebooksCache = result;
+      _ebooksCacheAt = DateTime.now();
+      _ebooksQuery = query;
+    }
+    return result;
   }
 
   /// Novels list from Open Library. Same readable-only shape as
   /// [fetchEbooks]; the default list is fiction (`subject=fiction`),
   /// a free-text [search] switches to a title/author query.
-  Future<List<CatalogItem>?> fetchNovels({
+  Future<CatalogPage?> fetchNovels({
     String? search,
+    int page = 1,
     bool forceRefresh = false,
   }) async {
     final query = (search == null || search.trim().isEmpty)
         ? ''
         : search.trim();
-    if (!forceRefresh &&
+    if (page == 1 &&
+        !forceRefresh &&
         _novelsCache != null &&
         _novelsCacheAt != null &&
         _novelsQuery == query &&
         DateTime.now().difference(_novelsCacheAt!) < _cacheTtl) {
       return _novelsCache!;
     }
+    _novelsSearchClient?.close();
+    final client = _novelsSearchClient = http.Client();
     final uri = query.isEmpty
         ? Uri.parse(
             '$_searchBase?subject=fiction'
-            '&limit=$_pageSize&fields=$_fields',
+            '&limit=$_pageSize&page=$page&fields=$_fields',
           )
         : Uri.parse(
             '$_searchBase?q=${Uri.encodeQueryComponent(query)}'
-            '&limit=$_pageSize&fields=$_fields',
+            '&limit=$_pageSize&page=$page&fields=$_fields',
           );
-    final items = await _fetchOpenLibrary(uri, CatalogType.novel);
-    if (items == null) return null;
-    _novelsCache = items;
-    _novelsCacheAt = DateTime.now();
-    _novelsQuery = query;
-    return items;
+    final result = await _fetchOpenLibrary(
+      uri,
+      CatalogType.novel,
+      page,
+      client: client,
+    );
+    if (result == null) return null;
+    if (page == 1) {
+      _novelsCache = result;
+      _novelsCacheAt = DateTime.now();
+      _novelsQuery = query;
+    }
+    return result;
   }
 
   /// Comics list from the Internet Archive (`collection:comics`,
@@ -216,20 +296,24 @@ class CatalogRepository {
   /// without an extra call. [search] matches issue titles
   /// (`title:(word1 AND word2)`, verified live). Returns null on
   /// failure. Never throws.
-  Future<List<CatalogItem>?> fetchComics({
+  Future<CatalogPage?> fetchComics({
     String? search,
+    int page = 1,
     bool forceRefresh = false,
   }) async {
     final query = (search == null || search.trim().isEmpty)
         ? ''
         : search.trim();
-    if (!forceRefresh &&
+    if (page == 1 &&
+        !forceRefresh &&
         _comicsCache != null &&
         _comicsCacheAt != null &&
         _comicsQuery == query &&
         DateTime.now().difference(_comicsCacheAt!) < _cacheTtl) {
       return _comicsCache!;
     }
+    _comicsSearchClient?.close();
+    final client = _comicsSearchClient = http.Client();
     final q = StringBuffer('collection:comics AND format:"Text PDF"');
     if (query.isNotEmpty) {
       final words = query
@@ -242,23 +326,29 @@ class CatalogRepository {
       '$_iaSearchBase?q=${Uri.encodeQueryComponent(q.toString())}'
       '&fl[]=identifier&fl[]=title&fl[]=description'
       '&fl[]=access-restricted-item'
-      '&rows=$_pageSize&page=1&output=json',
+      '&rows=$_pageSize&page=$page&output=json',
     );
-    final data = await _getJson(uri);
+    final data = await _getJson(uri, client: client);
     if (data == null) return null;
-    final docs =
-        (data['response'] as Map<String, dynamic>?)?['docs'] as List? ??
-            <dynamic>[];
+    final response = data['response'] as Map<String, dynamic>?;
+    final docs = response?['docs'] as List? ?? <dynamic>[];
     final items = docs
         .whereType<Map<String, dynamic>>()
         .where((d) => d['access-restricted-item'] != true)
         .map(CatalogItem.fromInternetArchive)
         .whereType<CatalogItem>()
         .toList();
-    _comicsCache = items;
-    _comicsCacheAt = DateTime.now();
-    _comicsQuery = query;
-    return items;
+    final numFound = (response?['numFound'] as num?)?.toInt() ?? 0;
+    final result = CatalogPage(
+      items: items,
+      hasMore: page * _pageSize < numFound,
+    );
+    if (page == 1) {
+      _comicsCache = result;
+      _comicsCacheAt = DateTime.now();
+      _comicsQuery = query;
+    }
+    return result;
   }
 
   /// Direct PDF URL for one comic issue. Resolves the filename from
@@ -297,30 +387,35 @@ class CatalogRepository {
   /// Manga list from MangaDex, most followed first. [search] matches
   /// titles. Covers ride along (`cover_art`); authors/artists too.
   /// Returns null on failure. Never throws.
-  Future<List<CatalogItem>?> fetchManga({
+  Future<CatalogPage?> fetchManga({
     String? search,
+    int page = 1,
     bool forceRefresh = false,
   }) async {
     final query = (search == null || search.trim().isEmpty)
         ? ''
         : search.trim();
-    if (!forceRefresh &&
+    if (page == 1 &&
+        !forceRefresh &&
         _mangaCache != null &&
         _mangaCacheAt != null &&
         _mangaQuery == query &&
         DateTime.now().difference(_mangaCacheAt!) < _cacheTtl) {
       return _mangaCache!;
     }
+    _mangaSearchClient?.close();
+    final client = _mangaSearchClient = http.Client();
     final titleParam = query.isEmpty
         ? ''
         : '&title=${Uri.encodeQueryComponent(query)}';
+    final offset = (page - 1) * _pageSize;
     final uri = Uri.parse(
-      '$_mangaBase/manga?limit=$_pageSize'
+      '$_mangaBase/manga?limit=$_pageSize&offset=$offset'
       '&includes[]=cover_art&includes[]=author&includes[]=artist'
       '&contentRating[]=safe&contentRating[]=suggestive'
       '&order[followedCount]=desc$titleParam',
     );
-    final data = await _getJson(uri);
+    final data = await _getJson(uri, client: client);
     if (data == null) return null;
     final docs = data['data'] as List? ?? <dynamic>[];
     final items = docs
@@ -328,17 +423,27 @@ class CatalogRepository {
         .map(CatalogItem.fromMangaDex)
         .whereType<CatalogItem>()
         .toList();
-    _mangaCache = items;
-    _mangaCacheAt = DateTime.now();
-    _mangaQuery = query;
-    return items;
+    final total = (data['total'] as num?)?.toInt() ?? 0;
+    final result = CatalogPage(
+      items: items,
+      hasMore: offset + items.length < total,
+    );
+    if (page == 1) {
+      _mangaCache = result;
+      _mangaCacheAt = DateTime.now();
+      _mangaQuery = query;
+    }
+    return result;
   }
 
   /// English chapters for one manga, oldest first. Only chapters
   /// with real pages are returned (licensed titles are just external
-  /// links — filtered by [MangaChapter.fromMangaDex]). Returns null
-  /// on failure. Never throws.
+  /// links — filtered by [MangaChapter.fromMangaDex]). The list is
+  /// cached per manga, so re-opening the same title is instant.
+  /// Returns null on failure. Never throws.
   Future<List<MangaChapter>?> fetchMangaChapters(String mangaId) async {
+    final cached = _mangaChaptersCache[mangaId];
+    if (cached != null) return cached;
     final uri = Uri.parse(
       '$_mangaBase/manga/$mangaId/feed?limit=100'
       '&translatedLanguage[]=en&order[chapter]=asc'
@@ -359,13 +464,22 @@ class CatalogRepository {
       final bn = double.tryParse(b.number) ?? double.infinity;
       return an.compareTo(bn);
     });
+    _cachePut(
+      _mangaChaptersCache,
+      mangaId,
+      chapters,
+      _mangaCacheCap,
+    );
     return chapters;
   }
 
   /// Page image URLs for one manga chapter, from MangaDex's at-home
-  /// server. Returns null when the chapter has no pages on the
-  /// server (stale chapter) or the fetch fails. Never throws.
+  /// server. Cached per chapter, so re-opening it is instant.
+  /// Returns null when the chapter has no pages on the server (stale
+  /// chapter) or the fetch fails. Never throws.
   Future<MangaPages?> fetchMangaPages(String chapterId) async {
+    final cached = _mangaPagesCache[chapterId];
+    if (cached != null) return cached;
     final data =
         await _getJson(Uri.parse('$_mangaBase/at-home/server/$chapterId'));
     if (data == null) return null;
@@ -377,14 +491,19 @@ class CatalogRepository {
             .toList() ??
         <String>[];
     if (baseUrl == null || hash == null || files.isEmpty) return null;
-    return MangaPages(baseUrl: baseUrl, hash: hash, files: files);
+    final pages = MangaPages(baseUrl: baseUrl, hash: hash, files: files);
+    _cachePut(_mangaPagesCache, chapterId, pages, _mangaCacheCap);
+    return pages;
   }
 
   /// Full plain text for a book. Tries each IA id in order and takes
   /// the first non-empty body (IA answers 302, its normal redirect;
-  /// `http` follows it). Retries once per id on timeout. Returns null
-  /// when no id yields text. Never throws.
+  /// `http` follows it). Retries once per id on timeout. The text is
+  /// cached per book, so re-opening it never re-downloads ~700KB.
+  /// Returns null when no id yields text. Never throws.
   Future<String?> fetchFullText(CatalogItem item) async {
+    final cached = _fullTextCache[item.id];
+    if (cached != null) return cached;
     for (final iaId in item.iaIds) {
       final url = CatalogItem.textUrlForIa(iaId);
       for (var attempt = 0; attempt < 2; attempt++) {
@@ -392,6 +511,12 @@ class CatalogRepository {
           final res =
               await _client.get(Uri.parse(url)).timeout(_textTimeout);
           if (res.statusCode == 200 && res.body.trim().isNotEmpty) {
+            _cachePut(
+              _fullTextCache,
+              item.id,
+              res.body,
+              _fullTextCacheCap,
+            );
             return res.body;
           }
           break; // Non-200 or empty: try the next IA id, not a retry.

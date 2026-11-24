@@ -286,6 +286,16 @@ class MangaPages {
 /// One chapter of a catalog item's full text. [text] is the chapter
 /// body (heading line excluded); [startOffset]/[endOffset] are char
 /// offsets into the full text, kept for progress bookkeeping.
+/// One page of catalog results: the items on this page plus whether
+/// the source has more pages after it (from its `numFound` / `total`
+/// count, so the tab knows whether to offer Load more).
+class CatalogPage {
+  const CatalogPage({required this.items, required this.hasMore});
+
+  final List<CatalogItem> items;
+  final bool hasMore;
+}
+
 class CatalogChapter {
   const CatalogChapter({
     required this.index,

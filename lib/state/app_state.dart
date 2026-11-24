@@ -312,18 +312,34 @@ class AppState extends ChangeNotifier {
   bool _ebooksLoading = false;
   bool _ebooksError = false;
   String _ebooksQuery = '';
+  int _ebooksPage = 1;
+  bool _ebooksHasMore = false;
+  bool _ebooksLoadingMore = false;
+  int _ebooksGen = 0;
   List<CatalogItem> _novels = <CatalogItem>[];
   bool _novelsLoading = false;
   bool _novelsError = false;
   String _novelsQuery = '';
+  int _novelsPage = 1;
+  bool _novelsHasMore = false;
+  bool _novelsLoadingMore = false;
+  int _novelsGen = 0;
   List<CatalogItem> _comics = <CatalogItem>[];
   bool _comicsLoading = false;
   bool _comicsError = false;
   String _comicsQuery = '';
+  int _comicsPage = 1;
+  bool _comicsHasMore = false;
+  bool _comicsLoadingMore = false;
+  int _comicsGen = 0;
   List<CatalogItem> _manga = <CatalogItem>[];
   bool _mangaLoading = false;
   bool _mangaError = false;
   String _mangaQuery = '';
+  int _mangaPage = 1;
+  bool _mangaHasMore = false;
+  bool _mangaLoadingMore = false;
+  int _mangaGen = 0;
   CatalogItem? _selectedCatalogItem;
   List<CatalogChapter> _catalogChapters = <CatalogChapter>[];
   int _selectedChapterIndex = 0;
@@ -512,24 +528,32 @@ class AppState extends ChangeNotifier {
   bool get ebooksLoading => _ebooksLoading;
   bool get ebooksError => _ebooksError;
   String get ebooksQuery => _ebooksQuery;
+  bool get ebooksHasMore => _ebooksHasMore;
+  bool get ebooksLoadingMore => _ebooksLoadingMore;
 
   /// Novels list from Open Library (default: fiction).
   List<CatalogItem> get novels => _novels;
   bool get novelsLoading => _novelsLoading;
   bool get novelsError => _novelsError;
   String get novelsQuery => _novelsQuery;
+  bool get novelsHasMore => _novelsHasMore;
+  bool get novelsLoadingMore => _novelsLoadingMore;
 
   /// Comics list from the Internet Archive (issues with a Text PDF).
   List<CatalogItem> get comics => _comics;
   bool get comicsLoading => _comicsLoading;
   bool get comicsError => _comicsError;
   String get comicsQuery => _comicsQuery;
+  bool get comicsHasMore => _comicsHasMore;
+  bool get comicsLoadingMore => _comicsLoadingMore;
 
   /// Manga list from MangaDex (most followed first).
   List<CatalogItem> get manga => _manga;
   bool get mangaLoading => _mangaLoading;
   bool get mangaError => _mangaError;
   String get mangaQuery => _mangaQuery;
+  bool get mangaHasMore => _mangaHasMore;
+  bool get mangaLoadingMore => _mangaLoadingMore;
 
   /// The catalog item whose detail page (or reader) is open.
   CatalogItem? get selectedCatalogItem => _selectedCatalogItem;
@@ -1014,104 +1038,309 @@ class AppState extends ChangeNotifier {
   // --------------------------------------------------------------- catalog
 
   /// Fetches the e-books list from Open Library. [search] is free text;
-  /// empty means the default education list. Same shape as
-  /// [fetchLiveNews]: the repo caches for 5 minutes, the loading flag
-  /// only shows while the list is empty. Never throws.
-  Future<void> fetchEbooks({String? search, bool forceRefresh = false}) async {
-    if (_ebooksLoading) return;
-    _ebooksLoading = true;
-    _ebooksError = false;
+  /// empty means the default education list. [page] is 1-based: page 1
+  /// replaces the list, later pages append (Load more). A newer fetch
+  /// supersedes an older one — the repo aborts the old request, and
+  /// the generation check below drops its result if it still lands.
+  /// The repo caches page 1 for 5 minutes; the loading flag only
+  /// shows while the list is empty. Never throws.
+  Future<void> fetchEbooks({
+    String? search,
+    int page = 1,
+    bool forceRefresh = false,
+  }) async {
+    final gen = ++_ebooksGen;
+    final isLoadMore = page > 1;
+    if (isLoadMore) {
+      _ebooksLoadingMore = true;
+    } else {
+      _ebooksLoading = true;
+      _ebooksError = false;
+    }
     notifyListeners();
+    CatalogPage? result;
     try {
-      final items = await _catalogRepo.fetchEbooks(
+      result = await _catalogRepo.fetchEbooks(
         search: search,
+        page: page,
         forceRefresh: forceRefresh,
       );
-      _ebooks = items ?? <CatalogItem>[];
+    } catch (e) {
+      debugPrint('[AppState] e-books fetch failed: $e');
+      result = null;
+    }
+    if (gen != _ebooksGen) {
+      // Superseded by a newer search: drop the result. A stale
+      // Load more clears its own flag; the page-1 loading flag
+      // belongs to the newer run, so it stays alone.
+      if (isLoadMore) {
+        _ebooksLoadingMore = false;
+        notifyListeners();
+      }
+      return;
+    }
+    if (result == null) {
+      if (isLoadMore) {
+        _ebooksLoadingMore = false;
+        showToast(
+          'Could not load more e-books — check your connection.',
+          Icons.wifi_off,
+        );
+      } else {
+        _ebooks = <CatalogItem>[];
+        _ebooksError = true;
+        _ebooksLoading = false;
+      }
+      notifyListeners();
+      return;
+    }
+    if (isLoadMore) {
+      _ebooks = <CatalogItem>[..._ebooks, ...result.items];
+      _ebooksPage = page;
+      _ebooksLoadingMore = false;
+    } else {
+      _ebooks = result.items;
       _ebooksQuery = (search == null || search.trim().isEmpty)
           ? ''
           : search.trim();
-      // Null means the fetch failed (not an empty search result).
-      _ebooksError = items == null;
-    } catch (e) {
-      debugPrint('[AppState] e-books fetch failed: $e');
-      _ebooksError = true;
+      _ebooksPage = 1;
+      _ebooksError = false;
+      _ebooksLoading = false;
     }
-    _ebooksLoading = false;
+    _ebooksHasMore = result.hasMore;
     notifyListeners();
   }
 
+  /// Loads the next e-books page and appends it to the list.
+  Future<void> loadMoreEbooks() async {
+    if (_ebooksLoading || _ebooksLoadingMore || !_ebooksHasMore) return;
+    await fetchEbooks(
+      search: _ebooksQuery.isEmpty ? null : _ebooksQuery,
+      page: _ebooksPage + 1,
+    );
+  }
+
   /// Fetches the novels list from Open Library. Same shape as
-  /// [fetchEbooks]: the repo caches for 5 minutes, the loading flag
-  /// only shows while the list is empty. Never throws.
-  Future<void> fetchNovels({String? search, bool forceRefresh = false}) async {
-    if (_novelsLoading) return;
-    _novelsLoading = true;
-    _novelsError = false;
+  /// [fetchEbooks]: the repo caches page 1 for 5 minutes, the loading
+  /// flag only shows while the list is empty. Never throws.
+  Future<void> fetchNovels({
+    String? search,
+    int page = 1,
+    bool forceRefresh = false,
+  }) async {
+    final gen = ++_novelsGen;
+    final isLoadMore = page > 1;
+    if (isLoadMore) {
+      _novelsLoadingMore = true;
+    } else {
+      _novelsLoading = true;
+      _novelsError = false;
+    }
     notifyListeners();
+    CatalogPage? result;
     try {
-      final items = await _catalogRepo.fetchNovels(
+      result = await _catalogRepo.fetchNovels(
         search: search,
+        page: page,
         forceRefresh: forceRefresh,
       );
-      _novels = items ?? <CatalogItem>[];
-      _novelsQuery =
-          (search == null || search.trim().isEmpty) ? '' : search.trim();
-      _novelsError = items == null;
     } catch (e) {
       debugPrint('[AppState] novels fetch failed: $e');
-      _novelsError = true;
+      result = null;
     }
-    _novelsLoading = false;
+    if (gen != _novelsGen) {
+      if (isLoadMore) {
+        _novelsLoadingMore = false;
+        notifyListeners();
+      }
+      return;
+    }
+    if (result == null) {
+      if (isLoadMore) {
+        _novelsLoadingMore = false;
+        showToast(
+          'Could not load more novels — check your connection.',
+          Icons.wifi_off,
+        );
+      } else {
+        _novels = <CatalogItem>[];
+        _novelsError = true;
+        _novelsLoading = false;
+      }
+      notifyListeners();
+      return;
+    }
+    if (isLoadMore) {
+      _novels = <CatalogItem>[..._novels, ...result.items];
+      _novelsPage = page;
+      _novelsLoadingMore = false;
+    } else {
+      _novels = result.items;
+      _novelsQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _novelsPage = 1;
+      _novelsError = false;
+      _novelsLoading = false;
+    }
+    _novelsHasMore = result.hasMore;
     notifyListeners();
+  }
+
+  /// Loads the next novels page and appends it to the list.
+  Future<void> loadMoreNovels() async {
+    if (_novelsLoading || _novelsLoadingMore || !_novelsHasMore) return;
+    await fetchNovels(
+      search: _novelsQuery.isEmpty ? null : _novelsQuery,
+      page: _novelsPage + 1,
+    );
   }
 
   /// Fetches the comics list from the Internet Archive. Same shape as
   /// [fetchEbooks]. Never throws.
-  Future<void> fetchComics({String? search, bool forceRefresh = false}) async {
-    if (_comicsLoading) return;
-    _comicsLoading = true;
-    _comicsError = false;
+  Future<void> fetchComics({
+    String? search,
+    int page = 1,
+    bool forceRefresh = false,
+  }) async {
+    final gen = ++_comicsGen;
+    final isLoadMore = page > 1;
+    if (isLoadMore) {
+      _comicsLoadingMore = true;
+    } else {
+      _comicsLoading = true;
+      _comicsError = false;
+    }
     notifyListeners();
+    CatalogPage? result;
     try {
-      final items = await _catalogRepo.fetchComics(
+      result = await _catalogRepo.fetchComics(
         search: search,
+        page: page,
         forceRefresh: forceRefresh,
       );
-      _comics = items ?? <CatalogItem>[];
-      _comicsQuery =
-          (search == null || search.trim().isEmpty) ? '' : search.trim();
-      _comicsError = items == null;
     } catch (e) {
       debugPrint('[AppState] comics fetch failed: $e');
-      _comicsError = true;
+      result = null;
     }
-    _comicsLoading = false;
+    if (gen != _comicsGen) {
+      if (isLoadMore) {
+        _comicsLoadingMore = false;
+        notifyListeners();
+      }
+      return;
+    }
+    if (result == null) {
+      if (isLoadMore) {
+        _comicsLoadingMore = false;
+        showToast(
+          'Could not load more comics — check your connection.',
+          Icons.wifi_off,
+        );
+      } else {
+        _comics = <CatalogItem>[];
+        _comicsError = true;
+        _comicsLoading = false;
+      }
+      notifyListeners();
+      return;
+    }
+    if (isLoadMore) {
+      _comics = <CatalogItem>[..._comics, ...result.items];
+      _comicsPage = page;
+      _comicsLoadingMore = false;
+    } else {
+      _comics = result.items;
+      _comicsQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _comicsPage = 1;
+      _comicsError = false;
+      _comicsLoading = false;
+    }
+    _comicsHasMore = result.hasMore;
     notifyListeners();
+  }
+
+  /// Loads the next comics page and appends it to the list.
+  Future<void> loadMoreComics() async {
+    if (_comicsLoading || _comicsLoadingMore || !_comicsHasMore) return;
+    await fetchComics(
+      search: _comicsQuery.isEmpty ? null : _comicsQuery,
+      page: _comicsPage + 1,
+    );
   }
 
   /// Fetches the manga list from MangaDex. Same shape as
   /// [fetchEbooks]. Never throws.
-  Future<void> fetchManga({String? search, bool forceRefresh = false}) async {
-    if (_mangaLoading) return;
-    _mangaLoading = true;
-    _mangaError = false;
+  Future<void> fetchManga({
+    String? search,
+    int page = 1,
+    bool forceRefresh = false,
+  }) async {
+    final gen = ++_mangaGen;
+    final isLoadMore = page > 1;
+    if (isLoadMore) {
+      _mangaLoadingMore = true;
+    } else {
+      _mangaLoading = true;
+      _mangaError = false;
+    }
     notifyListeners();
+    CatalogPage? result;
     try {
-      final items = await _catalogRepo.fetchManga(
+      result = await _catalogRepo.fetchManga(
         search: search,
+        page: page,
         forceRefresh: forceRefresh,
       );
-      _manga = items ?? <CatalogItem>[];
-      _mangaQuery =
-          (search == null || search.trim().isEmpty) ? '' : search.trim();
-      _mangaError = items == null;
     } catch (e) {
       debugPrint('[AppState] manga fetch failed: $e');
-      _mangaError = true;
+      result = null;
     }
-    _mangaLoading = false;
+    if (gen != _mangaGen) {
+      if (isLoadMore) {
+        _mangaLoadingMore = false;
+        notifyListeners();
+      }
+      return;
+    }
+    if (result == null) {
+      if (isLoadMore) {
+        _mangaLoadingMore = false;
+        showToast(
+          'Could not load more manga — check your connection.',
+          Icons.wifi_off,
+        );
+      } else {
+        _manga = <CatalogItem>[];
+        _mangaError = true;
+        _mangaLoading = false;
+      }
+      notifyListeners();
+      return;
+    }
+    if (isLoadMore) {
+      _manga = <CatalogItem>[..._manga, ...result.items];
+      _mangaPage = page;
+      _mangaLoadingMore = false;
+    } else {
+      _manga = result.items;
+      _mangaQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _mangaPage = 1;
+      _mangaError = false;
+      _mangaLoading = false;
+    }
+    _mangaHasMore = result.hasMore;
     notifyListeners();
+  }
+
+  /// Loads the next manga page and appends it to the list.
+  Future<void> loadMoreManga() async {
+    if (_mangaLoading || _mangaLoadingMore || !_mangaHasMore) return;
+    await fetchManga(
+      search: _mangaQuery.isEmpty ? null : _mangaQuery,
+      page: _mangaPage + 1,
+    );
   }
 
   /// Opens a catalog item's detail page and subscribes to its comments,
