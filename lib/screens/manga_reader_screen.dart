@@ -197,9 +197,17 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
   /// Tap zones: left/right (or top/bottom for vertical paging) turn
   /// pages, the centre toggles the menus. RTL reading mirrors the
   /// sides; the invert setting mirrors them again. While zoomed, taps
-  /// only toggle the menus — they never turn a page.
+  /// only toggle the menus — they never turn a page. Long strip is
+  /// different: there are no pages to turn, the reader scrolls, so
+  /// EVERY tap only toggles the menus. Turning on a tap would scroll
+  /// the strip to a guessed offset (pages have unequal heights) and
+  /// land mid-panel on a cut face or a half-clipped bubble.
   void _onTap(TapUpDetails details, MangaReaderSettings s, int pageCount) {
     if (_zoomed) {
+      setState(() => _menusVisible = !_menusVisible);
+      return;
+    }
+    if (!s.isPaged) {
       setState(() => _menusVisible = !_menusVisible);
       return;
     }

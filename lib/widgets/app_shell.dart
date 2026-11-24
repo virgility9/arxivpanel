@@ -61,6 +61,14 @@ class AppShell extends StatelessWidget {
     final c = palette.c;
     final isNarrow = MediaQuery.of(context).size.width < 700;
 
+    // Reader views (manga, comic PDF, book) are full-screen: the
+    // shell's top bar and bottom nav stay out of the way while reading
+    // — the readers bring their own top bar and footer. The paper
+    // reader keeps the shell chrome, as before.
+    final isReaderView = appState.view == AppView.mangaReader ||
+        appState.view == AppView.catalogPdf ||
+        appState.view == AppView.catalogReader;
+
     // Submit lives on a floating action button now (same upload icon as
     // the old tab), not in the bottom nav. Hidden for admins (they
     // cannot submit), and shown only on Browse's Local Library tab —
@@ -97,13 +105,14 @@ class AppShell extends StatelessWidget {
           children: [
             Column(
               children: [
-                _Navbar(
-                  appState: appState,
-                  theme: theme,
-                  isNarrow: isNarrow,
-                  onNavigate: (v) => _navigate(context, v),
-                  onAuthPrompt: (m) => _promptAuth(context, m),
-                ),
+                if (!isReaderView)
+                  _Navbar(
+                    appState: appState,
+                    theme: theme,
+                    isNarrow: isNarrow,
+                    onNavigate: (v) => _navigate(context, v),
+                    onAuthPrompt: (m) => _promptAuth(context, m),
+                  ),
                 Expanded(
                   child: MotionSwitcher(
                     expand: true,
@@ -128,7 +137,7 @@ class AppShell extends StatelessWidget {
             Positioned(
               left: 16,
               right: 16,
-              bottom: isNarrow ? 74 : 24,
+              bottom: isNarrow && !isReaderView ? 74 : 24,
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 340),
@@ -149,7 +158,7 @@ class AppShell extends StatelessWidget {
             ),
           ],
         ),
-        bottomNavigationBar: isNarrow
+        bottomNavigationBar: isNarrow && !isReaderView
             ? _BottomNav(
                 appState: appState,
                 theme: theme,
