@@ -83,20 +83,20 @@ class AppShell extends StatelessWidget {
       // No router in this app, so intercept the system back button: first
       // unwind the visible view's own state (a settings detail page, a
       // reader tab, a dirty submit form — see AppState.tryInnerBack), then
-      // fall back to Browse instead of exiting. (Browser back-button
+      // fall back to Library instead of exiting. (Browser back-button
       // history is not wired; this covers Android system back and
       // programmatic pops.)
-      canPop: appState.view == AppView.browse && !appState.hasInnerBack,
+      canPop: appState.view == AppView.library && !appState.hasInnerBack,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (appState.tryInnerBack()) return;
         // Back from the reader returns to the tab it was opened from
         // (Browse or the saved Library); anywhere else falls back to
-        // Browse, the home tab.
+        // Library, the home tab.
         if (appState.view == AppView.reader) {
           _navigate(context, appState.readerOrigin);
         } else {
-          _navigate(context, AppView.browse);
+          _navigate(context, AppView.library);
         }
       },
       child: Scaffold(
@@ -420,8 +420,8 @@ class _TabPagesState extends State<_TabPages> {
   List<AppView> get _tabs {
     final isAdmin = widget.appState.user?.isAdmin == true;
     return [
-      AppView.browse,
       AppView.library,
+      AppView.browse,
       AppView.feed,
       AppView.polls,
       AppView.settings,
@@ -705,15 +705,15 @@ class _Navbar extends StatelessWidget {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => onNavigate(AppView.browse),
+                onTap: () => onNavigate(AppView.library),
                 child: AppLogo(palette: palette, fontSize: isNarrow ? 17 : 20),
               ),
               if (!isNarrow) ...[
                 const SizedBox(width: 12),
-                navLink('Browse', AppView.browse,
-                    materialIcon: Icons.explore),
                 navLink('Library', AppView.library,
                     materialIcon: Icons.bookmark),
+                navLink('Browse', AppView.browse,
+                    materialIcon: Icons.explore),
                 navLink('Feed', AppView.feed, feedIcon: true),
                 navLink(
                   'Contest',
@@ -1011,18 +1011,18 @@ class _BottomNav extends StatelessWidget {
           })
         >[
           (
-            view: AppView.browse,
-            icon: null,
-            materialIcon: Icons.explore,
-            label: 'Browse',
-            requiresAuth: false,
-            badge: null,
-          ),
-          (
             view: AppView.library,
             icon: null,
             materialIcon: Icons.bookmark,
             label: 'Library',
+            requiresAuth: false,
+            badge: null,
+          ),
+          (
+            view: AppView.browse,
+            icon: null,
+            materialIcon: Icons.explore,
+            label: 'Browse',
             requiresAuth: false,
             badge: null,
           ),

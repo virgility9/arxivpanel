@@ -402,7 +402,7 @@ class AppState extends ChangeNotifier {
   bool _updateDownloading = false;
 
   AppUser? _user;
-  AppView _view = AppView.browse;
+  AppView _view = AppView.library;
 
   /// Active inner tab of the Browse view. Lives in AppState (not in the
   /// Browse screen's local state) so the shell's Submit button can hide
@@ -773,7 +773,7 @@ class AppState extends ChangeNotifier {
     _catalogSaves = <CatalogSave>[];
     _readingHistory = <ReadEntry>[];
     _subscribePapers();
-    navigate(AppView.browse);
+    navigate(AppView.library);
     notifyListeners();
     showToast('Signed out', Icons.logout);
   }
