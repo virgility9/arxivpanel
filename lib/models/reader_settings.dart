@@ -9,7 +9,7 @@
 /// the reader.
 library;
 
-import 'dart:ui' show BoxFit;
+import 'package:flutter/widgets.dart';
 
 /// Manga reading mode. `def` is Tachiyomi's default: paged, right to
 /// left (manga reads right to left).

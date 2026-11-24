@@ -254,7 +254,9 @@ class _CatalogReaderScreenState extends State<CatalogReaderScreen> {
                     if (s.dimOpacity > 0)
                       IgnorePointer(
                         child: Container(
-                          color: Colors.black.withOpacity(s.dimOpacity),
+                          color: Colors.black.withValues(
+                            alpha: s.dimOpacity,
+                          ),
                         ),
                       ),
                   ],
