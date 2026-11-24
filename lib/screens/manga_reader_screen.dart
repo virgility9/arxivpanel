@@ -548,7 +548,10 @@ class _MangaReaderScreenState extends State<MangaReaderScreen> {
       // A full viewport of look-ahead (the default 250px is a sliver
       // of one tall manhwa page): the next page's widget builds — and
       // its image starts loading — a screen before it appears.
-      cacheExtent: MediaQuery.sizeOf(context).height,
+      // (scrollCacheExtent: the plain `cacheExtent` double was
+      // deprecated after Flutter v3.41.0-0.0.pre.)
+      scrollCacheExtent:
+          ScrollCacheExtent.pixels(MediaQuery.sizeOf(context).height),
       itemCount: pageUrls.length,
       itemBuilder: (context, i) {
         // Long strip is fit-width by nature: width only, the height
