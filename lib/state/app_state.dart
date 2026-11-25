@@ -368,6 +368,8 @@ class AppState extends ChangeNotifier {
   int _mangaStartPage = 0;
   bool _comicPdfResolving = false;
   bool _comicPdfError = false;
+  bool _bookPdfResolving = false;
+  bool _bookPdfError = false;
   bool _synopsisLoading = false;
   List<PaperComment> _catalogComments = <PaperComment>[];
   Set<String> _catalogLikedBy = <String>{};
@@ -616,6 +618,8 @@ class AppState extends ChangeNotifier {
   /// screen's Read button waits on this).
   bool get comicPdfResolving => _comicPdfResolving;
   bool get comicPdfError => _comicPdfError;
+  bool get bookPdfResolving => _bookPdfResolving;
+  bool get bookPdfError => _bookPdfError;
 
   CatalogChapter? get selectedChapter {
     if (_catalogChapters.isEmpty) return null;
@@ -925,6 +929,8 @@ class AppState extends ChangeNotifier {
       _mangaPagesError = false;
       _comicPdfResolving = false;
       _comicPdfError = false;
+      _bookPdfResolving = false;
+      _bookPdfError = false;
       _synopsisLoading = false;
       _mangaReaderSettingsSub?.cancel();
       _mangaReaderSettingsSub = null;
@@ -1392,6 +1398,8 @@ class AppState extends ChangeNotifier {
     _mangaPagesError = false;
     _comicPdfResolving = false;
     _comicPdfError = false;
+    _bookPdfResolving = false;
+    _bookPdfError = false;
     _synopsisLoading = false;
     _catalogComments = <PaperComment>[];
     _catalogLikedBy = <String>{};
@@ -1449,6 +1457,34 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resolves the open book's PDF URL from IA metadata (once), for
+  /// the books whose text won't load at all. Runs only after the
+  /// text load fails (see [_ensureCatalogText]); the detail screen
+  /// offers the PDF as "Read as PDF" instead of a dead end.
+  Future<void> _ensureBookPdf() async {
+    final item = _selectedCatalogItem;
+    if (item == null ||
+        (item.type != CatalogType.ebook &&
+            item.type != CatalogType.novel)) {
+      return;
+    }
+    if (item.pdfUrl != null || _bookPdfResolving) return;
+    _bookPdfResolving = true;
+    _bookPdfError = false;
+    notifyListeners();
+    final url = await _catalogRepo.fetchBookPdfUrl(item);
+    if (_selectedCatalogItem?.id != item.id) return;
+    if (url == null) {
+      _bookPdfResolving = false;
+      _bookPdfError = true;
+      notifyListeners();
+      return;
+    }
+    _selectedCatalogItem = item.copyWith(pdfUrl: url);
+    _bookPdfResolving = false;
+    notifyListeners();
+  }
+
   /// Fetches the open book's synopsis from its Open Library work
   /// record (once). The detail screen shows a spinner while
   /// [_synopsisLoading] is true; a work with no synopsis just leaves
@@ -1467,9 +1503,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Opens the resolved comic PDF in the in-app PDF viewer. The Read
-  /// button only enables once the URL is resolved, so this is a
-  /// no-op when there is nothing to open yet.
+  /// Opens the resolved PDF in the in-app PDF viewer — a comic
+  /// issue, or a book whose text wouldn't load. The Read button only
+  /// enables once the URL is resolved, so this is a no-op when there
+  /// is nothing to open yet.
   void openCatalogPdf() {
     final item = _selectedCatalogItem;
     if (item == null || item.pdfUrl == null) return;
@@ -1628,6 +1665,10 @@ class AppState extends ChangeNotifier {
       _catalogTextLoading = false;
       _catalogTextError = true;
       notifyListeners();
+      // The text won't load — look for a scanned PDF instead, so
+      // the detail screen can offer "Read as PDF" rather than a
+      // dead end.
+      unawaited(_ensureBookPdf());
       return false;
     }
     _catalogChapters = splitChapters(text);
@@ -1639,6 +1680,7 @@ class AppState extends ChangeNotifier {
       _catalogTextLoading = false;
       _catalogTextError = true;
       notifyListeners();
+      unawaited(_ensureBookPdf());
       return false;
     }
     _catalogWholeText = joinWholeText(_catalogChapters);

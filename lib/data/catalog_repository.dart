@@ -117,6 +117,12 @@ class CatalogRepository {
   /// left. When the bulk check itself fails, the list is returned
   /// unfiltered (fail open — the per-id download fallback still
   /// applies) rather than dropping everything.
+  ///
+  /// An item with NO unrestricted ids gets one more chance first:
+  /// a free IA copy under the same title (see [_findFreeIaCopies]).
+  /// Popular books are often borrow-only on every Open Library copy
+  /// while IA hosts a free upload Open Library never links to — those
+  /// books used to vanish from the list entirely.
   Future<List<CatalogItem>> _filterReadable(
     List<CatalogItem> items, {
     http.Client? client,
@@ -125,16 +131,86 @@ class CatalogRepository {
     if (allIds.isEmpty) return items;
     final restricted = await _fetchRestrictedIds(allIds, client: client);
     if (restricted == null) return items;
+    // Usable ids per item, in list order. Items with none left are
+    // rescued below instead of dropped.
+    final keptPerItem = <List<String>>[];
+    final droppedIndices = <int>[];
+    for (var i = 0; i < items.length; i++) {
+      final kept = items[i]
+          .iaIds
+          .where((id) => !restricted.contains(id))
+          .toList();
+      keptPerItem.add(kept);
+      if (kept.isEmpty) droppedIndices.add(i);
+    }
+    final rescuedIds = <int, List<String>>{};
+    if (droppedIndices.isNotEmpty) {
+      final found = await Future.wait(
+        droppedIndices.map(
+          (i) => _findFreeIaCopies(items[i], client: client),
+        ),
+      );
+      for (var j = 0; j < droppedIndices.length; j++) {
+        if (found[j].isNotEmpty) rescuedIds[droppedIndices[j]] = found[j];
+      }
+    }
     final out = <CatalogItem>[];
-    for (final item in items) {
-      final kept =
-          item.iaIds.where((id) => !restricted.contains(id)).toList();
-      if (kept.isEmpty) continue;
-      out.add(kept.length == item.iaIds.length
-          ? item
-          : item.copyWith(iaIds: kept));
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      final kept = keptPerItem[i];
+      if (kept.isNotEmpty) {
+        out.add(kept.length == item.iaIds.length
+            ? item
+            : item.copyWith(iaIds: kept));
+      } else if (rescuedIds.containsKey(i)) {
+        // The Open Library copies are all borrow-only, but IA hosts
+        // a free copy — keep the book, reading from the free copy.
+        out.add(item.copyWith(iaIds: rescuedIds[i]!));
+      }
     }
     return out;
+  }
+
+  /// Free IA copies of a book, by title + author — the rescue path
+  /// for books whose Open Library copies are all lending-restricted
+  /// (borrow-only). IA hosts free user uploads of many popular books
+  /// that Open Library never links to (verified live 2026-11-25 for
+  /// "Dog Days": the OL copies are all restricted, while IA search
+  /// finds free items like `diary-of-a-wimpy-kid-book-04-dog-days_202504`).
+  /// Returns up to 3 free IA ids, or empty when there is no free copy
+  /// or the search fails. Never throws.
+  Future<List<String>> _findFreeIaCopies(
+    CatalogItem item, {
+    http.Client? client,
+  }) async {
+    final words = _titleWords(item.title);
+    if (words.isEmpty) return [];
+    final titleQuery = 'title:(${words.join(' AND ')})';
+    final author = item.author.trim();
+    final surname = author.split(RegExp(r'\s+')).lastWhere(
+          (w) => w.isNotEmpty,
+          orElse: () => '',
+        );
+    final creatorQuery = surname.isEmpty ? '' : ' AND creator:($surname)';
+    final uri = Uri.parse(
+      '$_iaSearchBase?q=${Uri.encodeQueryComponent('$titleQuery$creatorQuery AND mediatype:texts')}'
+      '&fl[]=identifier&fl[]=access-restricted-item'
+      '&rows=10&page=1&output=json',
+    );
+    final data = await _getJson(uri, client: client);
+    if (data == null) return [];
+    final docs =
+        (data['response'] as Map<String, dynamic>?)?['docs'] as List? ??
+            <dynamic>[];
+    final free = <String>[];
+    for (final doc in docs.whereType<Map<String, dynamic>>()) {
+      if (doc['access-restricted-item'] == true) continue;
+      final id = doc['identifier'] as String?;
+      if (id == null || id.isEmpty || free.contains(id)) continue;
+      free.add(id);
+      if (free.length >= 3) break;
+    }
+    return free;
   }
 
   /// Set of IA ids that are lending-restricted. Ids missing from the
@@ -403,6 +479,60 @@ class CatalogRepository {
     return 'https://archive.org/download/$iaId/${Uri.encodeComponent(name)}';
   }
 
+  /// Direct PDF URL for one book or novel, for the books whose text
+  /// won't load at all (no readable `.txt` anywhere — a scanned book
+  /// with no OCR text). The detail screen offers it as "Read as PDF"
+  /// in the same in-app viewer comics use. Tries each IA id in order;
+  /// inside one item it prefers a PDF whose name holds the book's
+  /// title words (a series collection holds one PDF per book), then
+  /// the item's own `{id}.pdf`, then the largest scan. `_text.pdf`
+  /// derivatives (OCR text as a PDF) are only a last resort — the
+  /// real scan is the book. Returns null when no PDF is listed or
+  /// the metadata fetch fails. Never throws.
+  Future<String?> fetchBookPdfUrl(CatalogItem item) async {
+    if (item.iaIds.isEmpty) return null;
+    final words = _titleWords(item.title);
+    for (final iaId in item.iaIds) {
+      final data =
+          await _getJson(Uri.parse('https://archive.org/metadata/$iaId'));
+      if (data == null) continue;
+      final files = (data['files'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          <Map<String, dynamic>>[];
+      final pdfs = files
+          .where((f) => (f['name'] as String? ?? '').endsWith('.pdf'))
+          .toList();
+      if (pdfs.isEmpty) continue;
+      final scans = pdfs
+          .where((f) => !(f['name'] as String).endsWith('_text.pdf'))
+          .toList();
+      final pool = scans.isEmpty ? pdfs : scans;
+      Map<String, dynamic>? pick;
+      if (words.isNotEmpty) {
+        for (final f in pool) {
+          final lower = (f['name'] as String).toLowerCase();
+          if (words.every((w) => lower.contains(w))) {
+            pick = f;
+            break;
+          }
+        }
+      }
+      pick ??= pool.firstWhere(
+        (f) => f['name'] == '$iaId.pdf',
+        orElse: () => pool.reduce(
+          (a, b) =>
+              ((a['size'] as num?) ?? 0) >= ((b['size'] as num?) ?? 0)
+                  ? a
+                  : b,
+        ),
+      );
+      final name = pick['name'] as String;
+      return 'https://archive.org/download/$iaId/${Uri.encodeComponent(name)}';
+    }
+    return null;
+  }
+
   /// Manga list from MangaDex, most followed first. [search] matches
   /// titles. Covers ride along (`cover_art`); authors/artists too.
   /// Returns null on failure. Never throws.
@@ -542,7 +672,7 @@ class CatalogRepository {
     final cached = _fullTextCache[item.id];
     if (cached != null) return cached;
     for (final iaId in item.iaIds) {
-      final text = await _downloadTextForIaId(iaId);
+      final text = await _downloadTextForIaId(iaId, title: item.title);
       if (text != null) {
         _cachePut(_fullTextCache, item.id, text, _fullTextCacheCap);
         return text;
@@ -558,7 +688,7 @@ class CatalogRepository {
           .where((id) => !tried.contains(id))
           .take(5);
       for (final iaId in editionIds) {
-        final text = await _downloadTextForIaId(iaId);
+        final text = await _downloadTextForIaId(iaId, title: item.title);
         if (text != null) {
           _cachePut(_fullTextCache, item.id, text, _fullTextCacheCap);
           return text;
@@ -569,12 +699,16 @@ class CatalogRepository {
   }
 
   /// Tries one IA id: the usual `{id}_djvu.txt` first, then the
-  /// item's metadata for its actual `.txt` file. Returns the text or
-  /// null. Never throws.
-  Future<String?> _downloadTextForIaId(String iaId) async {
+  /// item's metadata for its actual `.txt` file. [title] lets the
+  /// metadata step pick the file for THIS book when the item holds
+  /// several books. Returns the text or null. Never throws.
+  Future<String?> _downloadTextForIaId(
+    String iaId, {
+    String? title,
+  }) async {
     final direct = await _downloadText(CatalogItem.textUrlForIa(iaId));
     if (direct != null) return direct;
-    return _downloadTextViaMetadata(iaId);
+    return _downloadTextViaMetadata(iaId, title: title);
   }
 
   /// IA ids of a work's other editions, from Open Library
@@ -619,19 +753,27 @@ class CatalogRepository {
 
   /// Finds the actual plain-text file for one IA item from its
   /// metadata and downloads it. Skips `{id}_djvu.txt` (already tried
-  /// directly) and otherwise takes the largest `.txt` file — the OCR
-  /// text is the big one, small `.txt` files are usually checksums
-  /// or notes. Returns null when the item has no text file, the
-  /// metadata call fails, or the download fails. Never throws.
-  Future<String?> _downloadTextViaMetadata(String iaId) async {
+  /// directly). A multi-book item (e.g. a series collection) has one
+  /// `.txt` per book — the largest file would be the WRONG book, so
+  /// when [title] is given, a file whose name holds the title words
+  /// wins over the largest file. Returns null when the item has no
+  /// text file, the metadata call fails, or the download fails. Never
+  /// throws.
+  Future<String?> _downloadTextViaMetadata(
+    String iaId, {
+    String? title,
+  }) async {
     final data = await _getJson(
       Uri.parse('https://archive.org/metadata/$iaId'),
     );
     final files =
         (data?['files'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
             <Map<String, dynamic>>[];
+    final words = title == null ? <String>[] : _titleWords(title);
     String? bestName;
     var bestSize = -1;
+    String? bestTitleName;
+    var bestTitleSize = -1;
     for (final file in files) {
       final name = file['name'] as String?;
       if (name == null || !name.endsWith('.txt')) continue;
@@ -641,9 +783,19 @@ class CatalogRepository {
         bestSize = size;
         bestName = name;
       }
+      if (words.isNotEmpty) {
+        final lower = name.toLowerCase();
+        if (words.every((w) => lower.contains(w))) {
+          if (size > bestTitleSize) {
+            bestTitleSize = size;
+            bestTitleName = name;
+          }
+        }
+      }
     }
-    if (bestName == null) return null;
-    final encoded = Uri.encodeComponent(bestName);
+    final pick = bestTitleName ?? bestName;
+    if (pick == null) return null;
+    final encoded = Uri.encodeComponent(pick);
     return _downloadText('https://archive.org/download/$iaId/$encoded');
   }
 
@@ -678,4 +830,26 @@ class CatalogRepository {
     if (value is Map<String, dynamic>) return value['value'] as String?;
     return null;
   }
+}
+
+/// Distinctive words of a book title, for matching IA file names
+/// and title searches: lowercased, 3+ letters, minus filler words
+/// ("and", "the", "of", ...). "Dog Days" gives [dog, days];
+/// "Pride and Prejudice" gives [pride, prejudice].
+List<String> _titleWords(String title) {
+  const stopwords = {
+    'and',
+    'the',
+    'for',
+    'with',
+    'from',
+    'into',
+    'over',
+    'under',
+  };
+  return title
+      .toLowerCase()
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((w) => w.length >= 3 && !stopwords.contains(w))
+      .toList();
 }
