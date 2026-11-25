@@ -178,9 +178,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
               paper.tags.any((t) => t.toLowerCase().contains(q));
         }).toList();
         final groups = _groupsFor(_sortedSaves(q));
-        final hasCatalogSaves = groups.isNotEmpty;
-        final anySavedAtAll =
-            saved.isNotEmpty || widget.appState.catalogSaves.isNotEmpty;
+        // Whether ANY catalog saves exist, ignoring the current filter:
+        // the type filter must stay visible even when the filter itself
+        // matches nothing, or there is no way back to All.
+        final hasAnyCatalogSaves =
+            widget.appState.catalogSaves.isNotEmpty;
+        final showPapers =
+            filtered.isNotEmpty && _typeFilter == _TypeFilter.all;
+        final showEmpty = !showPapers && groups.isEmpty;
+        final anySavedAtAll = saved.isNotEmpty || hasAnyCatalogSaves;
 
         return RefreshIndicator(
           color: p.accent.accent,
@@ -243,25 +249,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1280),
-                    child: filtered.isEmpty && !hasCatalogSaves
+                    child: !anySavedAtAll
                         ? EmptyState(
                             palette: p,
                             icon: Icons.bookmark,
-                            title: !anySavedAtAll
-                                ? 'Nothing saved yet'
-                                : 'No saved items found',
-                            sub: !anySavedAtAll
-                                ? 'Tap the bookmark on a paper, a book, '
-                                    'a comic or a manga to keep it here.'
-                                : 'Try a different search',
+                            title: 'Nothing saved yet',
+                            sub: 'Tap the bookmark on a paper, a book, '
+                                'a comic or a manga to keep it here.',
                           )
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _controls(p, showGroup: hasCatalogSaves),
+                              _controls(p, showType: hasAnyCatalogSaves),
                               const SizedBox(height: 6),
-                              if (filtered.isNotEmpty &&
-                                  _typeFilter == _TypeFilter.all)
+                              if (showPapers)
                                 _section(
                                   p,
                                   key: 'papers',
@@ -276,6 +277,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   body: _view == _ViewMode.grid
                                       ? _catalogGrid(g.saves)
                                       : _catalogList(g.saves),
+                                ),
+                              if (showEmpty)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 24),
+                                  child: EmptyState(
+                                    palette: p,
+                                    icon: Icons.bookmark,
+                                    title: q.isEmpty
+                                        ? 'Nothing saved under this type yet'
+                                        : 'No saved items found',
+                                    sub: q.isEmpty
+                                        ? 'Switch the type filter back to '
+                                            'All to see everything.'
+                                        : 'Try a different search',
+                                  ),
                                 ),
                             ],
                           ),
@@ -294,13 +311,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
   // Controls: group / sort / view
   // -------------------------------------------------------------------------
 
-  Widget _controls(AppPalette p, {required bool showGroup}) {
+  Widget _controls(AppPalette p, {required bool showType}) {
     return Wrap(
       spacing: 20,
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (showGroup)
+        if (showType)
           _segmented<_TypeFilter>(
             p,
             label: 'TYPE',
@@ -324,7 +341,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           },
           onChanged: (v) => setState(() => _sortBy = v),
         ),
-        if (showGroup) _viewToggle(p),
+        if (showType) _viewToggle(p),
       ],
     );
   }
