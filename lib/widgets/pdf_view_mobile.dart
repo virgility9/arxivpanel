@@ -102,10 +102,19 @@ class _MobilePdfViewState extends State<_MobilePdfView> {
   }
 
   /// Error card: the raw failure plus a retry, and — for a 401 — the
-  /// Cloudinary toggle that causes it.
+  /// cause that matches where the PDF lives. A 401 on a Cloudinary
+  /// paper PDF means the PDF delivery toggle is still off; a 401 on
+  /// an Internet Archive copy means that copy is borrow-only (the
+  /// Archive lists its PDF in the metadata but refuses the download)
+  /// — it can only be read by borrowing it there, not in the app.
+  /// One generic "Cloudinary is blocking" hint used to cover both,
+  /// and it sent readers to a Cloudinary setting that was already
+  /// correct.
   Widget _buildError(ThemeData theme, Exception? error) {
     final message = error?.toString() ?? 'Could not load the PDF.';
     final is401 = message.contains('401');
+    final isArchive = widget.url.contains('archive.org');
+    final isCloudinary = widget.url.contains('cloudinary.com');
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -119,10 +128,17 @@ class _MobilePdfViewState extends State<_MobilePdfView> {
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium,
             ),
-            if (is401) ...[
+            if (is401 && isCloudinary) ...[
               const SizedBox(height: 8),
               Text(
                 'A 401 usually means Cloudinary is still blocking PDF delivery: Settings → Security → Allow delivery of PDF and ZIP files.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+            ] else if (is401 && isArchive) ...[
+              const SizedBox(height: 8),
+              Text(
+                'This copy is borrow-only on the Internet Archive — it can only be read by borrowing it there, not in the app.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
               ),

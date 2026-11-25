@@ -1424,6 +1424,10 @@ class AppState extends ChangeNotifier {
       unawaited(_ensureComicPdf());
     } else if (item.iaIds.isNotEmpty) {
       unawaited(_ensureCatalogText());
+      // The PDF alternative resolves in parallel, so the detail
+      // screen can offer "Read as PDF" at once instead of only
+      // after the text load fails (which can take minutes).
+      unawaited(_ensureBookPdf());
     }
     // Books carry no synopsis in the search document — fetch the work
     // record for it (manga and comics already carry theirs).

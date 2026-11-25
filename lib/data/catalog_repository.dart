@@ -492,7 +492,16 @@ class CatalogRepository {
   Future<String?> fetchBookPdfUrl(CatalogItem item) async {
     if (item.iaIds.isEmpty) return null;
     final words = _titleWords(item.title);
-    for (final iaId in item.iaIds) {
+    // A borrow-only copy still lists its PDF in the metadata, but
+    // the download 401s — offering that URL would show the viewer a
+    // "Could not load the PDF (HTTP 401)" dead end. Skip restricted
+    // ids first (same bulk flag the list filter uses). When the
+    // check itself fails, try the PDFs anyway (fail open).
+    final restricted = await _fetchRestrictedIds(item.iaIds);
+    final ids = restricted == null
+        ? item.iaIds
+        : item.iaIds.where((id) => !restricted.contains(id)).toList();
+    for (final iaId in ids) {
       final data =
           await _getJson(Uri.parse('https://archive.org/metadata/$iaId'));
       if (data == null) continue;

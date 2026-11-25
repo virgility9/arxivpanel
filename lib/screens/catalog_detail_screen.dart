@@ -330,6 +330,31 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
             ],
           ),
           const SizedBox(height: 10),
+          // The scanned PDF is offered up front — the reader should
+          // not wait for the text load (which can take minutes) to
+          // fail before seeing it. It resolves in parallel with the
+          // text when the detail page opens.
+          if (item.pdfUrl != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GoldButton(
+                palette: p,
+                label: 'Read as PDF',
+                icon: Icons.picture_as_pdf,
+                onPressed: () => appState.openCatalogPdf(),
+              ),
+            )
+          else if (appState.bookPdfResolving)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GoldButton(
+                palette: p,
+                label: 'Finding the PDF…',
+                icon: Icons.picture_as_pdf,
+                loading: true,
+                onPressed: null,
+              ),
+            ),
           if (progress != null && chapters.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -401,43 +426,7 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                     'and try again.',
                     style: bodyStyle(p, size: 13, color: c.textSub),
                   ),
-                  // The text version won't load — but the book may
-                  // still exist as a scanned PDF. Offer that instead
-                  // of a dead end.
-                  if (item.pdfUrl != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      'A scanned copy is available — read it as a PDF.',
-                      style: bodyStyle(p, size: 13, color: c.textSub),
-                    ),
-                    const SizedBox(height: 10),
-                    GoldButton(
-                      palette: p,
-                      label: 'Read as PDF',
-                      icon: Icons.picture_as_pdf,
-                      onPressed: () => appState.openCatalogPdf(),
-                      minHeight: 40,
-                    ),
-                  ] else if (appState.bookPdfResolving) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: p.accent.accent,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Looking for a PDF copy…',
-                          style: bodyStyle(p, size: 13, color: c.faint),
-                        ),
-                      ],
-                    ),
-                  ] else if (appState.bookPdfError) ...[
+                  if (appState.bookPdfError) ...[
                     const SizedBox(height: 10),
                     Text(
                       'No PDF copy found for this book either.',
