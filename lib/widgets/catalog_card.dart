@@ -14,6 +14,15 @@ import '../theme/theme_provider.dart';
 import 'motion.dart';
 import 'shared.dart';
 
+/// Gold-caps label for a catalog type, shared by every card style.
+String catalogTypeLabel(CatalogType type) => switch (type) {
+      CatalogType.ebook => 'E-BOOK',
+      CatalogType.novel => 'NOVEL',
+      CatalogType.lightNovel => 'LIGHT NOVEL',
+      CatalogType.comic => 'COMIC',
+      CatalogType.manga => 'MANGA',
+    };
+
 class CatalogCard extends StatelessWidget {
   const CatalogCard({
     super.key,
@@ -30,13 +39,7 @@ class CatalogCard extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback? onAuthPrompt;
 
-  String get _typeLabel => switch (item.type) {
-        CatalogType.ebook => 'E-BOOK',
-        CatalogType.novel => 'NOVEL',
-        CatalogType.lightNovel => 'LIGHT NOVEL',
-        CatalogType.comic => 'COMIC',
-        CatalogType.manga => 'MANGA',
-      };
+  String get _typeLabel => catalogTypeLabel(item.type);
 
   void _toggleSave() {
     if (appState.user == null) {
@@ -182,6 +185,247 @@ class CatalogCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Framed portrait cover shared by the compact card and the list row.
+/// The whole image shows (contain), like [CatalogCard]; no cover from
+/// the source gets a plain block with a book icon.
+class _CompactCover extends StatelessWidget {
+  const _CompactCover({
+    required this.url,
+    required this.theme,
+    this.width,
+    this.height,
+  });
+
+  final String? url;
+  final ThemeProvider theme;
+  final double? width;
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = theme.palette.c;
+    final radius = BorderRadius.circular(6);
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: c.surface2,
+        border: Border.all(color: c.border),
+        borderRadius: radius,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(5),
+        child: url != null
+            ? NetImage(
+                url: url!,
+                width: width ?? double.infinity,
+                height: height,
+              )
+            : Center(child: Icon(Icons.menu_book, size: 24, color: c.muted)),
+      ),
+    );
+  }
+}
+
+/// Small filled bookmark used over a compact cover; tapping it removes
+/// the save. The tap area is larger than the drawn chip.
+class _UnsaveChip extends StatelessWidget {
+  const _UnsaveChip({required this.theme, required this.onTap});
+
+  final ThemeProvider theme;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = theme.palette;
+    return Semantics(
+      button: true,
+      label: 'Remove from saved',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: palette.c.bg.withValues(alpha: 0.78),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.bookmark,
+                size: 16,
+                color: palette.accent.accent,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dense card for the saved Library grid: cover, two-line title and
+/// author. The saved collection is already grouped by type, so there is
+/// no type label here (the group header says it), and the bookmark is a
+/// small chip over the cover — everything on this screen is saved.
+class CatalogCompactCard extends StatelessWidget {
+  const CatalogCompactCard({
+    super.key,
+    required this.item,
+    required this.appState,
+    required this.theme,
+    required this.onOpen,
+  });
+
+  final CatalogItem item;
+  final AppState appState;
+  final ThemeProvider theme;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = theme.palette;
+    final c = palette.c;
+    return PressScale(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              GestureDetector(
+                onTap: onOpen,
+                child: AspectRatio(
+                  aspectRatio: 2 / 3,
+                  child: _CompactCover(url: item.coverUrl, theme: theme),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: _UnsaveChip(
+                  theme: theme,
+                  onTap: () => appState.toggleCatalogSave(item),
+                ),
+              ),
+            ],
+          ),
+          GestureDetector(
+            onTap: onOpen,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: displayStyle(palette, size: 14, height: 1.25)
+                        .copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    item.authorLabel,
+                    style: bodyStyle(palette, size: 11, color: c.muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One-line-per-book row for the saved Library list view. [showType]
+/// adds the gold type label — wanted when the list is not grouped by
+/// type, redundant under a type header.
+class CatalogListTile extends StatelessWidget {
+  const CatalogListTile({
+    super.key,
+    required this.item,
+    required this.appState,
+    required this.theme,
+    required this.onOpen,
+    this.showType = false,
+  });
+
+  final CatalogItem item;
+  final AppState appState;
+  final ThemeProvider theme;
+  final VoidCallback onOpen;
+  final bool showType;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = theme.palette;
+    final c = palette.c;
+    return InkWell(
+      onTap: onOpen,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: c.borderFaint)),
+        ),
+        child: Row(
+          children: [
+            _CompactCover(
+              url: item.coverUrl,
+              theme: theme,
+              width: 46,
+              height: 66,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (showType) ...[
+                    Text(
+                      catalogTypeLabel(item.type),
+                      style: monoStyle(palette,
+                          size: 9,
+                          color: palette.accent.accent,
+                          weight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                  ],
+                  Text(
+                    item.title,
+                    style: displayStyle(palette, size: 15, height: 1.25)
+                        .copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    item.authorLabel,
+                    style: bodyStyle(palette, size: 12, color: c.muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            _UnsaveChip(
+              theme: theme,
+              onTap: () => appState.toggleCatalogSave(item),
             ),
           ],
         ),

@@ -9,6 +9,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../models/catalog.dart';
 import '../models/models.dart';
@@ -20,7 +21,7 @@ import '../widgets/catalog_card.dart';
 import '../widgets/shared.dart';
 import 'library_screen.dart';
 
-class BrowseScreen extends StatelessWidget {
+class BrowseScreen extends StatefulWidget {
   const BrowseScreen({
     super.key,
     required this.appState,
@@ -32,6 +33,15 @@ class BrowseScreen extends StatelessWidget {
   final ThemeProvider theme;
   final VoidCallback onAuthPrompt;
 
+  @override
+  State<BrowseScreen> createState() => _BrowseScreenState();
+}
+
+class _BrowseScreenState extends State<BrowseScreen> {
+  AppState get appState => widget.appState;
+  ThemeProvider get theme => widget.theme;
+  VoidCallback get onAuthPrompt => widget.onAuthPrompt;
+
   static const _tabs = <({BrowseTab tab, String label})>[
     (tab: BrowseTab.localLibrary, label: 'Local Library'),
     (tab: BrowseTab.ebooks, label: 'E-books'),
@@ -40,6 +50,52 @@ class BrowseScreen extends StatelessWidget {
     (tab: BrowseTab.manga, label: 'Manga and Comics'),
   ];
 
+  /// Width of the soft fade on the strip's right edge. The strip's
+  /// right padding is a little wider than this, so the last tab can
+  /// always scroll clear of the fade.
+  static const double _fadeWidth = 36;
+
+  final ScrollController _tabScroll = ScrollController();
+  final Map<BrowseTab, GlobalKey> _tabKeys = {
+    for (final t in _tabs) t.tab: GlobalKey(),
+  };
+  BrowseTab? _centeredTab;
+
+  @override
+  void dispose() {
+    _tabScroll.dispose();
+    super.dispose();
+  }
+
+  /// Slides the active tab to the middle of the strip whenever it
+  /// changes (a tap, the shell, or a swipe), so a tab that was cut off
+  /// at the edge is never left half hidden. Uses the strip's own
+  /// controller, so no other scrollable (the page swipe) is touched.
+  void _centerActiveTab() {
+    final active = appState.browseTab;
+    if (_centeredTab == active) return;
+    _centeredTab = active;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_tabScroll.hasClients) return;
+      final box = _tabKeys[active]?.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached) return;
+      final viewport = RenderAbstractViewport.maybeOf(box);
+      if (viewport == null) return;
+      final position = _tabScroll.position;
+      final target = viewport
+          .getOffsetToReveal(box, 0.5)
+          .offset
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      if ((target - position.pixels).abs() < 1) return;
+      _tabScroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = theme.palette;
@@ -47,6 +103,7 @@ class BrowseScreen extends StatelessWidget {
       animation: appState,
       builder: (context, _) {
         final tab = appState.browseTab;
+        _centerActiveTab();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -60,20 +117,37 @@ class BrowseScreen extends StatelessWidget {
 
   /// Horizontally scrollable tab strip, pinned above the tab content.
   /// Active tab gets the gold text + underline, like the desktop nav.
+  /// No filled box: the strip sits on the page with one hairline under
+  /// it, and fades out on the right so it reads as scrollable instead
+  /// of cut off.
   Widget _tabRow(AppPalette p) {
     final c = p.c;
     return Container(
       decoration: BoxDecoration(
-        color: c.surface,
         border: Border(bottom: BorderSide(color: c.border)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final t in _tabs)
-              _browseTabButton(p, t, t.tab == appState.browseTab),
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => LinearGradient(
+          colors: const [Colors.white, Colors.white, Colors.transparent],
+          stops: [
+            0.0,
+            ((rect.width - _fadeWidth) / rect.width)
+                .clamp(0.0, 1.0)
+                .toDouble(),
+            1.0,
           ],
+        ).createShader(rect),
+        child: SingleChildScrollView(
+          controller: _tabScroll,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(left: 6, right: _fadeWidth + 8),
+          child: Row(
+            children: [
+              for (final t in _tabs)
+                _browseTabButton(p, t, t.tab == appState.browseTab),
+            ],
+          ),
         ),
       ),
     );
@@ -83,25 +157,29 @@ class BrowseScreen extends StatelessWidget {
       AppPalette p, ({BrowseTab tab, String label}) t, bool active) {
     final c = p.c;
     final a = p.accent;
-    return InkWell(
-      onTap: () => appState.setBrowseTab(t.tab),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: active ? a.accent : Colors.transparent,
-              width: 2,
+    return Semantics(
+      selected: active,
+      child: InkWell(
+        key: _tabKeys[t.tab],
+        onTap: () => appState.setBrowseTab(t.tab),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: active ? a.accent : Colors.transparent,
+                width: 2,
+              ),
             ),
           ),
-        ),
-        child: Text(
-          t.label,
-          style: bodyStyle(
-            p,
-            size: 14,
-            color: active ? a.accent : c.muted,
-            weight: active ? FontWeight.w600 : FontWeight.w400,
+          child: Text(
+            t.label,
+            style: bodyStyle(
+              p,
+              size: 14,
+              color: active ? a.accent : c.muted,
+              weight: active ? FontWeight.w600 : FontWeight.w400,
+            ),
           ),
         ),
       ),
