@@ -19,7 +19,7 @@ rules_version = '2';
 //   news/{newsId}                        admin-posted news items
 //   announcements/{id}                  admin announcements (Contest tab)
 //   users/{uid}/notifications/{id}      paper-status notices, one author only
-//   app_config/update                   latest published app version
+//   app_config/update                   latest published app version 
 //   deleted_users/{uid}              accounts an admin deleted — sign-in refuses them
 //   admins/{uid}                          presence of a doc marks the user as admin
 //                                         (create the first one manually in the
