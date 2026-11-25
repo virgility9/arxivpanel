@@ -455,7 +455,7 @@ enum AppView { browse, library, feed, reader, post, polls, profile, settings, ad
 /// by free public sources (Open Library for e-books and novels,
 /// MangaDex for manga and the Internet Archive for comics — manga and
 /// comics share the one [manga] tab, "Manga and Comics").
-enum BrowseTab { localLibrary, ebooks, novels, manga }
+enum BrowseTab { localLibrary, ebooks, novels, lightNovels, manga }
 
 /// A transient toast notification. [icon] is a solid Material icon
 /// (never an emoji: emoji glyphs render as boxes on some Windows fonts).

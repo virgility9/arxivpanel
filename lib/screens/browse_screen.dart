@@ -1,7 +1,7 @@
-/// Browse tab: the app's front door. Four inner tabs — Local Library
-/// (the app's own submitted papers) plus E-books, Novels, and Manga
-/// and Comics (manga from MangaDex and comics from the Internet
-/// Archive in one tab). The catalog tabs are read-only: users browse
+/// Browse tab: the app's front door. Five inner tabs — Local Library
+/// (the app's own submitted papers) plus E-books, Novels, Light
+/// Novels, and Manga and Comics (manga from MangaDex and comics from
+/// the Internet Archive in one tab). The catalog tabs are read-only: users browse
 /// and read there, they never post. The active tab lives in
 /// [AppState.browseTab] (not in this screen's local state) so the
 /// shell's Submit button and the screen stay in sync, and the tab
@@ -36,6 +36,7 @@ class BrowseScreen extends StatelessWidget {
     (tab: BrowseTab.localLibrary, label: 'Local Library'),
     (tab: BrowseTab.ebooks, label: 'E-books'),
     (tab: BrowseTab.novels, label: 'Novels'),
+    (tab: BrowseTab.lightNovels, label: 'Light Novels'),
     (tab: BrowseTab.manga, label: 'Manga and Comics'),
   ];
 
@@ -123,6 +124,12 @@ class BrowseScreen extends StatelessWidget {
         );
       case BrowseTab.novels:
         return _NovelsTab(
+          appState: appState,
+          theme: theme,
+          onAuthPrompt: onAuthPrompt,
+        );
+      case BrowseTab.lightNovels:
+        return _LightNovelsTab(
           appState: appState,
           theme: theme,
           onAuthPrompt: onAuthPrompt,
@@ -665,6 +672,273 @@ class _NovelsTabState extends State<_NovelsTab> {
           palette: p,
           icon: Icons.auto_stories,
           title: 'No novels found',
+          sub: 'Try a different search.',
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, listConstraints) {
+            final width = listConstraints.maxWidth;
+            final columns = width < 700 ? 2 : width < 1100 ? 3 : 4;
+            const spacing = 12.0;
+            final cellWidth = (width - spacing * (columns - 1)) / columns;
+            return SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.start,
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final book in books)
+                    SizedBox(
+                      width: cellWidth,
+                      child: RepaintBoundary(
+                        child: CatalogCard(
+                          key: ValueKey(book.id),
+                          item: book,
+                          appState: widget.appState,
+                          theme: widget.theme,
+                          onAuthPrompt: widget.onAuthPrompt,
+                          onOpen: () => widget.appState.openCatalogItem(book),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+        if (hasMore || loadingMore) ...[
+          const SizedBox(height: 20),
+          _loadMoreRow(p, loadingMore, onLoadMore),
+        ],
+      ],
+    );
+  }
+}
+
+/// Light Novels tab: light novel volumes from RanobeDB (English
+/// releases, newest first), read-only — same shape as [_NovelsTab].
+/// RanobeDB is metadata only, so every listed volume stays and the
+/// readable copy is resolved per item when its detail page opens.
+class _LightNovelsTab extends StatefulWidget {
+  const _LightNovelsTab({
+    required this.appState,
+    required this.theme,
+    required this.onAuthPrompt,
+  });
+
+  final AppState appState;
+  final ThemeProvider theme;
+  final VoidCallback onAuthPrompt;
+
+  @override
+  State<_LightNovelsTab> createState() => _LightNovelsTabState();
+}
+
+class _LightNovelsTabState extends State<_LightNovelsTab> {
+  final TextEditingController _searchController = TextEditingController();
+  final Debouncer _debouncer = Debouncer();
+  String _search = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.appState.fetchLightNovels();
+    });
+  }
+
+  @override
+  void dispose() {
+    _debouncer.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _runSearch({bool forceRefresh = false}) {
+    widget.appState.fetchLightNovels(
+      search: _search,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  void _clearSearch() {
+    _debouncer.cancel();
+    _searchController.clear();
+    setState(() => _search = '');
+    widget.appState.fetchLightNovels();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.theme.palette;
+    final c = p.c;
+    final isNarrow = MediaQuery.of(context).size.width < 700;
+    final appState = widget.appState;
+    final books = appState.lightNovels;
+    final loading = appState.lightNovelsLoading;
+    final failed = appState.lightNovelsError;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Search row (same shape as the Local Library hero).
+        Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: c.border)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            isNarrow ? 16 : 24,
+            isNarrow ? 16 : 24,
+            isNarrow ? 16 : 24,
+            isNarrow ? 16 : 24,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1280),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) {
+                        setState(() => _search = v);
+                        _debouncer(() => _runSearch());
+                      },
+                      onSubmitted: (_) {
+                        _debouncer.cancel();
+                        _runSearch();
+                      },
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Search light novels…',
+                        prefixIcon:
+                            Icon(Icons.search, color: c.faint, size: 20),
+                        prefixIconConstraints:
+                            const BoxConstraints(minWidth: 44),
+                        suffixIcon: _search.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                icon: Icon(Icons.clear,
+                                    color: c.faint, size: 18),
+                                constraints: const BoxConstraints(
+                                    minWidth: 44, minHeight: 44),
+                                onPressed: _clearSearch,
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Reload',
+                    icon: Icon(Icons.refresh, color: c.faint, size: 20),
+                    constraints:
+                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    onPressed: () {
+                      _debouncer.cancel();
+                      _runSearch(forceRefresh: true);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                isNarrow ? 16 : 24,
+                isNarrow ? 16 : 32,
+                isNarrow ? 16 : 24,
+                80,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1280),
+                  child: _body(
+                    p,
+                    books,
+                    loading,
+                    failed,
+                    appState.lightNovelsHasMore,
+                    appState.lightNovelsLoadingMore,
+                    widget.appState.loadMoreLightNovels,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _body(
+    AppPalette p,
+    List<CatalogItem> books,
+    bool loading,
+    bool failed,
+    bool hasMore,
+    bool loadingMore,
+    VoidCallback onLoadMore,
+  ) {
+    if (loading && books.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 64),
+        child: Column(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: p.accent.accent,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Loading light novels…',
+              style: bodyStyle(p, size: 13, color: p.c.faint),
+            ),
+          ],
+        ),
+      );
+    }
+    if (failed && books.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+        child: Column(
+          children: [
+            EmptyState(
+              palette: p,
+              icon: Icons.wifi_off,
+              title: 'Could not load light novels',
+              sub: 'Check your connection and try again.',
+            ),
+            const SizedBox(height: 20),
+            GoldButton(
+              palette: p,
+              label: 'Retry',
+              icon: Icons.refresh,
+              onPressed: () => _runSearch(forceRefresh: true),
+            ),
+          ],
+        ),
+      );
+    }
+    if (books.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+        child: EmptyState(
+          palette: p,
+          icon: Icons.auto_stories,
+          title: 'No light novels found',
           sub: 'Try a different search.',
         ),
       );

@@ -324,6 +324,14 @@ class AppState extends ChangeNotifier {
   bool _novelsHasMore = false;
   bool _novelsLoadingMore = false;
   int _novelsGen = 0;
+  List<CatalogItem> _lightNovels = <CatalogItem>[];
+  bool _lightNovelsLoading = false;
+  bool _lightNovelsError = false;
+  String _lightNovelsQuery = '';
+  int _lightNovelsPage = 1;
+  bool _lightNovelsHasMore = false;
+  bool _lightNovelsLoadingMore = false;
+  int _lightNovelsGen = 0;
   List<CatalogItem> _comics = <CatalogItem>[];
   bool _comicsLoading = false;
   bool _comicsError = false;
@@ -355,6 +363,12 @@ class AppState extends ChangeNotifier {
   bool _catalogJumpToBookmark = false;
   bool _catalogTextLoading = false;
   bool _catalogTextError = false;
+
+  /// The open light novel has no free copy anywhere the app can
+  /// reach (RanobeDB lists the book, the Internet Archive hosts no
+  /// free readable copy). The detail screen says so instead of
+  /// blaming the connection.
+  bool _catalogNoFreeCopy = false;
   List<MangaChapter> _mangaChapters = <MangaChapter>[];
   int _selectedMangaChapterIndex = 0;
   bool _mangaChaptersLoading = false;
@@ -557,6 +571,15 @@ class AppState extends ChangeNotifier {
   bool get novelsHasMore => _novelsHasMore;
   bool get novelsLoadingMore => _novelsLoadingMore;
 
+  /// Light novels list from RanobeDB (default: newest English
+  /// releases). Metadata only — readability resolves per item.
+  List<CatalogItem> get lightNovels => _lightNovels;
+  bool get lightNovelsLoading => _lightNovelsLoading;
+  bool get lightNovelsError => _lightNovelsError;
+  String get lightNovelsQuery => _lightNovelsQuery;
+  bool get lightNovelsHasMore => _lightNovelsHasMore;
+  bool get lightNovelsLoadingMore => _lightNovelsLoadingMore;
+
   /// Comics list from the Internet Archive (issues with a Text PDF).
   List<CatalogItem> get comics => _comics;
   bool get comicsLoading => _comicsLoading;
@@ -629,6 +652,7 @@ class AppState extends ChangeNotifier {
 
   bool get catalogTextLoading => _catalogTextLoading;
   bool get catalogTextError => _catalogTextError;
+  bool get catalogNoFreeCopy => _catalogNoFreeCopy;
   List<PaperComment> get catalogComments => _catalogComments;
   Set<String> get catalogLikedBy => _catalogLikedBy;
   List<CatalogSave> get catalogSaves => _catalogSaves;
@@ -919,6 +943,7 @@ class AppState extends ChangeNotifier {
       _catalogWholeText = '';
       _catalogTextLoading = false;
       _catalogTextError = false;
+      _catalogNoFreeCopy = false;
       _mangaChapters = <MangaChapter>[];
       _selectedMangaChapterIndex = 0;
       _mangaChaptersLoading = false;
@@ -1229,6 +1254,85 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Fetches the light novels list from RanobeDB. Same shape as
+  /// [fetchNovels]: the repo caches page 1 for 5 minutes, the loading
+  /// flag only shows while the list is empty. Never throws.
+  Future<void> fetchLightNovels({
+    String? search,
+    int page = 1,
+    bool forceRefresh = false,
+  }) async {
+    final gen = ++_lightNovelsGen;
+    final isLoadMore = page > 1;
+    if (isLoadMore) {
+      _lightNovelsLoadingMore = true;
+    } else {
+      _lightNovelsLoading = true;
+      _lightNovelsError = false;
+    }
+    notifyListeners();
+    CatalogPage? result;
+    try {
+      result = await _catalogRepo.fetchLightNovels(
+        search: search,
+        page: page,
+        forceRefresh: forceRefresh,
+      );
+    } catch (e) {
+      debugPrint('[AppState] light novels fetch failed: $e');
+      result = null;
+    }
+    if (gen != _lightNovelsGen) {
+      if (isLoadMore) {
+        _lightNovelsLoadingMore = false;
+        notifyListeners();
+      }
+      return;
+    }
+    if (result == null) {
+      if (isLoadMore) {
+        _lightNovelsLoadingMore = false;
+        showToast(
+          'Could not load more light novels — check your connection.',
+          Icons.wifi_off,
+        );
+      } else {
+        _lightNovels = <CatalogItem>[];
+        _lightNovelsError = true;
+        _lightNovelsLoading = false;
+      }
+      notifyListeners();
+      return;
+    }
+    if (isLoadMore) {
+      _lightNovels = <CatalogItem>[..._lightNovels, ...result.items];
+      _lightNovelsPage = page;
+      _lightNovelsLoadingMore = false;
+    } else {
+      _lightNovels = result.items;
+      _lightNovelsQuery =
+          (search == null || search.trim().isEmpty) ? '' : search.trim();
+      _lightNovelsPage = 1;
+      _lightNovelsError = false;
+      _lightNovelsLoading = false;
+    }
+    _lightNovelsHasMore = result.hasMore;
+    notifyListeners();
+  }
+
+  /// Loads the next light novels page and appends it to the list.
+  Future<void> loadMoreLightNovels() async {
+    if (_lightNovelsLoading ||
+        _lightNovelsLoadingMore ||
+        !_lightNovelsHasMore) {
+      return;
+    }
+    await fetchLightNovels(
+      search: _lightNovelsQuery.isEmpty ? null : _lightNovelsQuery,
+      page: _lightNovelsPage + 1,
+    );
+  }
+
   /// Fetches the comics list from the Internet Archive. Same shape as
   /// [fetchEbooks]. Never throws.
   Future<void> fetchComics({
@@ -1388,6 +1492,7 @@ class AppState extends ChangeNotifier {
     _catalogWholeText = '';
     _catalogTextLoading = false;
     _catalogTextError = false;
+    _catalogNoFreeCopy = false;
     _mangaChapters = <MangaChapter>[];
     _selectedMangaChapterIndex = 0;
     _mangaChaptersLoading = false;
@@ -1411,7 +1516,8 @@ class AppState extends ChangeNotifier {
     if (item.type == CatalogType.manga) {
       _subscribeMangaReaderSettings(item.id);
     } else if (item.type == CatalogType.ebook ||
-        item.type == CatalogType.novel) {
+        item.type == CatalogType.novel ||
+        item.type == CatalogType.lightNovel) {
       ensureBookReaderSettings();
     }
     navigate(AppView.catalogDetail);
@@ -1428,6 +1534,11 @@ class AppState extends ChangeNotifier {
       // screen can offer "Read as PDF" at once instead of only
       // after the text load fails (which can take minutes).
       unawaited(_ensureBookPdf());
+    } else if (item.type == CatalogType.lightNovel) {
+      // No IA ids yet — RanobeDB hosts no text. Resolve a free copy
+      // first; the text and PDF loads start from there when one is
+      // found.
+      unawaited(_ensureLightNovelCopy());
     }
     // Books carry no synopsis in the search document — fetch the work
     // record for it (manga and comics already carry theirs).
@@ -1469,7 +1580,8 @@ class AppState extends ChangeNotifier {
     final item = _selectedCatalogItem;
     if (item == null ||
         (item.type != CatalogType.ebook &&
-            item.type != CatalogType.novel)) {
+            item.type != CatalogType.novel &&
+            item.type != CatalogType.lightNovel)) {
       return;
     }
     if (item.pdfUrl != null || _bookPdfResolving) return;
@@ -1487,6 +1599,36 @@ class AppState extends ChangeNotifier {
     _selectedCatalogItem = item.copyWith(pdfUrl: url);
     _bookPdfResolving = false;
     notifyListeners();
+  }
+
+  /// Finds a free Internet Archive copy of the open light novel
+  /// (once). RanobeDB lists the book but hosts no text, so the detail
+  /// screen starts with no IA ids — the rescue search (the same one
+  /// the book list uses for borrow-only copies) looks for a free
+  /// upload by title + author. When one is found the text and PDF
+  /// loads start exactly like a book; when none is found
+  /// [_catalogNoFreeCopy] is set and the detail screen says so
+  /// instead of blaming the connection.
+  Future<void> _ensureLightNovelCopy() async {
+    final item = _selectedCatalogItem;
+    if (item == null || item.type != CatalogType.lightNovel) return;
+    if (item.iaIds.isNotEmpty || _catalogNoFreeCopy) return;
+    _catalogTextLoading = true;
+    _catalogTextError = false;
+    notifyListeners();
+    final ids = await _catalogRepo.findFreeIaCopies(item);
+    if (_selectedCatalogItem?.id != item.id) return;
+    if (ids.isEmpty) {
+      _catalogTextLoading = false;
+      _catalogNoFreeCopy = true;
+      notifyListeners();
+      return;
+    }
+    _selectedCatalogItem = item.copyWith(iaIds: ids);
+    _catalogTextLoading = false;
+    notifyListeners();
+    unawaited(_ensureCatalogText());
+    unawaited(_ensureBookPdf());
   }
 
   /// Fetches the open book's synopsis from its Open Library work
@@ -1695,6 +1837,16 @@ class AppState extends ChangeNotifier {
 
   /// Retries the chapter download from the detail screen's error state.
   Future<void> reloadCatalogChapters() async {
+    final item = _selectedCatalogItem;
+    if (item != null &&
+        item.type == CatalogType.lightNovel &&
+        item.iaIds.isEmpty) {
+      // Retry the free-copy lookup (a copy may have appeared, or the
+      // first search failed) — the text load starts from there.
+      _catalogNoFreeCopy = false;
+      await _ensureLightNovelCopy();
+      return;
+    }
     await _ensureCatalogText();
   }
 
@@ -1825,6 +1977,7 @@ class AppState extends ChangeNotifier {
         switch (item.type) {
           CatalogType.manga => 'Manga saved!',
           CatalogType.comic => 'Comic saved!',
+          CatalogType.lightNovel => 'Light novel saved!',
           _ => 'Book saved!',
         },
         Icons.bookmark,

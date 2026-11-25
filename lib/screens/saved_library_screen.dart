@@ -105,6 +105,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
               save.title.toLowerCase().contains(q) ||
               save.author.toLowerCase().contains(q);
         }).toList();
+        final lightNovelSaves = widget.appState.catalogSaves
+            .where((save) => save.type == CatalogType.lightNovel)
+            .where((save) {
+          return q.isEmpty ||
+              save.title.toLowerCase().contains(q) ||
+              save.author.toLowerCase().contains(q);
+        }).toList();
         // Manga and comics are one Browse tab ("Manga and Comics"), so
         // they are one Library group too — no separate COMICS section.
         // The type stays on each save (the detail screen and reader
@@ -120,6 +127,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         }).toList();
         final hasCatalogSaves = ebookSaves.isNotEmpty ||
             novelSaves.isNotEmpty ||
+            lightNovelSaves.isNotEmpty ||
             mangaComicSaves.isNotEmpty;
 
         return SingleChildScrollView(
@@ -145,7 +153,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       onChanged: (v) => setState(() => _search = v),
                       decoration: InputDecoration(
                         hintText:
-                            'Search your saved papers, books, comics and manga…',
+                            'Search your saved papers, books, light novels, comics and manga…',
                         prefixIcon:
                             Icon(Icons.search, color: c.faint, size: 20),
                         prefixIconConstraints:
@@ -187,7 +195,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 : 'No saved items found',
                             sub: saved.isEmpty && !hasCatalogSaves
                                 ? 'Tap the bookmark on a paper, a book, '
-                                    'a comic or a manga to keep it here.'
+                                    'a light novel, a comic or a manga to keep it here.'
                                 : 'Try a different search',
                           )
                         : Column(
@@ -250,6 +258,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     p, 'NOVELS · ${novelSaves.length}'),
                                 const SizedBox(height: 14),
                                 _catalogGrid(novelSaves),
+                              ],
+                              if (lightNovelSaves.isNotEmpty) ...[
+                                const SizedBox(height: 28),
+                                _sectionLabel(p,
+                                    'LIGHT NOVELS · ${lightNovelSaves.length}'),
+                                const SizedBox(height: 14),
+                                _catalogGrid(lightNovelSaves),
                               ],
                               if (mangaComicSaves.isNotEmpty) ...[
                                 const SizedBox(height: 28),

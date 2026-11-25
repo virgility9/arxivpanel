@@ -33,6 +33,7 @@ class CatalogCard extends StatelessWidget {
   String get _typeLabel => switch (item.type) {
         CatalogType.ebook => 'E-BOOK',
         CatalogType.novel => 'NOVEL',
+        CatalogType.lightNovel => 'LIGHT NOVEL',
         CatalogType.comic => 'COMIC',
         CatalogType.manga => 'MANGA',
       };
