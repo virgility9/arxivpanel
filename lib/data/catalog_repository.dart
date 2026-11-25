@@ -186,7 +186,7 @@ class CatalogRepository {
     final words = _titleWords(item.title);
     if (words.isEmpty) return [];
     final titleQuery = 'title:(${words.join(' AND ')})';
-    final author = item.author.trim();
+    final author = item.authors.isEmpty ? '' : item.authors.first.trim();
     final surname = author.split(RegExp(r'\s+')).lastWhere(
           (w) => w.isNotEmpty,
           orElse: () => '',
