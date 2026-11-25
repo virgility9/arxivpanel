@@ -1,8 +1,6 @@
 /// Catalog source client for the Browse tabs: e-books and novels from
-/// Open Library + the Internet Archive, light novels from RanobeDB
-/// (metadata only — the readable copy is resolved from the Internet
-/// Archive on demand), comics from the Internet Archive, manga from
-/// MangaDex — no new dependency, only `package:http`, already in the
+/// Open Library + the Internet Archive, comics from the Internet
+/// Archive, manga from MangaDex — no new dependency, only `package:http`, already in the
 /// 5-minute cache per list (page 1), 20-item pages with Load more,
 /// 20s timeout for JSON with 3 attempts, 90s for full text with 2
 /// attempts per IA id, never throws (empty page / null on failure).
@@ -38,7 +36,6 @@ class CatalogRepository {
   static const _maxAttempts = 3;
   static const _iaSearchBase = 'https://archive.org/advancedsearch.php';
   static const _mangaBase = 'https://api.mangadex.org';
-  static const _ranobeDbBase = 'https://ranobedb.org/api/v0';
 
   final http.Client _client;
   CatalogPage? _ebooksCache;
@@ -47,9 +44,6 @@ class CatalogRepository {
   CatalogPage? _novelsCache;
   DateTime? _novelsCacheAt;
   String? _novelsQuery;
-  CatalogPage? _lightNovelsCache;
-  DateTime? _lightNovelsCacheAt;
-  String? _lightNovelsQuery;
   CatalogPage? _comicsCache;
   DateTime? _comicsCacheAt;
   String? _comicsQuery;
@@ -65,7 +59,6 @@ class CatalogRepository {
   /// (texts, chapters, synopses).
   http.Client? _ebooksSearchClient;
   http.Client? _novelsSearchClient;
-  http.Client? _lightNovelsSearchClient;
   http.Client? _comicsSearchClient;
   http.Client? _mangaSearchClient;
 
@@ -176,12 +169,6 @@ class CatalogRepository {
     }
     return out;
   }
-
-  /// Public wrapper for [_findFreeIaCopies]: light novels start with
-  /// no IA ids at all (RanobeDB hosts no text), so the detail screen
-  /// resolves a free copy on demand instead of at list time.
-  Future<List<String>> findFreeIaCopies(CatalogItem item) =>
-      _findFreeIaCopies(item);
 
   /// Free IA copies of a book, by title + author — the rescue path
   /// for books whose Open Library copies are all lending-restricted
@@ -393,63 +380,6 @@ class CatalogRepository {
       _novelsCache = result;
       _novelsCacheAt = DateTime.now();
       _novelsQuery = query;
-    }
-    return result;
-  }
-
-  /// Light novels list from RanobeDB (`/books`, English releases
-  /// only). The default list is the newest English releases first;
-  /// a free-text [search] switches to relevance order. RanobeDB is
-  /// metadata only — no readable chapters — so the list is NOT
-  /// filtered for readability: every listed volume stays, and the
-  /// detail screen resolves a free Internet Archive copy on demand
-  /// (or says none exists). Same cache shape as [fetchNovels] (page 1
-  /// for 5 minutes, superseding search closes the old client).
-  /// Returns null on failure. Never throws.
-  Future<CatalogPage?> fetchLightNovels({
-    String? search,
-    int page = 1,
-    bool forceRefresh = false,
-  }) async {
-    final query = (search == null || search.trim().isEmpty)
-        ? ''
-        : search.trim();
-    if (page == 1 &&
-        !forceRefresh &&
-        _lightNovelsCache != null &&
-        _lightNovelsCacheAt != null &&
-        _lightNovelsQuery == query &&
-        DateTime.now().difference(_lightNovelsCacheAt!) < _cacheTtl) {
-      return _lightNovelsCache!;
-    }
-    _lightNovelsSearchClient?.close();
-    final client = _lightNovelsSearchClient = http.Client();
-    final sort = query.isEmpty ? 'Release date desc' : 'Relevance desc';
-    final queryParam = query.isEmpty
-        ? ''
-        : '&q=${Uri.encodeQueryComponent(query)}';
-    final uri = Uri.parse(
-      '$_ranobeDbBase/books?rl=en&rll=or'
-      '&sort=${Uri.encodeQueryComponent(sort)}'
-      '&limit=$_pageSize&page=$page$queryParam',
-    );
-    final data = await _getJson(uri, client: client);
-    if (data == null) return null;
-    final docs = data['books'] as List? ?? <dynamic>[];
-    final items = docs
-        .whereType<Map<String, dynamic>>()
-        .map(CatalogItem.fromRanobeDb)
-        .whereType<CatalogItem>()
-        .toList();
-    final totalPages = (data['totalPages'] as num?)?.toInt() ?? 1;
-    final result = CatalogPage(
-      items: items,
-      hasMore: page < totalPages,
-    );
-    if (page == 1) {
-      _lightNovelsCache = result;
-      _lightNovelsCacheAt = DateTime.now();
-      _lightNovelsQuery = query;
     }
     return result;
   }

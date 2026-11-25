@@ -125,7 +125,6 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
     final typeLabel = switch (item.type) {
       CatalogType.ebook => 'E-BOOK',
       CatalogType.novel => 'NOVEL',
-      CatalogType.lightNovel => 'LIGHT NOVEL',
       CatalogType.comic => 'COMIC',
       CatalogType.manga => 'MANGA',
     };
@@ -407,34 +406,6 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                   Text(
                     'Loading chapters…',
                     style: bodyStyle(p, size: 13, color: c.faint),
-                  ),
-                ],
-              ),
-            )
-          else if (appState.catalogNoFreeCopy && chapters.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: c.surface,
-                border: Border.all(color: c.border),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'No free copy of this light novel was found. '
-                    'RanobeDB lists the book, but no free readable '
-                    'copy exists on the Internet Archive right now.',
-                    style: bodyStyle(p, size: 13, color: c.textSub),
-                  ),
-                  const SizedBox(height: 10),
-                  GoldButton(
-                    palette: p,
-                    label: 'Retry',
-                    icon: Icons.refresh,
-                    onPressed: () => appState.reloadCatalogChapters(),
-                    minHeight: 40,
                   ),
                 ],
               ),

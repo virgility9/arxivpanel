@@ -1,5 +1,5 @@
-/// Catalog models for the Browse tabs: e-books, novels, light novels,
-/// comics, manga from free public sources. Catalog items are NOT papers — they live
+/// Catalog models for the Browse tabs: e-books, novels, comics, manga
+/// from free public sources. Catalog items are NOT papers — they live
 /// outside Firestore (fetched from the source API) and only their
 /// saves, comments, reactions and reading progress live in Firestore
 /// (see FirestoreRepository's catalog methods).
@@ -9,9 +9,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Which catalog tab an item belongs to. [BrowseTab] (models.dart) is
 /// the UI tab; this is the data type (no localLibrary here).
-enum CatalogType { ebook, novel, lightNovel, comic, manga }
+enum CatalogType { ebook, novel, comic, manga }
 
-/// One book / comic / manga / light novel from a public source. The id is namespaced
+/// One book / comic / manga from a public source. The id is namespaced
 /// by source (`ol:OL66554W` for Open Library) so ids never collide
 /// across sources. Only the fields the screens show are kept. The
 /// search document carries almost everything the detail screen needs
@@ -58,7 +58,6 @@ class CatalogItem {
   final String? synopsis;
 
   CatalogItem copyWith({
-    List<String>? authors,
     List<String>? iaIds,
     String? pdfUrl,
     String? synopsis,
@@ -67,7 +66,7 @@ class CatalogItem {
       id: id,
       type: type,
       title: title,
-      authors: authors ?? this.authors,
+      authors: authors,
       subjects: subjects,
       iaIds: iaIds ?? this.iaIds,
       coverUrl: coverUrl,
@@ -202,34 +201,6 @@ class CatalogItem {
     );
   }
 
-  /// Builds a light novel volume from one RanobeDB `/books` document.
-  /// The list response carries no authors and no synopsis — and the
-  /// per-book detail endpoint was checked live (Sword Art Online vol 1
-  /// id 5151, Overlord vol 1 id 9177, 2026-11-25) and returns an empty
-  /// description with no editions/staff, so there is no detail fetch
-  /// to enrich them: the card shows "Unknown author" and the detail
-  /// screen says no synopsis is available. The cover rides along
-  /// (`image.filename`, verified live: images.ranobedb.org serves it).
-  /// `iaIds` starts empty — RanobeDB hosts no text, so the free IA
-  /// copy is resolved on demand when the detail page opens (see
-  /// AppState's light-novel copy lookup).
-  static CatalogItem? fromRanobeDb(Map<String, dynamic> json) {
-    final bookId = json['id'];
-    if (bookId == null) return null;
-    final image = json['image'] as Map<String, dynamic>?;
-    final filename = image?['filename'] as String?;
-    return CatalogItem(
-      id: 'rnb:$bookId',
-      type: CatalogType.lightNovel,
-      title: (json['title'] as String? ?? 'Untitled').trim(),
-      authors: const [],
-      subjects: const [],
-      iaIds: const [],
-      coverUrl: filename != null && filename.isNotEmpty
-          ? 'https://images.ranobedb.org/$filename'
-          : null,
-    );
-  }
 }
 
 /// Strips HTML tags from a source description (Internet Archive

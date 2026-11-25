@@ -18,7 +18,6 @@ import 'shared.dart';
 String catalogTypeLabel(CatalogType type) => switch (type) {
       CatalogType.ebook => 'E-BOOK',
       CatalogType.novel => 'NOVEL',
-      CatalogType.lightNovel => 'LIGHT NOVEL',
       CatalogType.comic => 'COMIC',
       CatalogType.manga => 'MANGA',
     };

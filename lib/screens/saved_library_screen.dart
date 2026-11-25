@@ -89,7 +89,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   /// Splits [saves] (already sorted) into sections. By type: e-books,
-  /// novels, light novels, then manga and comics (one Browse tab, so one
+  /// novels, then manga and comics (one Browse tab, so one
   /// group). With "Recent" the sections are ordered by their newest
   /// save, so what you saved last is on top; otherwise the fixed order
   /// above. "None" is one flat section.
@@ -105,8 +105,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           saves.where((s) => s.type == CatalogType.ebook).toList()),
       _SaveGroup('novels', 'NOVELS',
           saves.where((s) => s.type == CatalogType.novel).toList()),
-      _SaveGroup('lightNovels', 'LIGHT NOVELS',
-          saves.where((s) => s.type == CatalogType.lightNovel).toList()),
       _SaveGroup('manga', 'MANGA AND COMICS', saves.where(isManga).toList()),
     ].where((g) => g.saves.isNotEmpty).toList();
     if (_sortBy == _SortBy.recent) {
@@ -201,7 +199,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       onChanged: (v) => setState(() => _search = v),
                       decoration: InputDecoration(
                         hintText:
-                            'Search your saved papers, books, light novels, comics and manga…',
+                            'Search your saved papers, books, comics and manga…',
                         prefixIcon:
                             Icon(Icons.search, color: c.faint, size: 20),
                         prefixIconConstraints:
@@ -243,7 +241,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 : 'No saved items found',
                             sub: !anySavedAtAll
                                 ? 'Tap the bookmark on a paper, a book, '
-                                    'a light novel, a comic or a manga to keep it here.'
+                                    'a comic or a manga to keep it here.'
                                 : 'Try a different search',
                           )
                         : Column(
