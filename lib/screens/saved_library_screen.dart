@@ -1,6 +1,6 @@
 /// Library tab: the user's saved collection — everything bookmarked,
-/// grouped by type, so nothing has to be browsed for twice. Papers
-/// first, then the catalog sections (e-books, novels, comics, manga).
+/// so nothing has to be browsed for twice. A type filter picks All,
+/// E-books, Novels, or Manga and Comics; papers show under All, first.
 /// Read-only collection: posting happens from Browse's Local Library tab.
 library;
 
@@ -31,9 +31,10 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-/// How the saved books are grouped. Papers always come first, in their
-/// own section, because they use a different card.
-enum _GroupBy { type, none }
+/// Which saved items the Library shows. Papers always come first, in
+/// their own section, because they use a different card — and only
+/// under All, since they are not a catalog type.
+enum _TypeFilter { all, ebook, manga, novel }
 
 enum _SortBy { recent, title, author }
 
@@ -51,7 +52,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
 
-  _GroupBy _groupBy = _GroupBy.type;
+  _TypeFilter _typeFilter = _TypeFilter.all;
   _SortBy _sortBy = _SortBy.recent;
   _ViewMode _view = _ViewMode.grid;
 
@@ -88,24 +89,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return saves;
   }
 
-  /// Splits [saves] (already sorted) into sections. By type: e-books,
-  /// novels, then manga and comics (one Browse tab, so one
-  /// group). With "Recent" the sections are ordered by their newest
-  /// save, so what you saved last is on top; otherwise the fixed order
-  /// above. "None" is one flat section.
+  /// Splits [saves] (already sorted) into sections for the current
+  /// type filter: e-books, novels, then manga and comics (one Browse
+  /// tab, so one group). "All" shows every section; any other filter
+  /// shows only its own. With "Recent" the sections are ordered by
+  /// their newest save, so what you saved last is on top; otherwise
+  /// the fixed order above.
   List<_SaveGroup> _groupsFor(List<CatalogSave> saves) {
     if (saves.isEmpty) return const [];
-    if (_groupBy == _GroupBy.none) {
-      return [_SaveGroup('all', 'ALL SAVED', saves)];
-    }
     bool isManga(CatalogSave s) =>
         s.type == CatalogType.comic || s.type == CatalogType.manga;
     final groups = <_SaveGroup>[
-      _SaveGroup('ebooks', 'E-BOOKS',
-          saves.where((s) => s.type == CatalogType.ebook).toList()),
-      _SaveGroup('novels', 'NOVELS',
-          saves.where((s) => s.type == CatalogType.novel).toList()),
-      _SaveGroup('manga', 'MANGA AND COMICS', saves.where(isManga).toList()),
+      if (_typeFilter == _TypeFilter.all ||
+          _typeFilter == _TypeFilter.ebook)
+        _SaveGroup('ebooks', 'E-BOOKS',
+            saves.where((s) => s.type == CatalogType.ebook).toList()),
+      if (_typeFilter == _TypeFilter.all ||
+          _typeFilter == _TypeFilter.novel)
+        _SaveGroup('novels', 'NOVELS',
+            saves.where((s) => s.type == CatalogType.novel).toList()),
+      if (_typeFilter == _TypeFilter.all ||
+          _typeFilter == _TypeFilter.manga)
+        _SaveGroup('manga', 'MANGA AND COMICS',
+            saves.where(isManga).toList()),
     ].where((g) => g.saves.isNotEmpty).toList();
     if (_sortBy == _SortBy.recent) {
       groups.sort((a, b) => b.saves.first.savedAt
@@ -176,8 +182,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         final anySavedAtAll =
             saved.isNotEmpty || widget.appState.catalogSaves.isNotEmpty;
 
-        return SingleChildScrollView(
-          child: Column(
+        return RefreshIndicator(
+          color: p.accent.accent,
+          backgroundColor: c.surface,
+          onRefresh: () => widget.appState.refreshLibrary(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Search row (same shape as the Local Library hero).
@@ -249,7 +260,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             children: [
                               _controls(p, showGroup: hasCatalogSaves),
                               const SizedBox(height: 6),
-                              if (filtered.isNotEmpty)
+                              if (filtered.isNotEmpty &&
+                                  _typeFilter == _TypeFilter.all)
                                 _section(
                                   p,
                                   key: 'papers',
@@ -271,6 +283,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
               ),
             ],
+            ),
           ),
         );
       },
@@ -288,12 +301,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (showGroup)
-          _segmented<_GroupBy>(
+          _segmented<_TypeFilter>(
             p,
-            label: 'GROUP',
-            value: _groupBy,
-            options: const {_GroupBy.type: 'Type', _GroupBy.none: 'None'},
-            onChanged: (v) => setState(() => _groupBy = v),
+            label: 'TYPE',
+            value: _typeFilter,
+            options: const {
+              _TypeFilter.all: 'All',
+              _TypeFilter.ebook: 'E-book',
+              _TypeFilter.manga: 'Manga',
+              _TypeFilter.novel: 'Novel',
+            },
+            onChanged: (v) => setState(() => _typeFilter = v),
           ),
         _segmented<_SortBy>(
           p,
@@ -366,7 +384,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               style: bodyStyle(
                 p,
                 size: 13,
-                color: e.key == value ? c.text : c.muted,
+                color: e.key == value ? c.text : c.textSub,
                 weight: e.key == value ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
@@ -385,7 +403,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: Icon(
             data,
             size: 18,
-            color: _view == mode ? c.text : c.muted,
+            color: _view == mode ? c.text : c.textSub,
           ),
         );
     return Row(
@@ -565,8 +583,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  /// One row per book; the type label shows only when the list is not
-  /// already grouped by type.
+  /// One row per book; the section header already names the type, so
+  /// no per-row type label.
   Widget _catalogList(List<CatalogSave> saves) {
     return Align(
       alignment: Alignment.topLeft,
@@ -583,7 +601,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   item: item,
                   appState: widget.appState,
                   theme: widget.theme,
-                  showType: _groupBy == _GroupBy.none,
+                  showType: false,
                   onOpen: () => widget.appState.openCatalogItem(item),
                 );
               }),

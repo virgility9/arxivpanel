@@ -116,6 +116,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   /// Horizontally scrollable tab strip, pinned above the tab content.
   /// Active tab gets the gold text + underline, like the desktop nav.
+  /// Inactive tabs use the secondary text color so they stay legible
+  /// in both themes.
   /// No filled box: the strip sits on the page with one hairline under
   /// it, and fades out on the right so it reads as scrollable instead
   /// of cut off.
@@ -176,7 +178,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
             style: bodyStyle(
               p,
               size: 14,
-              color: active ? a.accent : c.muted,
+              color: active ? a.accent : c.textSub,
               weight: active ? FontWeight.w600 : FontWeight.w400,
             ),
           ),

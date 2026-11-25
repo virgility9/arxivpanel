@@ -748,6 +748,18 @@ class AppState extends ChangeNotifier {
     _catalogSavesSub = null;
   }
 
+  /// Pull-to-refresh for the Library tab: re-subscribes the saved-data
+  /// streams (bookmarks + catalog saves) and reloads the papers list,
+  /// so a stale snapshot or a missed update is picked up at once.
+  Future<void> refreshLibrary() async {
+    final user = _user;
+    if (user != null) {
+      _cancelUserSubs();
+      _subscribeUserData(user);
+    }
+    await fetchArxivPapers(forceRefresh: true);
+  }
+
   /// Signs in with email and password.
   ///
   /// Returns `null` on success, otherwise a user-friendly error message.
