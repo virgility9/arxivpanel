@@ -1,299 +1,299 @@
-rules_version = '2';
+  rules_version = '2';
 
-// Firestore security rules for ArxivPanel.
-// Paste into: Firebase console → Firestore Database → Rules tab → Publish.
-// No CLI required.
-//
-// Data model:
-//   papers/{paperId}                      paper docs, `status`: pending|approved|rejected|revision|archived
-//   papers/{paperId}/comments/{commentId} comment docs
-//   papers/{paperId}/reactions/{uid}      one doc per user: { emoji, reactedAt }
-//   users/{uid}                           profile docs (username, email, avatar, bio, ...)
-//   users/{uid}/bookmarks/{paperId}       saved papers (doc id = paper id)
-//   users/{uid}/history/{entryId}         reading-history entries
-//   users/{uid}/manga_reader_settings/{catalogId}  per-series manga reader settings
-//   users/{uid}/book_reader_settings/book  text reader settings (one doc)
-//   polls/{pollId}                        poll docs
-//   polls/{pollId}/options/{optionId}     poll options
-//   polls/{pollId}/votes/{uid}            one vote per user (doc id = uid)
-//   news/{newsId}                        admin-posted news items
-//   announcements/{id}                  admin announcements (Contest tab)
-//   users/{uid}/notifications/{id}      paper-status notices, one author only
-//   app_config/update                   latest published app version 
-//   deleted_users/{uid}              accounts an admin deleted — sign-in refuses them
-//   admins/{uid}                          presence of a doc marks the user as admin
-//                                         (create the first one manually in the
-//                                         console — see FIREBASE_SETUP.md step 8)
-//                                         — or set isAdmin: true on the user
-//                                         profile in the console; either works
+  // Firestore security rules for ArxivPanel.
+  // Paste into: Firebase console → Firestore Database → Rules tab → Publish.
+  // No CLI required.
+  //
+  // Data model:
+  //   papers/{paperId}                      paper docs, `status`: pending|approved|rejected|revision|archived
+  //   papers/{paperId}/comments/{commentId} comment docs
+  //   papers/{paperId}/reactions/{uid}      one doc per user: { emoji, reactedAt }
+  //   users/{uid}                           profile docs (username, email, avatar, bio, ...)
+  //   users/{uid}/bookmarks/{paperId}       saved papers (doc id = paper id)
+  //   users/{uid}/history/{entryId}         reading-history entries
+  //   users/{uid}/manga_reader_settings/{catalogId}  per-series manga reader settings
+  //   users/{uid}/book_reader_settings/book  text reader settings (one doc)
+  //   polls/{pollId}                        poll docs
+  //   polls/{pollId}/options/{optionId}     poll options
+  //   polls/{pollId}/votes/{uid}            one vote per user (doc id = uid)
+    //   news/{newsId}                        admin-posted news items
+    //   announcements/{id}                  admin announcements (Contest tab)
+  //   users/{uid}/notifications/{id}      paper-status notices, one author only
+  //   app_config/update                   latest published app version 
+  //   deleted_users/{uid}              accounts an admin deleted — sign-in refuses them
+  //   admins/{uid}                          presence of a doc marks the user as admin
+  //                                         (create the first one manually in the
+  //                                         console — see FIREBASE_SETUP.md step 8)
+  //                                         — or set isAdmin: true on the user
+  //                                         profile in the console; either works
 
-service cloud.firestore {
-  match /databases/{database}/documents {
+  service cloud.firestore {
+    match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
+      function signedIn() {
+        return request.auth != null;
+      }
 
-    // An admin is either listed in the admins collection OR flagged on
-    // their user profile (`users/{uid}.isAdmin == true`). The profile
-    // flag is safe to trust: the users rules forbid anyone granting it
-    // to themselves through the app (create requires it false/absent,
-    // update requires it unchanged), so only the Firebase console can
-    // set it — the same trust root as the admins collection. This is
-    // what makes an account the app already treats as admin (isAdmin on
-    // the profile) a real admin in the rules too, without a separate
-    // admins doc.
-    function isAdmin() {
-      return signedIn()
-        && (exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-          || profileIsAdmin());
-    }
+      // An admin is either listed in the admins collection OR flagged on
+      // their user profile (`users/{uid}.isAdmin == true`). The profile
+      // flag is safe to trust: the users rules forbid anyone granting it
+      // to themselves through the app (create requires it false/absent,
+      // update requires it unchanged), so only the Firebase console can
+      // set it — the same trust root as the admins collection. This is
+      // what makes an account the app already treats as admin (isAdmin on
+      // the profile) a real admin in the rules too, without a separate
+      // admins doc.
+      function isAdmin() {
+        return signedIn()
+          && (exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+            || profileIsAdmin());
+      }
 
-    function profileIsAdmin() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
+      function profileIsAdmin() {
+        return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      }
 
-    function isAuthor(paperData) {
-      return signedIn() && paperData.authorId == request.auth.uid;
-    }
+      function isAuthor(paperData) {
+        return signedIn() && paperData.authorId == request.auth.uid;
+      }
 
-    // A paper is publicly readable once approved.
-    function paperVisible(paperData) {
-      return paperData.status == 'approved'
-        || isAuthor(paperData)
-        || isAdmin();
-    }
+      // A paper is publicly readable once approved.
+      function paperVisible(paperData) {
+        return paperData.status == 'approved'
+          || isAuthor(paperData)
+          || isAdmin();
+      }
 
-    // ------------------------------------------------------------- papers
-    match /papers/{paperId} {
-      allow read: if paperVisible(resource.data);
+      // ------------------------------------------------------------- papers
+      match /papers/{paperId} {
+        allow read: if paperVisible(resource.data);
 
-      // Anyone signed in can submit; new papers always start as pending
-      // and the authorId must be their own uid.
-      allow create: if signedIn()
-        && request.resource.data.status == 'pending'
-        && request.resource.data.authorId == request.auth.uid
-        && request.resource.data.keys().hasAll(
-             ['title', 'abstract', 'field', 'authorId', 'status']);
-
-      // Author can edit their own pending/revision papers; admins can do
-      // anything (approve/reject/archive). isAdmin can never be escalated
-      // here — it lives on the user doc, guarded below.
-      allow update: if isAdmin()
-        || (isAuthor(resource.data)
-            && request.resource.data.authorId == resource.data.authorId
-            && request.resource.data.status == resource.data.status);
-
-      allow delete: if isAdmin() || isAuthor(resource.data);
-
-      // ------------------------------------------------------- comments
-      match /comments/{commentId} {
-        allow read: if paperVisible(
-          get(/databases/$(database)/documents/papers/$(paperId)).data);
-
+        // Anyone signed in can submit; new papers always start as pending
+        // and the authorId must be their own uid.
         allow create: if signedIn()
-          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && request.resource.data.authorId == request.auth.uid
           && request.resource.data.keys().hasAll(
-               ['userId', 'username', 'text']);
+              ['title', 'abstract', 'field', 'authorId', 'status']);
 
-        // Authors can edit/delete their own comments; admins can delete.
-        allow update, delete: if signedIn()
-          && (resource.data.userId == request.auth.uid || isAdmin());
+        // Author can edit their own pending/revision papers; admins can do
+        // anything (approve/reject/archive). isAdmin can never be escalated
+        // here — it lives on the user doc, guarded below.
+        allow update: if isAdmin()
+          || (isAuthor(resource.data)
+              && request.resource.data.authorId == resource.data.authorId
+              && request.resource.data.status == resource.data.status);
+
+        allow delete: if isAdmin() || isAuthor(resource.data);
+
+        // ------------------------------------------------------- comments
+        match /comments/{commentId} {
+          allow read: if paperVisible(
+            get(/databases/$(database)/documents/papers/$(paperId)).data);
+
+          allow create: if signedIn()
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.keys().hasAll(
+                ['userId', 'username', 'text']);
+
+          // Authors can edit/delete their own comments; admins can delete.
+          allow update, delete: if signedIn()
+            && (resource.data.userId == request.auth.uid || isAdmin());
+        }
+
+        // ------------------------------------------------------ reactions
+        // One doc per user (doc id = uid): { emoji, reactedAt }.
+        match /reactions/{uid} {
+          allow read: if paperVisible(
+            get(/databases/$(database)/documents/papers/$(paperId)).data);
+
+          // Users can only write their own reaction doc; admins can clean
+          // up reactions when deleting a paper.
+          allow write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
       }
 
-      // ------------------------------------------------------ reactions
-      // One doc per user (doc id = uid): { emoji, reactedAt }.
-      match /reactions/{uid} {
-        allow read: if paperVisible(
-          get(/databases/$(database)/documents/papers/$(paperId)).data);
-
-        // Users can only write their own reaction doc; admins can clean
-        // up reactions when deleting a paper.
-        allow write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-    }
-
-    // -------------------------------------------------------------- users
-    match /users/{uid} {
-      // Profiles are public (username/avatar shown across the app).
-      allow read: if true;
-
-      // Users can create/update only their own doc, and can never grant
-      // themselves admin — isAdmin may only change via an existing admin.
-      allow create: if signedIn() && uid == request.auth.uid
-        && (!('isAdmin' in request.resource.data)
-            || request.resource.data.isAdmin == false);
-
-      allow update: if signedIn() && uid == request.auth.uid
-        && request.resource.data.isAdmin == resource.data.isAdmin;
-
-      allow delete: if isAdmin();
-
-      match /bookmarks/{paperId} {
-        allow read, write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-
-      match /history/{entryId} {
-        allow read, write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-
-      // Saved catalog items (snapshot docs) and reading progress.
-      // Same owner rule as bookmarks/history: the owner or an admin.
-      match /catalog_saves/{catalogId} {
-        allow read, write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-
-      match /catalog_progress/{catalogId} {
-        allow read, write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-
-      // Last-read page per manga chapter (one doc per manga, keyed by
-      // chapter id inside). Same owner rule as catalog progress.
-      match /manga_progress/{catalogId} {
-        allow read, write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-
-      // Reader customization: manga settings are per series (one doc
-      // per manga id), book settings are one doc for all books.
-      // Same owner rule as catalog saves/progress.
-      match /manga_reader_settings/{catalogId} {
-        allow read, write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-
-      match /book_reader_settings/{docId} {
-        allow read, write: if isAdmin()
-          || (signedIn() && uid == request.auth.uid);
-      }
-    }
-
-    // ------------------------------------------------------------ catalog
-    // Browse catalog items (e-books, novels, comics, manga) live in the
-    // source APIs, not in Firestore — but their comments and reactions
-    // do. Catalog content is public, so reads are public (signed-out
-    // users can read comments and like counts); writes mirror papers.
-    match /catalog_items/{catalogId} {
-      // The catalog item doc itself is never written by clients (it
-      // only exists as a parent for the subcollections); reads stay
-      // open so the subcollection rules below can resolve.
-      allow read: if true;
-
-      match /comments/{commentId} {
+      // -------------------------------------------------------------- users
+      match /users/{uid} {
+        // Profiles are public (username/avatar shown across the app).
         allow read: if true;
 
-        allow create: if signedIn()
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.keys().hasAll(
-               ['userId', 'username', 'text']);
+        // Users can create/update only their own doc, and can never grant
+        // themselves admin — isAdmin may only change via an existing admin.
+        allow create: if signedIn() && uid == request.auth.uid
+          && (!('isAdmin' in request.resource.data)
+              || request.resource.data.isAdmin == false);
 
-        // Authors can edit/delete their own comments; admins can delete.
-        allow update, delete: if signedIn()
-          && (resource.data.userId == request.auth.uid || isAdmin());
+        allow update: if signedIn() && uid == request.auth.uid
+          && request.resource.data.isAdmin == resource.data.isAdmin;
+
+        allow delete: if isAdmin();
+
+        match /bookmarks/{paperId} {
+          allow read, write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
+
+        match /history/{entryId} {
+          allow read, write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
+
+        // Saved catalog items (snapshot docs) and reading progress.
+        // Same owner rule as bookmarks/history: the owner or an admin.
+        match /catalog_saves/{catalogId} {
+          allow read, write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
+
+        match /catalog_progress/{catalogId} {
+          allow read, write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
+
+        // Last-read page per manga chapter (one doc per manga, keyed by
+        // chapter id inside). Same owner rule as catalog progress.
+        match /manga_progress/{catalogId} {
+          allow read, write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
+
+        // Reader customization: manga settings are per series (one doc
+        // per manga id), book settings are one doc for all books.
+        // Same owner rule as catalog saves/progress.
+        match /manga_reader_settings/{catalogId} {
+          allow read, write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
+
+        match /book_reader_settings/{docId} {
+          allow read, write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
       }
 
-      // One doc per user (doc id = uid): { emoji, reactedAt }.
-      match /reactions/{uid} {
+      // ------------------------------------------------------------ catalog
+      // Browse catalog items (e-books, novels, comics, manga) live in the
+      // source APIs, not in Firestore — but their comments and reactions
+      // do. Catalog content is public, so reads are public (signed-out
+      // users can read comments and like counts); writes mirror papers.
+      match /catalog_items/{catalogId} {
+        // The catalog item doc itself is never written by clients (it
+        // only exists as a parent for the subcollections); reads stay
+        // open so the subcollection rules below can resolve.
         allow read: if true;
 
-        // Users can only write their own reaction doc; admins can clean
-        // up reactions when deleting catalog data.
-        allow write: if isAdmin()
+        match /comments/{commentId} {
+          allow read: if true;
+
+          allow create: if signedIn()
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.keys().hasAll(
+                ['userId', 'username', 'text']);
+
+          // Authors can edit/delete their own comments; admins can delete.
+          allow update, delete: if signedIn()
+            && (resource.data.userId == request.auth.uid || isAdmin());
+        }
+
+        // One doc per user (doc id = uid): { emoji, reactedAt }.
+        match /reactions/{uid} {
+          allow read: if true;
+
+          // Users can only write their own reaction doc; admins can clean
+          // up reactions when deleting catalog data.
+          allow write: if isAdmin()
+            || (signedIn() && uid == request.auth.uid);
+        }
+      }
+
+      // -------------------------------------------------------------- polls
+      match /polls/{pollId} {
+        allow read: if true;
+        allow create: if signedIn();
+        allow update, delete: if isAdmin()
+          || (signedIn() && resource.data.createdBy == request.auth.uid);
+
+        match /options/{optionId} {
+          allow read: if true;
+          allow write: if isAdmin()
+            || (signedIn()
+                && get(/databases/$(database)/documents/polls/$(pollId)).data.createdBy
+                  == request.auth.uid);
+        }
+
+        // One vote per user: the vote doc id IS the uid.
+        match /votes/{uid} {
+          allow read: if true;
+          allow create, update: if signedIn() && uid == request.auth.uid;
+          allow delete: if signedIn()
+            && (uid == request.auth.uid || isAdmin());
+        }
+      }
+
+      // -------------------------------------------------------------- news
+      // News items posted before posting was removed. Public to read;
+      // only admins can delete (live headlines come from the web and
+      // never touch Firestore). Nothing can create or update news now.
+      match /news/{newsId} {
+        allow read: if true;
+        allow delete: if isAdmin();
+      }
+
+      // ------------------------------------------------------- announcements
+      // Admin announcements for the Contest tab. Public to read; only
+      // admins can post or delete.
+      match /announcements/{announcementId} {
+        allow read: if true;
+        allow create: if isAdmin()
+          && request.resource.data.keys().hasAll(['title', 'createdBy']);
+        allow update, delete: if isAdmin();
+      }
+
+      // ------------------------------------------------- paper notifications
+      // Paper-status notices live under the author's own user doc so a
+      // rejected paper's title never leaks through the public feed.
+      // Only admins create them (right after a status change); the owner
+      // (or an admin) can read and delete them.
+      match /users/{uid}/notifications/{notificationId} {
+        allow read, delete: if isAdmin()
+          || (signedIn() && uid == request.auth.uid);
+        allow create: if isAdmin();
+        allow update: if isAdmin()
           || (signedIn() && uid == request.auth.uid);
       }
-    }
 
-    // -------------------------------------------------------------- polls
-    match /polls/{pollId} {
-      allow read: if true;
-      allow create: if signedIn();
-      allow update, delete: if isAdmin()
-        || (signedIn() && resource.data.createdBy == request.auth.uid);
-
-      match /options/{optionId} {
+      // ------------------------------------------------------------ app_config
+      // Latest published app version. Public to read (the update check
+      // runs signed-out too); only admins can publish a new version.
+      match /app_config/{docId} {
         allow read: if true;
-        allow write: if isAdmin()
-          || (signedIn()
-              && get(/databases/$(database)/documents/polls/$(pollId)).data.createdBy
-                 == request.auth.uid);
+        allow write: if isAdmin();
       }
 
-      // One vote per user: the vote doc id IS the uid.
-      match /votes/{uid} {
-        allow read: if true;
-        allow create, update: if signedIn() && uid == request.auth.uid;
-        allow delete: if signedIn()
-          && (uid == request.auth.uid || isAdmin());
+      // ---------------------------------------------------------- deleted_users
+      // Accounts an admin deleted inside the app. The Auth account itself
+      // can only be erased in the Firebase console (or via the Admin SDK),
+      // so this marker is what actually locks them out: sign-in checks it
+      // before recreating a profile, and a live session is signed out
+      // when its profile disappears. Only admins can write it; a user can
+      // read only their own marker (the sign-in check runs right after
+      // auth, before any profile exists).
+      match /deleted_users/{uid} {
+        allow read: if signedIn() && uid == request.auth.uid;
+        allow create, delete: if isAdmin();
       }
-    }
 
-    // -------------------------------------------------------------- news
-    // News items posted before posting was removed. Public to read;
-    // only admins can delete (live headlines come from the web and
-    // never touch Firestore). Nothing can create or update news now.
-    match /news/{newsId} {
-      allow read: if true;
-      allow delete: if isAdmin();
-    }
-
-    // ------------------------------------------------------- announcements
-    // Admin announcements for the Contest tab. Public to read; only
-    // admins can post or delete.
-    match /announcements/{announcementId} {
-      allow read: if true;
-      allow create: if isAdmin()
-        && request.resource.data.keys().hasAll(['title', 'createdBy']);
-      allow update, delete: if isAdmin();
-    }
-
-    // ------------------------------------------------- paper notifications
-    // Paper-status notices live under the author's own user doc so a
-    // rejected paper's title never leaks through the public feed.
-    // Only admins create them (right after a status change); the owner
-    // (or an admin) can read and delete them.
-    match /users/{uid}/notifications/{notificationId} {
-      allow read, delete: if isAdmin()
-        || (signedIn() && uid == request.auth.uid);
-      allow create: if isAdmin();
-      allow update: if isAdmin()
-        || (signedIn() && uid == request.auth.uid);
-    }
-
-    // ------------------------------------------------------------ app_config
-    // Latest published app version. Public to read (the update check
-    // runs signed-out too); only admins can publish a new version.
-    match /app_config/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // ---------------------------------------------------------- deleted_users
-    // Accounts an admin deleted inside the app. The Auth account itself
-    // can only be erased in the Firebase console (or via the Admin SDK),
-    // so this marker is what actually locks them out: sign-in checks it
-    // before recreating a profile, and a live session is signed out
-    // when its profile disappears. Only admins can write it; a user can
-    // read only their own marker (the sign-in check runs right after
-    // auth, before any profile exists).
-    match /deleted_users/{uid} {
-      allow read: if signedIn() && uid == request.auth.uid;
-      allow create, delete: if isAdmin();
-    }
-
-    // ------------------------------------------------------------- admins
-    // Presence of admins/{uid} marks that uid as an admin.
-    match /admins/{uid} {
-      allow read: if isAdmin();
-      // The very first admin doc must be created manually in the console
-      // (console → Firestore → admins collection). After that, only admins
-      // can add/remove admins.
-      allow write: if isAdmin();
+      // ------------------------------------------------------------- admins
+      // Presence of admins/{uid} marks that uid as an admin.
+      match /admins/{uid} {
+        allow read: if isAdmin();
+        // The very first admin doc must be created manually in the console
+        // (console → Firestore → admins collection). After that, only admins
+        // can add/remove admins.
+        allow write: if isAdmin();
+      }
     }
   }
-}
